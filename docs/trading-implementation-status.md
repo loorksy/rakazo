@@ -13,14 +13,16 @@ no Kili source, runtime, dependencies or data are included.
 - Canonical action and authority fingerprints in the Node-only
   `@rakazo/core/node/financial-action` export. Material account, mode, symbol,
   protection, quantity, expiry, owner, Bot and risk-scope changes invalidate hashes.
-- Fail-closed single-owner admission decisions, bootstrap-proof digest verification
-  and Main Trading Agent operating guidance. These are tested primitives, not yet
-  wired into auth routes or provisioning.
+- Fail-closed single-owner admission, proof-gated bootstrap, database race protection
+  and server-provisioned Main Trading Agent in the actual auth/application paths.
+- Owner-only private environment resolution across RPC/events/files/Computer;
+  ordinary clients no longer offer Space creation or create the initial Bot.
+- Native MetaApi read-only SDK adapter with normalized account, symbol, quote,
+  candle and stream interfaces; no execution method is exposed by this port.
 - Fork synchronization instructions and an upstream-sensitive delta manifest.
 
-The existing runtime, Computer, Worker, authentication, database, approval executor
-and clients remain unchanged. This checkpoint does not enable trading or enforce
-single-owner access across the application.
+The existing runtime/Worker and approval executor remain the execution foundation.
+This checkpoint does not yet enable trading. Single-owner access is enforced.
 
 ## Verification
 
@@ -35,7 +37,8 @@ single-owner access across the application.
 ## Prisma setup and owner enforcement
 
 The former Prisma download blocker is resolved. Verified generation succeeds;
-all 97 migrations, including single-owner enforcement, apply to fixture PostgreSQL.
+all 98 migrations, including single-owner/private-environment enforcement, apply
+to fixture PostgreSQL.
 No checksum or TLS bypass was used.
 
 Owner enforcement now runs in actual auth/application paths. Six PostgreSQL auth
@@ -43,3 +46,7 @@ tests pass, and the original auth/db/API unit suite passes (858 tests, with sepa
 service-gated suites skipped). Auth/db/API TypeScript checks pass. See
 `single-owner-trading.md`. The complete product transformation remains unfinished;
 the foundational checkpoint above describes the earlier commit, not completion.
+
+Owner client tests, mobile TypeScript checking and web production build pass.
+MetaApi/financial-contract focused suites: 49 passed. Adapter TypeScript and
+scoped Biome checks pass. See `metaapi-provider.md` for the SDK/license boundary.

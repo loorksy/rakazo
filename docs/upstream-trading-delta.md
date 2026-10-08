@@ -14,6 +14,11 @@ This manifest describes implemented deltas only. It is not a list of proposed fe
 | `apps/api/src/app.ts` | Activate owner boundary on actual application paths | RPC/events/files/Computer share owner resolver | Composition root | HIGH |
 | `apps/api/src/env.ts` | Read operator bootstrap proof | Backend-only setup authority | Protected deployment configuration | MEDIUM |
 | `apps/api/src/router.ts` | Deny Space creation and signup reopening in product | UI cannot create extra owner environments | Product state checks before generic mutations | MEDIUM |
+| `packages/adapter-kit/src/index.ts` | Export provider-neutral broker ports | No raw SDK/credential surface | Domain interface export | LOW |
+| `packages/adapters/src/index.ts` | Export native read provider | Normalize and redact before tools | Provider composition | LOW |
+| `packages/adapters/package.json`, `pnpm-lock.yaml` | Pin native MetaApi SDK | Read-only adapter and explicit vendor license | Provider dependency | MEDIUM |
+| `apps/web/src/features/auth/Auth.tsx`, `apps/mobile/app/sign-in.tsx` | Proof-gated owner onboarding | Setup proof stays outside user payload/storage | Auth form extension | MEDIUM |
+| `apps/web/src/features/shell/Onboarding.tsx`, shell/client navigation | Server Main Agent/private environment | Browser cannot bootstrap a competing Main identity | Product onboarding | MEDIUM |
 
 Owner-only routing and server Trading Agent provisioning are active. Financial
 execution is not yet implemented. Run orchestration and the existing approval
