@@ -4,6 +4,11 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
+    "./node/financial-action": {
+      "types": "./src/node/financial-action.ts",
+      "development": "./src/node/financial-action.ts",
+      "default": "./src/node/financial-action.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "development": "./src/index.ts",
