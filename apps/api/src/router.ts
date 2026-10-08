@@ -148,6 +148,7 @@ import {
   expandSkillReferencesInPrompt,
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
+  MAIN_TRADING_AGENT_SPAWN_KEY,
   nextCronDateAcrossStrict,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
@@ -987,7 +988,10 @@ export function createRouter(deps: RouterDeps) {
         groupRepos.listGroups(actor, { archived: true }),
       ]);
       const { bots, groups, botSections } = navigation.current;
-      const active = bots.find((bot) => bot.id === input.botId) ?? bots[0];
+      const active =
+        bots.find((bot) => bot.id === input.botId) ??
+        bots.find((bot) => bot.spawnKey === MAIN_TRADING_AGENT_SPAWN_KEY) ??
+        bots[0];
       const [thread, routines] = active
         ? await Promise.all([
             resolveThreadTarget(deps.prisma, actor, { botId: active.id }).then((target) =>
@@ -5874,8 +5878,15 @@ async function spaceNavigationDto(
     select: { organizationId: true },
   });
   if (!currentSpace) throw new IsolationError();
+  const ownerSettings = await deps.prisma.deploymentSettings.findUnique({
+    where: { id: "default" },
+  });
   const memberships = await deps.prisma.spaceMember.findMany({
-    where: { userId: actor.userId, organizationId: currentSpace.organizationId },
+    where: {
+      userId: actor.userId,
+      organizationId: currentSpace.organizationId,
+      ...(ownerSettings?.singleOwnerEnforced ? { spaceId: actor.spaceId } : {}),
+    },
     select: {
       spaceId: true,
       role: true,

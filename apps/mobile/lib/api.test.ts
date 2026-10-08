@@ -67,6 +67,28 @@ afterEach(() => {
 });
 
 describe("mobile API authentication", () => {
+  it("sends the bootstrap proof only to trusted auth and keeps it out of the user payload", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ token: "fixture-session" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const proof = "fixture-only-owner-setup-key-not-a-secret";
+    await signUp("owner@example.test", "fixture-password", "Owner", proof);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:3100/api/auth/sign-up/email",
+      expect.objectContaining({
+        headers: {
+          "content-type": "application/json",
+          origin: "rakazo://",
+          "x-rakazo-owner-bootstrap": proof,
+        },
+        body: JSON.stringify({
+          email: "owner@example.test",
+          password: "fixture-password",
+          name: "Owner",
+        }),
+      }),
+    );
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalledWith(expect.anything(), proof);
+  });
   beforeEach(async () => {
     vi.restoreAllMocks();
     vi.mocked(SecureStore.getItemAsync).mockReset();

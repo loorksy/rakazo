@@ -2861,6 +2861,7 @@ export function ShellPage() {
                   className="app-no-drag w-auto gap-0 overflow-hidden p-0 data-closed:animate-none"
                 >
                   <BotCreatePicker
+                    allowSpaces={false}
                     bots={bots}
                     onCreateBot={() => {
                       setCreateMenuOpen(false);

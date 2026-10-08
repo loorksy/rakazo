@@ -588,7 +588,8 @@ export async function createApp(
       credentials: true,
     }),
   );
-  app.get("/api/auth/capabilities", (c) => {
+  app.get("/api/auth/capabilities", async (c) => {
+    const settings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
     c.header("cache-control", "no-store");
     return c.json({
       sso: env.oidc
@@ -599,6 +600,12 @@ export async function createApp(
       resetUrl:
         env.passwordAuth !== false && email ? new URL("/reset-password", env.webOrigin).href : null,
       billing: Boolean(billing),
+      ownerBootstrapRequired: Boolean(
+        settings && !settings.ownerBootstrapCompleted && settings.ownerBootstrapProofHash,
+      ),
+      registrationOpen: Boolean(
+        settings && !settings.ownerBootstrapCompleted && settings.ownerBootstrapProofHash,
+      ),
     } satisfies AuthCapabilities);
   });
   if (localEmailEmulator && env.nodeEnv === "development") {

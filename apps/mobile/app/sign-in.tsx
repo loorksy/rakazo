@@ -42,6 +42,7 @@ export default function SignIn() {
   const { mode: requestedMode } = useLocalSearchParams<{ mode?: string | string[] }>();
   const [mode, setMode] = useState<AuthMode>(() => initialAuthMode(requestedMode));
   const [name, setName] = useState("");
+  const [setupKey, setSetupKey] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +128,7 @@ export default function SignIn() {
           trimmedEmail,
           password,
           name.trim() || trimmedEmail.split("@")[0] || "User",
+          setupKey,
         );
         if (result.verificationRequired) {
           setResetSent(true);
@@ -298,6 +300,24 @@ export default function SignIn() {
                           }}
                         />
                       ) : null}
+                      {mode === "up" && reset?.ownerBootstrapRequired ? (
+                        <TextInput
+                          accessibilityLabel={t("Setup key")}
+                          placeholder={t("Setup key")}
+                          secureTextEntry
+                          autoCapitalize="none"
+                          autoComplete="off"
+                          value={setupKey}
+                          onChangeText={setSetupKey}
+                          style={{
+                            marginTop: 12,
+                            padding: 16,
+                            borderRadius: 13,
+                            backgroundColor: tokens.muted,
+                            color: tokens.foreground,
+                          }}
+                        />
+                      ) : null}
                       {error ? (
                         <Text style={{ color: tokens.destructive, marginTop: 12 }}>{error}</Text>
                       ) : null}
@@ -329,6 +349,7 @@ export default function SignIn() {
                           accessibilityRole="button"
                           hitSlop={8}
                           onPress={() => {
+                            if (mode === "in" && reset?.registrationOpen === false) return;
                             setMode("forgot");
                             setError(null);
                           }}
@@ -341,41 +362,43 @@ export default function SignIn() {
                           </Text>
                         </Pressable>
                       ) : null}
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          justifyContent: "center",
-                          alignItems: "center",
-                          marginTop: 24,
-                        }}
-                      >
-                        <Text style={{ color: tokens.mutedForeground, fontSize: 15 }}>
-                          {mode === "in"
-                            ? t("Don’t have an account?")
-                            : mode === "up"
-                              ? t("Already have an account?")
-                              : ""}
-                        </Text>
-                        <Pressable
-                          accessibilityRole="button"
-                          hitSlop={8}
-                          onPress={() => {
-                            setMode((current) => (current === "in" ? "up" : "in"));
-                            setError(null);
+                      {mode === "in" && reset?.registrationOpen === false ? null : (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            marginTop: 24,
                           }}
-                          style={{ marginLeft: 5 }}
                         >
-                          <Text
-                            style={{ color: tokens.foreground, fontSize: 15, fontWeight: "600" }}
-                          >
+                          <Text style={{ color: tokens.mutedForeground, fontSize: 15 }}>
                             {mode === "in"
-                              ? t("Sign up")
+                              ? t("Don’t have an account?")
                               : mode === "up"
-                                ? t("Sign in")
-                                : t("Back to sign in")}
+                                ? t("Already have an account?")
+                                : ""}
                           </Text>
-                        </Pressable>
-                      </View>
+                          <Pressable
+                            accessibilityRole="button"
+                            hitSlop={8}
+                            onPress={() => {
+                              setMode((current) => (current === "in" ? "up" : "in"));
+                              setError(null);
+                            }}
+                            style={{ marginLeft: 5 }}
+                          >
+                            <Text
+                              style={{ color: tokens.foreground, fontSize: 15, fontWeight: "600" }}
+                            >
+                              {mode === "in"
+                                ? t("Sign up")
+                                : mode === "up"
+                                  ? t("Sign in")
+                                  : t("Back to sign in")}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
                     </>
                   ) : null}
                 </>

@@ -72,6 +72,30 @@ it("shows no credential form while capabilities load", async () => {
   expect(host.querySelector("input")).toBeNull();
   expect(host.textContent).toContain("Loading…");
 });
+it("offers the masked setup key only for owner bootstrap", async () => {
+  vi.mocked(fetchAuthCapabilities).mockResolvedValue({
+    ...capabilities,
+    passwordAuth: true,
+    ownerBootstrapRequired: true,
+    registrationOpen: true,
+  });
+  await render("up");
+  const setup = host.querySelector<HTMLInputElement>("#owner-setup-key");
+  expect(setup?.type).toBe("password");
+  expect(setup?.required).toBe(true);
+  expect(setup?.autocomplete).toBe("off");
+});
+it("does not invite a second human to register after owner bootstrap", async () => {
+  vi.mocked(fetchAuthCapabilities).mockResolvedValue({
+    ...capabilities,
+    passwordAuth: true,
+    ownerBootstrapRequired: false,
+    registrationOpen: false,
+  });
+  await render("in");
+  expect(host.querySelector('a[href="/sign-up"]')).toBeNull();
+  expect(host.querySelector("#owner-setup-key")).toBeNull();
+});
 it.each(["in", "up"] as const)("offers SSO and hides credentials on %s", async (mode) => {
   vi.mocked(fetchAuthCapabilities).mockResolvedValue(capabilities);
   await render(mode);

@@ -23,6 +23,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [setupKey, setSetupKey] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(() => {
     const code = searchParams.get("error");
@@ -97,11 +98,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       const trimmedEmail = email.trim();
       const result =
         mode === "up"
-          ? await authClient.signUp.email({
-              email: trimmedEmail,
-              password,
-              name: name || trimmedEmail.split("@")[0] || "User",
-            })
+          ? await authClient.signUp.email(
+              {
+                email: trimmedEmail,
+                password,
+                name: name || trimmedEmail.split("@")[0] || "User",
+              },
+              { headers: { "x-rakazo-owner-bootstrap": setupKey } },
+            )
           : await authClient.signIn.email({ email: trimmedEmail, password });
       if (result.error) {
         setError(authErrorText(result.error, t`Could not continue`));
@@ -264,6 +268,22 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   ) : null}
                 </div>
               ) : null}
+              {mode === "up" && reset?.ownerBootstrapRequired ? (
+                <div className="mt-4 w-full">
+                  <Label htmlFor="owner-setup-key">
+                    <Trans>Setup key</Trans>
+                  </Label>
+                  <Input
+                    id="owner-setup-key"
+                    type="password"
+                    autoComplete="off"
+                    required
+                    value={setupKey}
+                    onChange={(event) => setSetupKey(event.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
+              ) : null}
               {error ? (
                 <p role="alert" className="mt-3 w-full text-sm text-destructive">
                   {error}
@@ -293,7 +313,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 </Button>
               ) : null}
               <p className="mt-8 text-muted-foreground">
-                {mode === "in" ? (
+                {mode === "in" && reset?.registrationOpen !== false ? (
                   <>
                     <Trans>Don’t have an account?</Trans>{" "}
                     <Link to="/sign-up" className="font-medium text-foreground">

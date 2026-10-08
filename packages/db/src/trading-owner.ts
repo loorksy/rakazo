@@ -1,4 +1,5 @@
 import type { Actor } from "@rakazo/contracts";
+import { BOT_COLORS } from "@rakazo/contracts";
 import {
   MAIN_TRADING_AGENT_SPAWN_KEY,
   ownerSessionAllowed,
@@ -77,7 +78,7 @@ export async function provisionTradingOwner(
       userId,
       name: "Trading Agent",
       title: "Trading Agent",
-      color: "blue",
+      color: BOT_COLORS[4],
       spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
       pinned: true,
       position: -1,
@@ -86,12 +87,21 @@ export async function provisionTradingOwner(
     },
     update: {},
   });
+  await prisma.bot.updateMany({
+    where: { id: bot.id, color: "blue" },
+    data: { color: BOT_COLORS[4] },
+  });
   // Recover a missing thread without rewriting user history or instructions.
   await prisma.thread.upsert({
     where: { botId: bot.id },
     create: { botId: bot.id, spaceId, userId },
     update: {},
   });
+  const bound = await prisma.deploymentSettings.updateMany({
+    where: { id: "default", ownerUserId: userId, singleOwnerEnforced: true },
+    data: { ownerSpaceId: spaceId },
+  });
+  if (bound.count !== 1) throw new IsolationError("Owner changed during provisioning");
   return { spaceId, botId: bot.id };
 }
 
@@ -102,7 +112,9 @@ export async function requireTradingMembership(
   requestedSpaceId?: string | null,
 ): Promise<Actor> {
   await requireTradingOwner(prisma, userId);
-  const actor = await requireMembership(prisma, userId);
+  const settings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
+  if (!settings?.ownerSpaceId) throw new IsolationError("Owner environment needs provisioning");
+  const actor = await requireMembership(prisma, userId, settings.ownerSpaceId);
   if (requestedSpaceId && requestedSpaceId !== actor.spaceId) throw new IsolationError();
   return actor;
 }

@@ -26,6 +26,14 @@ for RPC, events, files and Computer access. Existing stream authorization checks
 reuse that resolver. Unknown messaging senders do not auto-provision product access.
 Public Space creation and reopening signup are denied by the backend.
 
+The exact owner environment is persisted as `DeploymentSettings.ownerSpaceId`.
+An owner's other historical memberships cannot become the active product scope.
+Generic Bot tools/RPC cannot create the reserved Main Trading Agent spawn identity.
+Web/Electron onboarding reuses the server agent; it no longer creates Chief in the
+browser. Web and mobile offer a masked setup-key field only during bootstrap and
+remove signup invitations once registration closes. Normal create menus omit Space
+creation. Specialist Bots and their existing group collaboration remain available.
+
 The PostgreSQL auth regression suite uses an explicitly selected fixture database
 whose name ends in `_test`. It verifies real concurrent signup, hidden user inserts,
 service identity conversion, lost-owner recovery, foreign principals/environments,

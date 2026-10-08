@@ -285,6 +285,7 @@ model Invitation {
 model DeploymentSettings {
   id                              String   @id @default("default")
   ownerUserId                     String?
+  ownerSpaceId                    String?
   singleOwnerEnforced             Boolean  @default(false)
   ownerBootstrapCompleted         Boolean  @default(false)
   ownerBootstrapProofHash         String?

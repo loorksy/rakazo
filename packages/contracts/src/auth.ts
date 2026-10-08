@@ -11,6 +11,8 @@ export const authCapabilitiesSchema = z.object({
   passwordReset: z.boolean(),
   resetUrl: z.string().url().nullable(),
   billing: z.boolean().optional(),
+  ownerBootstrapRequired: z.boolean().optional(),
+  registrationOpen: z.boolean().optional(),
 });
 export type AuthCapabilities = z.infer<typeof authCapabilitiesSchema>;
 

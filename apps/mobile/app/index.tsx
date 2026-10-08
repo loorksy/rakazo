@@ -508,12 +508,6 @@ export default function Home() {
                 icon: { type: "sfSymbol" as const, name: "person.2" },
                 onPress: () => runCreateAction("group"),
               },
-              {
-                type: "action" as const,
-                label: t("New space"),
-                icon: { type: "sfSymbol" as const, name: "square.grid.2x2" },
-                onPress: () => runCreateAction("space"),
-              },
             ],
           },
         },
@@ -599,7 +593,6 @@ export default function Home() {
               actions={[
                 { id: "bot", title: t("New bot"), image: "person.crop.circle.badge.plus" },
                 { id: "group", title: t("New group"), image: "person.2" },
-                { id: "space", title: t("New space"), image: "square.grid.2x2" },
               ]}
               colorScheme={appearance}
               onPressAction={({ nativeEvent }) => {

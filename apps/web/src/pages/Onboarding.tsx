@@ -20,6 +20,7 @@ import {
   clampCatalogThinkingLevel,
   createModelProbe,
   initialModelProbeState,
+  MAIN_TRADING_AGENT_SPAWN_KEY,
   pickCatalogModelId,
 } from "@rakazo/core";
 import {
@@ -57,61 +58,11 @@ import { errorText } from "../lib/user-error";
 
 const CUSTOM_MODEL_OPTION = "__rakazo_custom_model__";
 const DEFAULT_THINKING_LEVEL_OPTION = "__rakazo_default_thinking__";
-const FIRST_BOT_NAME = "Chief";
-const FIRST_BOT_SPAWN_KEY = "onboarding:first";
-const FIRST_BOT_LOCK = "rakazo:onboarding-first-bot";
-
-/** Survives StrictMode remounts; concurrent first-bot creates share one in-flight attempt. */
-let firstBotEnsure: Promise<{ id: string }> | null = null;
-
-function findFirstBot(
-  bots: Array<{ id: string; name: string; spawnKey: string | null }>,
-): { id: string } | undefined {
-  const bySpawnKey = bots.find((bot) => bot.spawnKey === FIRST_BOT_SPAWN_KEY);
-  if (bySpawnKey) return { id: bySpawnKey.id };
-  // Legacy first-run Chief created before spawnKey was set.
-  const byName = bots.find((bot) => bot.name === FIRST_BOT_NAME);
-  return byName ? { id: byName.id } : undefined;
-}
-
-async function createOrReuseFirstBot(): Promise<{ id: string }> {
-  const existing = await rpc.bots.list();
-  const reuse = findFirstBot(existing);
-  if (reuse) return reuse;
-  try {
-    const created = await rpc.bots.create({
-      name: FIRST_BOT_NAME,
-      title: "",
-      description: "",
-      instructions: "",
-      notifyOnFinish: true,
-      spawnKey: FIRST_BOT_SPAWN_KEY,
-    });
-    return { id: created.id };
-  } catch (error) {
-    // Another tab won the unique (spaceId, spawnKey) race; reuse that bot only.
-    const afterConflict = await rpc.bots.list();
-    const winner = afterConflict.find((bot) => bot.spawnKey === FIRST_BOT_SPAWN_KEY);
-    if (winner) return { id: winner.id };
-    throw error;
-  }
-}
-
-async function withFirstBotLock<T>(run: () => Promise<T>): Promise<T> {
-  const locks = globalThis.navigator?.locks;
-  if (!locks?.request) return run();
-  return locks.request(FIRST_BOT_LOCK, run);
-}
-
 async function ensureFirstBot(): Promise<{ id: string }> {
-  if (firstBotEnsure) return firstBotEnsure;
-  // Web Lock serializes cross-tab creates; module promise covers same-tab StrictMode.
-  // spawnKey makes create idempotent when locks are unavailable.
-  // Clear after settle so a later empty-space visit re-lists instead of reusing a deleted id.
-  firstBotEnsure = withFirstBotLock(createOrReuseFirstBot).finally(() => {
-    firstBotEnsure = null;
-  });
-  return firstBotEnsure;
+  const bots = await rpc.bots.list();
+  const main = bots.find((bot) => bot.spawnKey === MAIN_TRADING_AGENT_SPAWN_KEY);
+  if (!main) throw new Error("Trading Agent provisioning is unavailable");
+  return { id: main.id };
 }
 
 function providerLabel(entry: ModelCatalogEntry): string {

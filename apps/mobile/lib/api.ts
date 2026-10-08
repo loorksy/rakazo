@@ -459,12 +459,17 @@ export async function captureApiRequestContext(): Promise<ApiRequestContext> {
 async function authenticateWithEmail(
   action: "sign-in" | "sign-up",
   input: { email: string; password: string; name?: string },
+  setupKey?: string,
 ) {
   const { response, body } = await fetchMobileJson<unknown>(
     `${currentApiBase()}/api/auth/${action}/email`,
     {
       method: "POST",
-      headers: { "content-type": "application/json", origin: "rakazo://" },
+      headers: {
+        "content-type": "application/json",
+        origin: "rakazo://",
+        ...(setupKey ? { "x-rakazo-owner-bootstrap": setupKey } : {}),
+      },
       body: JSON.stringify(input),
     },
     {},
@@ -492,8 +497,8 @@ export function signIn(email: string, password: string) {
   return authenticateWithEmail("sign-in", { email, password });
 }
 
-export function signUp(email: string, password: string, name: string) {
-  return authenticateWithEmail("sign-up", { email, password, name });
+export function signUp(email: string, password: string, name: string, setupKey?: string) {
+  return authenticateWithEmail("sign-up", { email, password, name }, setupKey);
 }
 
 export type PasswordResetCapabilities = AuthCapabilities;
