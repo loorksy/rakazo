@@ -15,6 +15,7 @@ import {
 export { resolveCloudAgentProvider, resolveSandboxProvider } from "@rakazo/adapters";
 
 export interface AppEnv {
+  ownerBootstrapProof?: string;
   passwordAuth?: boolean;
   oidc?: OidcConfig;
   nodeEnv: string;
@@ -155,6 +156,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const updaterUrl = optional(source.RAKAZO_UPDATER_URL);
   const updaterToken = optional(source.RAKAZO_UPDATER_TOKEN);
   return {
+    ownerBootstrapProof: optional(source.OWNER_BOOTSTRAP_PROOF),
     passwordAuth,
     oidc,
     nodeEnv: source.NODE_ENV ?? "",

@@ -8,8 +8,9 @@ import {
   parseAllowlist,
   signupPolicyFromEnv,
 } from "@rakazo/core";
+import { verifyOwnerBootstrapProof } from "@rakazo/core/node/financial-action";
 import type { PrismaClient } from "@rakazo/db";
-import { bootstrapUserSpace } from "@rakazo/db";
+import { bootstrapUserSpace, provisionTradingOwner, requireTradingOwner } from "@rakazo/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import {
@@ -31,6 +32,8 @@ import { oidcDiscovery } from "./oidc.js";
 export type { OidcConfig } from "./oidc.js";
 
 export interface AuthEnv {
+  /** Set by the trading product composition root, never by a request. */
+  ownerOnly?: boolean;
   passwordAuth?: boolean;
   oidc?: OidcConfig;
   secret: string;
@@ -323,8 +326,10 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
         }
       },
       deleteUser: {
-        enabled: true,
+        enabled: !env.ownerOnly,
         beforeDelete: async (user) => {
+          if (env.ownerOnly)
+            throw new APIError("FORBIDDEN", { message: "Owner recovery requires the operator" });
           await env.beforeDeleteUser?.(user.id);
           const memberships = await prisma.member.findMany({
             where: { userId: user.id },
@@ -448,6 +453,14 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
                 findSession: async (token: string) => {
                   const session = await findSession(token);
                   if (!session || isMessagingEmail(session.user.email)) return null;
+                  if (env.ownerOnly) {
+                    try {
+                      await requireTradingOwner(prisma, session.user.id);
+                    } catch {
+                      return null;
+                    }
+                    return session;
+                  }
                   if (session.user.emailVerified) return session;
                   if (env.oidc?.allowSignupBypass) {
                     const accounts = await ctx.context.internalAdapter.findAccounts(
@@ -477,6 +490,15 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
           before: async (session, ctx) => {
             // The auth adapter can still be inside the signup transaction.
             const user = await ctx?.context.internalAdapter.findUserById(session.userId);
+            if (env.ownerOnly) {
+              if (!user || isMessagingEmail(user.email)) throw new APIError("FORBIDDEN");
+              try {
+                await provisionTradingOwner(prisma, user.id);
+              } catch {
+                throw new APIError("FORBIDDEN", { message: "Owner session required" });
+              }
+              return;
+            }
             const policy = await resolveSignupPolicy(prisma, env);
             const oidcSignIn = isOidcCallback(ctx);
             const bypassAllowlist = oidcSignIn && env.oidc?.allowSignupBypass;
@@ -533,9 +555,24 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
       },
       user: {
         create: {
-          before: async (user) => {
+          before: async (user, ctx) => {
             if (isMessagingEmail(user.email)) {
               throw new APIError("BAD_REQUEST", { message: "Email is not available" });
+            }
+            if (env.ownerOnly) {
+              const settings = await prisma.deploymentSettings.findUnique({
+                where: { id: "default" },
+              });
+              const proof = ctx?.headers?.get("x-rakazo-owner-bootstrap") ?? "";
+              if (
+                !settings?.singleOwnerEnforced ||
+                settings.ownerBootstrapCompleted ||
+                settings.ownerUserId ||
+                !verifyOwnerBootstrapProof(settings.ownerBootstrapProofHash, proof)
+              )
+                throw new APIError("FORBIDDEN", {
+                  message: "Owner bootstrap is closed or setup key is invalid",
+                });
             }
           },
         },

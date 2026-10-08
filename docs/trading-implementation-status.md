@@ -32,15 +32,14 @@ single-owner access across the application.
   namespace. The existing Chromium quiescence test times out in a process namespace
   with thousands of unreaped zombies; it passes unchanged in the clean namespace.
 
-## External setup blocker
+## Prisma setup and owner enforcement
 
-Prisma generation requires verified schema-engine artifacts from
-`binaries.prisma.sh`. The environment's active outbound policy denies that domain
-with HTTP 403. Even `prisma generate --no-engine` needs the schema engine.
+The former Prisma download blocker is resolved. Verified generation succeeds;
+all 97 migrations, including single-owner enforcement, apply to fixture PostgreSQL.
 No checksum or TLS bypass was used.
 
-A reusable environment configuration draft adds that domain and the pinned pnpm
-installation/generation commands. It must be published before the active policy
-changes. Until generation succeeds, auth/database/API/Worker integration, their
-full type checks and application builds are unverified. The complete product
-transformation remains unfinished.
+Owner enforcement now runs in actual auth/application paths. Six PostgreSQL auth
+tests pass, and the original auth/db/API unit suite passes (858 tests, with separate
+service-gated suites skipped). Auth/db/API TypeScript checks pass. See
+`single-owner-trading.md`. The complete product transformation remains unfinished;
+the foundational checkpoint above describes the earlier commit, not completion.

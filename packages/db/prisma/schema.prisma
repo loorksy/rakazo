@@ -285,6 +285,9 @@ model Invitation {
 model DeploymentSettings {
   id                              String   @id @default("default")
   ownerUserId                     String?
+  singleOwnerEnforced             Boolean  @default(false)
+  ownerBootstrapCompleted         Boolean  @default(false)
+  ownerBootstrapProofHash         String?
   signupsEnabled                  Boolean  @default(true)
   signupAllowlist                 String   @default("")
   signupPolicyInitialized         Boolean  @default(false)

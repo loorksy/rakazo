@@ -79,10 +79,12 @@ import {
   createPool,
   createThreadEvents,
   IsolationError,
+  initializeTradingOwner,
   parsePositiveInteger,
   provisionMessagingIdentity,
+  provisionTradingOwner,
   pushSessionExpiresAt,
-  requireMembership,
+  requireTradingMembership,
 } from "@rakazo/db";
 import type { Logger } from "@rakazo/logging";
 import {
@@ -183,7 +185,7 @@ export async function createApp(
     contextStrategy,
     ...envOverrides
   } = overrides;
-  const env = { ...loadEnv(process.env), ...envOverrides };
+  const env = { ...loadEnv(process.env), ...envOverrides, messagingOpenSignup: false };
   const logger = loggerOverride ?? createServiceLogger({ service: SERVICE_NAMES.api });
   installLogger(logger);
   const created = prismaOverride
@@ -380,7 +382,15 @@ export async function createApp(
   const notifications = new ExpoPushProvider(env.dataDir, (sessionId) =>
     pushSessionExpiresAt(prisma, sessionId),
   );
+  await initializeTradingOwner(prisma, env.ownerBootstrapProof);
+  const ownerSettings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
+  if (
+    ownerSettings?.ownerUserId &&
+    (await prisma.user.findUnique({ where: { id: ownerSettings.ownerUserId } }))
+  )
+    await provisionTradingOwner(prisma, ownerSettings.ownerUserId);
   const auth = createAuth(prisma, {
+    ownerOnly: true,
     passwordAuth: env.passwordAuth,
     oidc: env.oidc,
     secret: env.authSecret,
@@ -614,7 +624,7 @@ export async function createApp(
     const session = await auth.api.getSession({ headers: sessionHeaders(request) });
     if (!session?.user) return null;
     const actor = await actorFromMembership(
-      requireMembership(prisma, session.user.id, request.headers.get("x-rakazo-space-id")),
+      requireTradingMembership(prisma, session.user.id, request.headers.get("x-rakazo-space-id")),
     );
     return actor && { actor, sessionId: session.session.id };
   };

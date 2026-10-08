@@ -796,6 +796,13 @@ export function createRouter(deps: RouterDeps) {
         spaceNavigationDto(deps, context.actor, repos, groupRepos),
       ),
       create: authed.spaces.create.handler(async ({ context, input }) => {
+        const settings = await deps.prisma.deploymentSettings.findUnique({
+          where: { id: "default" },
+        });
+        if (settings?.singleOwnerEnforced)
+          throw new ORPCError("FORBIDDEN", {
+            message: "The trading environment is provisioned by the server",
+          });
         let space: { id: string; name: string };
         try {
           space = await createSpaceForMember(deps.prisma, {
@@ -1008,6 +1015,11 @@ export function createRouter(deps: RouterDeps) {
       }),
       update: authed.deployment.update.handler(async ({ context, input }) => {
         if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        const ownerSettings = await deps.prisma.deploymentSettings.findUnique({
+          where: { id: "default" },
+        });
+        if (ownerSettings?.singleOwnerEnforced && input.signupsEnabled === true)
+          throw new ORPCError("FORBIDDEN", { message: "Owner registration cannot be reopened" });
         if (input.computerHost === "this-mac" && deps.env.sandboxProvider !== "docker") {
           throw new ORPCError("BAD_REQUEST", {
             message:
