@@ -1,0 +1,8 @@
+/* The contextual React controls save backend state. The vendor toolbar is hidden
+   because its local-only selections cannot become authoritative chart state. */
+.rakazo-chart-adapter .klinecharts-pro-period-bar {
+  display: none;
+}
+.rakazo-chart-adapter .klinecharts-pro-widget {
+  height: 100%;
+}

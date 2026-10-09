@@ -15,6 +15,10 @@ patchedDependencies:
     hash: etbhenc3wnsl43rdtwvgrimboq
     path: patches/app-builder-lib@26.15.3.patch
 
+  '@klinecharts/pro@0.1.1':
+    hash: 7gftmgjzocvmmep6spqkhzqyea
+    path: patches/@klinecharts__pro@0.1.1.patch
+
 importers:
 
   .:
@@ -271,6 +275,12 @@ importers:
 
   apps/web:
     dependencies:
+      klinecharts:
+        specifier: 9.8.12
+        version: 9.8.12
+      '@klinecharts/pro':
+        specifier: 0.1.1
+        version: 0.1.1(patch_hash=7gftmgjzocvmmep6spqkhzqyea)(klinecharts@9.8.12)
       '@lingui/core':
         specifier: 6.6.0
         version: 6.6.0(@babel/core@7.29.7)(@babel/types@7.29.8)
@@ -10466,6 +10476,28 @@ packages:
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
+
+  '@klinecharts/pro@0.1.1':
+    resolution: {integrity: sha512-ChKW0/ra183CFKevzWSn1HwrLY3YOpERA8wfso+MMTyTYKEKx8Sd7gFTr5Hfn6R4MVru7xSlUHsqjlq/WpXrVA==}
+    peerDependencies:
+      klinecharts: '>=9.0.0'
+
+  klinecharts@9.8.12:
+    resolution: {integrity: sha512-yKLWMliwwIsiQsAI8geNOkE8P6SFsvaa0leX2isgB4Y1SvM3tS6Y9pe7ZbKkiLtOE0P0W9W9wb0M2wH0xAPG7w==}
+    engines: {node: '>=0.10.0'}
+
+  seroval-plugins@1.6.8:
+    resolution: {integrity: sha512-N7mWAMydj89EnYTHtRpS3LBrAz3J9O6oVrqpuXuvlAHfAUG8WEKqtbAd7SBiJNY5NfCAFhSdyAh7wI4Shjqy4g==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      seroval: ^1.0
+
+  seroval@1.6.8:
+    resolution: {integrity: sha512-HlSgSAkTk4EqHcje1ptJjfZi1YDv5KbhVJ/d3P7T/nAXua2VmDu+AKDX5VTdFfZf48nDkWB2TKYt0DrCSa+3wg==}
+    engines: {node: '>=10'}
+
+  solid-js@1.9.17:
+    resolution: {integrity: sha512-4GAmLOWPfNV8H9Jfn2LSFTpNEG6jiOKPiwd5lnLGQtehHaX6l3TOLzJqQ7mqwB/3k1Yy3zyumFVopmc/tm34ow==}
 
 snapshots:
 
@@ -22135,3 +22167,23 @@ snapshots:
   zod@4.6.2: {}
 
   zwitch@2.0.4: {}
+
+  '@klinecharts/pro@0.1.1(patch_hash=7gftmgjzocvmmep6spqkhzqyea)(klinecharts@9.8.12)':
+    dependencies:
+      klinecharts: 9.8.12
+      lodash: 4.18.1
+      solid-js: 1.9.17
+
+  seroval-plugins@1.6.8(seroval@1.6.8):
+    dependencies:
+      seroval: 1.6.8
+
+  seroval@1.6.8: {}
+
+  solid-js@1.9.17:
+    dependencies:
+      csstype: 3.2.3
+      seroval: 1.6.8
+      seroval-plugins: 1.6.8(seroval@1.6.8)
+
+  klinecharts@9.8.12: {}

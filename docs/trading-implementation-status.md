@@ -50,3 +50,18 @@ the foundational checkpoint above describes the earlier commit, not completion.
 Owner client tests, mobile TypeScript checking and web production build pass.
 MetaApi/financial-contract focused suites: 49 passed. Adapter TypeScript and
 scoped Biome checks pass. See `metaapi-provider.md` for the SDK/license boundary.
+
+## Broker session and chart checkpoint
+
+Protected multi-account connection settings, owner SSO bootstrap, Worker-owned
+fenced SDK sessions, bounded authenticated quote fan-out and broker history reads
+are implemented. Thirteen PostgreSQL broker lifecycle tests include actual process
+death, takeover, rotation and stale-writer rejection. All 101 migrations now apply
+to a fresh fixture database with integrity checks enabled.
+
+Persistent semantic Cloud Chart storage/controller and the isolated KLineChart Pro
+web/Electron bridge are implemented; see `cloud-chart-workspace.md` for exact scope
+and pinned vendor patch. The focused chart gate passes 67 tests, including seven
+real PostgreSQL persistence/ownership/concurrency tests. Contract identity hardening
+adds traversal/query rejection. All 765 web/related executor regression tests pass. Type checks and production web
+build pass; existing bundle-size warnings remain. These are checkpoints, not full product completion.

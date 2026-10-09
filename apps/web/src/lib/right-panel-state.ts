@@ -1,4 +1,5 @@
 export type Panel =
+  | "chart"
   | "computer"
   | "settings"
   | "routine"
@@ -9,7 +10,14 @@ export type Panel =
 export type RightPanelState = { panel: Panel; routineId?: string };
 
 /** Panels that are safe to remember across reloads. Create flows stay ephemeral. */
-const durablePanels: readonly Panel[] = ["computer", "settings", "routine", "group-settings", null];
+const durablePanels: readonly Panel[] = [
+  "chart",
+  "computer",
+  "settings",
+  "routine",
+  "group-settings",
+  null,
+];
 
 export function rightPanelStorageKey(
   userId: string,
@@ -20,9 +28,11 @@ export function rightPanelStorageKey(
   return `rakazo:right-panel-state:${userId}:${spaceId}:${kind}:${targetId}`;
 }
 
-export function readRightPanelState(key: string): RightPanelState {
+export function readRightPanelState(key: string, fallback: Panel = null): RightPanelState {
   try {
-    const value: unknown = JSON.parse(localStorage.getItem(key) ?? "null");
+    const stored = localStorage.getItem(key);
+    if (stored === null) return { panel: fallback };
+    const value: unknown = JSON.parse(stored);
     if (
       !value ||
       typeof value !== "object" ||

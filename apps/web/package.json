@@ -14,6 +14,7 @@
     "intl:compile": "lingui compile"
   },
   "dependencies": {
+    "@klinecharts/pro": "0.1.1",
     "@lingui/core": "6.6.0",
     "@lingui/react": "6.6.0",
     "@orpc/client": "1.15.0",
@@ -26,6 +27,7 @@
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "better-auth": "1.7.4",
+    "klinecharts": "9.8.12",
     "lucide-react": "1.44.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",

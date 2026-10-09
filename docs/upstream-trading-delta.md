@@ -30,3 +30,7 @@ executor are unchanged at this stage.
 | `packages/contracts/src/rpc.ts`, `apps/api/src/router.ts` | Owner-only broker reads and stream subscription | Exact account/instrument scope; no raw secrets | Existing authenticated RPC/events | MEDIUM |
 | `packages/adapters/src/builtin-tools.ts`, executor | Broker evidence discovery/read tools | Central execution path; no financial mutation | Existing tools and approvals | MEDIUM |
 | Existing account/integrations settings | Named protected broker connections | Masked entry, no stored secret returned | Contextual settings extension | MEDIUM |
+
+| Cloud Chart contracts/controller and DB migration | Durable account-scoped visual workspace | Run fencing, object revisions, private/shared ownership | Additive resource behind existing tools/RPC | MEDIUM |
+| Web Shell contextual panel | Chart primary, Computer secondary | User viewing choice never changed by Bot activity | Existing right-panel architecture | MEDIUM |
+| Pinned KLineChart Pro dependency and ESM lifecycle patch | Isolated interactive chart projection | Backend datafeed; no arbitrary chart code or browser authority | Vendor accessor/disposer | MEDIUM |

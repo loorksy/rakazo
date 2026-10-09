@@ -5,6 +5,21 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: /^klinecharts$/,
+        replacement: fileURLToPath(
+          new URL("./apps/web/node_modules/klinecharts/dist/index.esm.js", import.meta.url),
+        ),
+      },
+      {
+        find: /^@klinecharts\/pro$/,
+        replacement: fileURLToPath(
+          new URL(
+            "./apps/web/node_modules/@klinecharts/pro/dist/klinecharts-pro.js",
+            import.meta.url,
+          ),
+        ),
+      },
+      {
         // The published dist keeps JSX inside .js files, which vite cannot parse;
         // tests load the package's shipped TypeScript source instead.
         find: /^@ronradtke\/react-native-markdown-display$/,
@@ -36,7 +51,7 @@ export default defineConfig({
   test: {
     // Load the markdown renderer's shipped TypeScript source through vite so
     // react-native can be mocked in node tests.
-    server: { deps: { inline: [/react-native-markdown-display/] } },
+    server: { deps: { inline: [/react-native-markdown-display/, /klinecharts/] } },
     environment: "node",
     setupFiles: ["./packages/testkit/src/pin-test-env.ts"],
     include: [

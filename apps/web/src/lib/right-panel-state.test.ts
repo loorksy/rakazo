@@ -56,3 +56,16 @@ describe("right panel preferences", () => {
     expect(readRightPanelState(key)).toEqual({ panel: "computer" });
   });
 });
+
+it("defaults to chart only when the user has no saved viewing choice", () => {
+  const entries = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => entries.set(key, value),
+  });
+  expect(readRightPanelState("fresh", "chart")).toEqual({ panel: "chart" });
+  writeRightPanelState("fresh", "computer");
+  expect(readRightPanelState("fresh", "chart")).toEqual({ panel: "computer" });
+  writeRightPanelState("fresh", null);
+  expect(readRightPanelState("fresh", "chart")).toEqual({ panel: null });
+});

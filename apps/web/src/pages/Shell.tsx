@@ -89,6 +89,7 @@ import {
   ArrowUp,
   Bell,
   Box,
+  ChartCandlestick,
   ChevronDown,
   Clock,
   Copy,
@@ -148,6 +149,7 @@ import {
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
 import { CallCard } from "../components/call/CallCard";
 import { VoiceChatCard } from "../components/call/VoiceChatCard";
+import { CloudChartPanel } from "../components/chart/CloudChartPanel";
 import { ComputerWorkspace } from "../components/computer/ComputerWorkspace";
 import { lazyOverlay } from "../components/ErrorBoundary";
 import { MessageHoverMetadata } from "../components/MessageHoverMetadata";
@@ -2547,14 +2549,26 @@ export function ShellPage() {
       // Reload starts with panel=null so storage restores. In-session chat switches used to
       // keep computer/settings open; only routine was cleared (handled above). Carry is
       // session-only — do not write the carried panel onto the destination's saved prefs.
-      if (panel === "computer" || panel === "settings" || panel === "group-settings") {
-        const carried = panel === "computer" ? "computer" : inGroup ? "group-settings" : "settings";
+      if (
+        panel === "chart" ||
+        panel === "computer" ||
+        panel === "settings" ||
+        panel === "group-settings"
+      ) {
+        const carried =
+          panel === "chart"
+            ? "chart"
+            : panel === "computer"
+              ? "computer"
+              : inGroup
+                ? "group-settings"
+                : "settings";
         pendingPanelRestore.current = null;
         if (carried !== panel) setPanelState(carried);
         setRestoredPanelKey(null);
         return;
       }
-      pendingPanelRestore.current = readRightPanelState(panelStorageKey);
+      pendingPanelRestore.current = readRightPanelState(panelStorageKey, inGroup ? null : "chart");
     }
     const saved = pendingPanelRestore.current;
     if (!saved) return;
@@ -3546,6 +3560,19 @@ export function ShellPage() {
             {!inGroup && active ? (
               <button
                 type="button"
+                title={t`Cloud chart`}
+                aria-label={t`Cloud chart`}
+                data-testid="chart-workspace-trigger"
+                onClick={() => setPanel(panel === "chart" ? null : "chart")}
+                data-active={panel === "chart" ? "" : undefined}
+                className="app-no-drag grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
+              >
+                <ChartCandlestick size={18} strokeWidth={1.6} className="text-foreground/75" />
+              </button>
+            ) : null}
+            {!inGroup && active ? (
+              <button
+                type="button"
                 title={t`Agent computer`}
                 onClick={() => {
                   const next = panel === "computer" ? null : "computer";
@@ -3691,7 +3718,9 @@ export function ShellPage() {
             panel !== "group-settings" ? (
               <div className="mb-4 flex items-center justify-between">
                 <span className="text-[13.5px] text-muted-foreground">
-                  {panel === "settings" ? (
+                  {panel === "chart" ? (
+                    <Trans>Cloud chart</Trans>
+                  ) : panel === "settings" ? (
                     <Trans>Settings</Trans>
                   ) : active ? (
                     (computer?.state ?? active.status)
@@ -3732,6 +3761,11 @@ export function ShellPage() {
                     <X size={16} strokeWidth={1.8} />
                   </Button>
                 </div>
+              </div>
+            ) : null}
+            {panel === "chart" && active ? (
+              <div className="h-[calc(100%_-_3rem)] min-h-96">
+                <CloudChartPanel />
               </div>
             ) : null}
             {panel === "computer" && active ? (
