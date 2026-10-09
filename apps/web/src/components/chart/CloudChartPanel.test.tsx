@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   charts: vi.fn(),
   read: vi.fn(),
   chartEvents: vi.fn(),
+  indicators: vi.fn(),
 }));
 vi.mock("../../lib/rpc", () => ({
   rpc: {
@@ -20,6 +21,7 @@ vi.mock("../../lib/rpc", () => ({
       charts: api.charts,
       read: api.read,
       chartEvents: api.chartEvents,
+      indicators: api.indicators,
     },
   },
 }));
@@ -71,6 +73,7 @@ async function render() {
   await act(async () => root?.render(<CloudChartPanel />));
 }
 function fixtures() {
+  api.indicators.mockResolvedValue([]);
   api.list.mockResolvedValue([{ id: "account", label: "Fixture", revokedAt: null }]);
   api.charts.mockResolvedValue([chart]);
   api.read.mockResolvedValue([

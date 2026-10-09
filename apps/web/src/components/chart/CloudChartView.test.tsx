@@ -11,6 +11,8 @@ import { afterEach, expect, it, vi } from "vitest";
 const native = vi.hoisted(() => ({
   subscribeAction: vi.fn(),
   unsubscribeAction: vi.fn(),
+  removeIndicator: vi.fn(),
+  createIndicator: vi.fn(),
   removeOverlay: vi.fn(),
   createOverlay: vi.fn(),
   setOffsetRightDistance: vi.fn(),

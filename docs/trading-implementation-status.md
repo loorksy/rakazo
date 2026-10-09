@@ -65,3 +65,9 @@ and pinned vendor patch. The focused chart gate passes 67 tests, including seven
 real PostgreSQL persistence/ownership/concurrency tests. Contract identity hardening
 adds traversal/query rejection. All 765 web/related executor regression tests pass. Type checks and production web
 build pass; existing bundle-size warnings remain. These are checkpoints, not full product completion.
+
+Safe indicator IR, activation testing, immutable registry/versioning, owner-scoped JSON
+imports, per-object authority/revisions and native plot projection are implemented.
+The combined chart/indicator gate passes 85 tests, including 17 PostgreSQL cases.
+KLine lifecycle patch correction is verified against the installed package and production
+build; the final patch uses contextual ESM hunks and local type augmentation.

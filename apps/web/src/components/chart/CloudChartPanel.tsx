@@ -5,12 +5,14 @@ import type {
   ChartDrawing,
   ChartEvent,
   CloudChart,
+  CustomIndicator,
   TradingConnectionView,
 } from "@rakazo/contracts";
 import {
   BrokerInstrumentDirectorySchema,
   BrokerTimeframeSchema,
   CloudChartSchema,
+  CustomIndicatorSchema,
 } from "@rakazo/contracts";
 import { CHART_DRAWING_CAPABILITIES } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
@@ -24,6 +26,8 @@ export function CloudChartPanel() {
   const [accountId, setAccountId] = useState("");
   const [directory, setDirectory] = useState<BrokerInstrumentDirectory>([]);
   const [instrumentId, setInstrumentId] = useState("");
+  const [indicators, setIndicators] = useState<CustomIndicator[]>([]);
+  const [indicatorId, setIndicatorId] = useState("");
   const [drawingTool, setDrawingTool] = useState<ChartDrawing["type"]>();
   const [event, setEvent] = useState<ChartEvent | undefined>();
   const [error, setError] = useState(false);
@@ -44,6 +48,18 @@ export function CloudChartPanel() {
         const available = accounts.filter((row) => !row.revokedAt);
         setConnections(available);
         setAccountId(available[0]?.id ?? "");
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setError(true);
+      });
+    return () => abort.abort();
+  }, []);
+  useEffect(() => {
+    const abort = new AbortController();
+    void rpc.trading
+      .indicators({ operation: "search", query: "" }, { signal: abort.signal })
+      .then((raw) => {
+        if (!abort.signal.aborted) setIndicators(CustomIndicatorSchema.array().parse(raw));
       })
       .catch(() => {
         if (!abort.signal.aborted) setError(true);
@@ -290,6 +306,64 @@ export function CloudChartPanel() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Indicator"
+              className={selectClass}
+              value={indicatorId}
+              onChange={(e) => setIndicatorId(e.target.value)}
+            >
+              <option value="">
+                <Trans>Indicator</Trans>
+              </option>
+              {indicators.map((i) => (
+                <option key={`${i.id}:${i.version}`} value={`${i.id}:${i.version}`}>
+                  {i.definition.name} · v{i.version}
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy || !indicatorId}
+              onClick={() => {
+                const item = indicators.find((i) => `${i.id}:${i.version}` === indicatorId);
+                if (item)
+                  void command({
+                    operation: "indicator_add",
+                    chartId: chart.id,
+                    expectedRevision: chart.revision,
+                    indicator: {
+                      definitionId: item.id,
+                      definitionVersion: item.version,
+                      parameters: {},
+                      pane: item.definition.outputs[0]?.pane ?? "PRICE",
+                      visible: true,
+                    },
+                  });
+              }}
+            >
+              <Trans>Add</Trans>
+            </Button>
+            {chart.state.indicators.map((i) => (
+              <Button
+                key={i.id}
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  void command({
+                    operation: "indicator_remove",
+                    chartId: chart.id,
+                    indicatorId: i.id,
+                    expectedIndicatorRevision: i.revision,
+                  })
+                }
+              >
+                {i.definitionId} ×
+              </Button>
+            ))}
           </div>
           <div className="min-h-96 flex-1">
             <CloudChartView

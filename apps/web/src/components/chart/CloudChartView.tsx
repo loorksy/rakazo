@@ -1,10 +1,12 @@
 import { Trans } from "@lingui/react/macro";
 import type { ChartCommand, ChartDrawing, ChartEvent, CloudChart } from "@rakazo/contracts";
+import { ChartEvidenceSchema } from "@rakazo/contracts";
 import { CHART_DRAWING_CAPABILITIES } from "@rakazo/core";
 import type { Chart, OverlayEvent } from "klinecharts";
 import { ActionType } from "klinecharts";
 import { useEffect, useRef, useState } from "react";
 import { KlineBrokerDatafeed, klinePeriod } from "../../lib/kline-broker-datafeed";
+import { installChartIndicator } from "../../lib/kline-indicators";
 import { rpc } from "../../lib/rpc";
 import "@klinecharts/pro/dist/klinecharts-pro.css";
 import "./cloud-chart.css";
@@ -27,6 +29,7 @@ export function CloudChartView({
   const chartRef = useRef(chart);
   chartRef.current = chart;
   const api = useRef<Chart | null>(null);
+  const installed = useRef<Array<{ name: string; paneId: string }>>([]);
   const [ready, setReady] = useState(0);
   const [error, setError] = useState(false);
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
@@ -67,13 +70,18 @@ export function CloudChartView({
           datafeed,
         });
         api.current = instance.getChartApi();
+        let initialDataReady = false;
         const onData = () => {
-          if (!closed) setReady((value) => value + 1);
+          if (!closed && !initialDataReady) {
+            initialDataReady = true;
+            setReady((value) => value + 1);
+          }
         };
         api.current.subscribeAction(ActionType.OnDataReady, onData);
         release = () => {
           api.current?.unsubscribeAction(ActionType.OnDataReady, onData);
           instance.destroy();
+          installed.current = [];
           api.current = null;
         };
         if (closed) release();
@@ -94,6 +102,57 @@ export function CloudChartView({
     chart.state.preferences.theme,
     chart.state.viewport.from,
     chart.state.viewport.to,
+  ]);
+  useEffect(() => {
+    const native = api.current;
+    if (!native) return;
+    const abort = new AbortController();
+    let inflight = false;
+    async function refresh() {
+      if (!native || inflight) return;
+      inflight = true;
+      try {
+        const evidence = ChartEvidenceSchema.parse(
+          await rpc.trading.chartEvidence({ chartId: chart.id }, { signal: abort.signal }),
+        );
+        if (abort.signal.aborted || evidence.chart.revision !== chartRef.current.revision) return;
+        for (const previous of installed.current)
+          native?.removeIndicator(previous.paneId, previous.name);
+        installed.current = [];
+        for (const instance of chart.state.indicators) {
+          const result = evidence.calculations.find((result) => result.instanceId === instance.id);
+          if (!result || !instance.visible) continue;
+          const item = installChartIndicator(native, instance, result);
+          if (item) installed.current.push(item);
+        }
+      } catch {
+        if (!abort.signal.aborted) setError(true);
+      } finally {
+        inflight = false;
+      }
+    }
+    if (chart.state.indicators.some((i) => i.visible)) void refresh();
+    else {
+      for (const previous of installed.current)
+        native.removeIndicator(previous.paneId, previous.name);
+      installed.current = [];
+    }
+    const timer =
+      chart.state.indicators.some((i) => i.visible) && !chart.state.viewport.to
+        ? setInterval(() => void refresh(), 5000)
+        : undefined;
+    return () => {
+      abort.abort();
+      if (timer) clearInterval(timer);
+    };
+  }, [
+    chart.id,
+    chart.accountId,
+    chart.instrumentId,
+    chart.state.timeframe,
+    chart.state.viewport.to,
+    JSON.stringify(chart.state.indicators),
+    ready,
   ]);
   useEffect(() => {
     const native = api.current;

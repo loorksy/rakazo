@@ -60,9 +60,43 @@ User drawings are converted into bounded semantic anchors and saved through the
 same revision-checked backend. A conflict reloads authoritative state; raw provider
 exceptions are not displayed.
 
+## Safe indicator registry
+
+`chart_indicators` discovers versioned definitions, validates/tests a structured IR,
+imports an owner-scoped JSON attachment, and returns exact computed analytical series.
+It never evaluates JavaScript, Python, Pine or uploaded programs. Definitions are
+immutable PostgreSQL records; an UPDATE trigger also prevents accidental in-place
+rewrites by trusted backend code. A changed definition creates a new version. Charts
+remain pinned until explicitly updated, and instance edits use object revisions and
+creator permissions just like drawings.
+
+The IR uses at most 64 ordered acyclic nodes, 16 bounded numeric parameters, eight
+outputs, 512-bar lookbacks and 2,000 input candles. Its work budget is two million
+primitive window operations. It supports OHLCV, arithmetic, rolling mean/min/max/sum/
+standard deviation, shifts, comparisons/crossings, conditional series and confirmed
+swing extrema. Swing outputs retain both confirmation time and the original anchor.
+Missing inputs, warmup and division by zero produce unavailable values, never NaN.
+Analytical calculations use bounded finite numbers; they do not authorize financial
+execution prices, quantities or risk, which retain the independent decimal boundary.
+
+Activation tests empty/short/missing-volume/history/timeframe cases, reproducibility
+and maximum parameter/resource bounds. Tests measure safety/correctness, not profit.
+Imports accept only safe JSON artifacts up to 64 KiB owned by the current principal
+in the private environment; a Bot cannot import another Bot's private artifact.
+Definition hashes deduplicate identical imports and retain filename/creator provenance.
+
+The deployed registry includes optional SMA, rolling standard deviation and broker
+volume definitions. No indicator is automatically applied and other vendor-native
+indicator names are not advertised as backend-supported calculations. A trusted
+KLine adapter projects validated results into line/bar/marker panes; uploaded source
+never runs in the client. One shared broker evidence request supplies every visible
+indicator. Five-second chart-only refresh is active only while a client is observing
+visible live indicators; it does not call an LLM and stops on unmount. Ordinary quotes
+remain streamed and do not reinitialize the chart or steal the user's viewport.
+
 ## Current scope
 
-Indicator instances are reserved in the format but indicator calculation/registry
-and chart-only vision rendering are subsequent implementation work. Mobile native
-interactive chart integration is not yet implemented; this checkpoint verifies the
-web/Electron adapter. No financial execution authority is granted by chart tools.
+Chart-only vision rendering and mobile native chart integration remain subsequent
+implementation work. This checkpoint verifies the web/Electron adapter, safe indicator
+factory and import/version persistence. No financial execution authority is granted
+by chart or indicator tools.
