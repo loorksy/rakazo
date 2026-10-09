@@ -105,6 +105,7 @@ import { ReplyDismissButton } from "../components/reply-dismiss-button";
 import { ReplyLine } from "../components/reply-line";
 import { SelectTextSheet } from "../components/select-text-sheet";
 import { trailingHeaderOptions } from "../components/sheet-header";
+import { TradingMandateCard } from "../components/TradingMandateCard";
 import { TimeSeparator } from "../components/time-separator";
 import { VoiceChatCard } from "../components/VoiceChatCard";
 import { WorkingIndicator } from "../components/WorkingIndicator";
@@ -3850,6 +3851,15 @@ const MessageBubble = memo(function MessageBubble({
           actionProps={actionProps}
         />
       ))}
+      {message.blocks
+        .filter((block) => block.kind === "trading_mandate")
+        .map((block, index) => (
+          <TradingMandateCard
+            key={`mandate-${index}`}
+            goalId={block.goalId}
+            mandateId={block.mandateId}
+          />
+        ))}
       {choiceBlocks.map((block, index) => (
         <ChoiceCard
           key={`choice-${index}`}

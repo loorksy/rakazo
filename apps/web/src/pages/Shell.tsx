@@ -160,6 +160,7 @@ import {
   ToolOnlyNarration,
   ToolSteps,
 } from "../components/ToolActivityDisclosure";
+import { TradingMandateCard } from "../components/TradingMandateCard";
 import { SkillDraftCard } from "../components/teach/SkillDraftCard";
 import { TeachCaptureOverlay } from "../components/teach/TeachCaptureOverlay";
 import { TeachComputerOverlayControl } from "../components/teach/TeachComputerOverlay";
@@ -6754,6 +6755,9 @@ const MessageView = memo(function MessageView({
               <ChartBlockView name={block.name} spec={block.spec} data={block.data} />
             </div>
           );
+        }
+        if (block.kind === "trading_mandate") {
+          return <TradingMandateCard key={i} goalId={block.goalId} mandateId={block.mandateId} />;
         }
         if (block.kind === "mcp_approval") {
           const botId = "botId" in artifactTarget ? artifactTarget.botId : message.botId;
