@@ -30,6 +30,7 @@ import { getUiAppearancePreference, setUiAppearance } from "../lib/ui-appearance
 import type { UiLocale } from "../lib/ui-locale";
 import { UI_LOCALE_LABELS, UI_LOCALES } from "../lib/ui-locale";
 import { authErrorText } from "../lib/user-error";
+import { TradingConnectionsPanel } from "./TradingConnectionsPanel";
 
 export type SettingsGeneralProps = {
   email?: string | null;
@@ -185,6 +186,7 @@ export function GeneralSettingsPanels({
         </Button>
       ) : null}
 
+      {isDeploymentOwner ? <TradingConnectionsPanel /> : null}
       <details data-testid="advanced-settings" className="group rounded-xl border border-border">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-[14px] text-foreground/75">
           <span className="block text-[15px] text-foreground">
