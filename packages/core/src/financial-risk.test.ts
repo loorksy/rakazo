@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { RiskCapacityReservation } from "./account-risk-capacity.js";
 import { accountRiskCapacity } from "./account-risk-capacity.js";
 import { financialCeil, financialDecimal, financialUnits } from "./financial-decimal.js";
-import { assessFinancialAction } from "./financial-risk.js";
+import { assessAttributedFinancialAction, assessFinancialAction } from "./financial-risk.js";
 import { tradingMandateFingerprint } from "./node/financial-action.js";
 
 const now = new Date("2026-10-09T10:00:00Z");
@@ -367,6 +367,93 @@ describe("deterministic bounded financial risk", () => {
       decision: "DENY",
       code: "TARGET_OWNERSHIP_CHANGED",
     });
+  });
+  it("keeps original-entry loss/cost accounting independent from forward quote risk on a partial close", () => {
+    const owned = { ...target, entry: "2700.1" };
+    const close: FinancialAction = {
+      ...identity,
+      operation: "CLOSE_POSITION",
+      positionId: "position",
+      volume: "0.01",
+    };
+    const assessed = assessAttributedFinancialAction({
+      action: close,
+      envelope,
+      facts,
+      state,
+      target: owned,
+      now,
+      reservation: { risk: "11.2", exposure: "5400.2", margin: "30" },
+    });
+    expect(assessed.assessment).toMatchObject({
+      decision: "ALLOW",
+      incrementalRisk: "0",
+      classification: "REDUCES_RISK",
+    });
+    expect(assessed.settlement).toEqual({ risk: "6.1", exposure: "2700.1", margin: "15" });
+  });
+  it("does not ignore newly priced reservation risk just because a stop moves toward profit", () => {
+    const protection: FinancialAction = {
+      ...identity,
+      operation: "MODIFY_PROTECTION",
+      positionId: "position",
+      stopLoss: "2697",
+      takeProfit: "2710",
+    };
+    const assessed = assessAttributedFinancialAction({
+      action: protection,
+      envelope,
+      facts: { ...facts, lossTickValue: "2" },
+      state: { ...state, openRisk: "11.2" },
+      target: { ...target, entry: "2700.1" },
+      now,
+      reservation: { risk: "11.2", exposure: "5400.2", margin: "30" },
+    });
+    expect(assessed.assessment).toMatchObject({
+      decision: "ALLOW",
+      incrementalRisk: "2.2",
+      classification: "INCREASES_RISK",
+    });
+    expect(assessed.settlement?.risk).toBe("13.4");
+  });
+  it("rejects malformed protected reservation facts instead of trusting numeric coercion", () => {
+    const close: FinancialAction = {
+      ...identity,
+      operation: "CLOSE_POSITION",
+      positionId: "position",
+      volume: "0.01",
+    };
+    expect(
+      assessAttributedFinancialAction({
+        action: close,
+        envelope,
+        facts,
+        state,
+        target,
+        now,
+        reservation: { risk: "NaN", exposure: "1", margin: "0" },
+      }).assessment,
+    ).toEqual({ decision: "DENY", code: "INVALID_RESERVATION_INPUT" });
+  });
+  it("does not permit stop widening when rounded risk values are equal", () => {
+    const change: FinancialAction = {
+      ...identity,
+      operation: "MODIFY_PROTECTION",
+      positionId: "position",
+      stopLoss: "2696",
+      takeProfit: "2710",
+    };
+    expect(
+      assess({
+        action: change,
+        target: { ...target, stopLoss: "2698" },
+        facts: {
+          ...facts,
+          lossTickValue: "0.000000000001",
+          quote: { ...facts.quote, bid: "2700", ask: "2700.1" },
+        },
+      }),
+    ).toEqual({ decision: "DENY", code: "STOP_WIDENING_NOT_AUTHORIZED" });
   });
   it("allows a fully closing risk reduction under account freeze and validates partial remainder", () => {
     const close: FinancialAction = {

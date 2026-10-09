@@ -9,6 +9,7 @@ import {
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
 import {
+  accountRiskCapacity,
   applySimulationAction,
   financialDecimal,
   financialUnits,
@@ -24,6 +25,7 @@ import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
+import { attributedFinancialAssessment, financialTarget } from "./financial-target.js";
 
 /** Local provider adapter. No broker mutation SDK or credential resolver is imported. */
 export class SimulationBroker {
@@ -214,7 +216,7 @@ export class SimulationBroker {
         limits.mode !== "SIMULATION" ||
         limits.revision !== guard?.revision ||
         guard?.ownerUserId !== actor.ownerUserId ||
-        action.operation !== "OPEN"
+        limits.maxDrawdown !== null
       )
         throw new Error("Current simulation authority required");
       const reservation = await tx.tradingRiskReservation.findUnique({ where: { effectId } });
@@ -232,6 +234,73 @@ export class SimulationBroker {
       if (book.ownerUserId !== actor.ownerUserId || book.revision !== facts.simulationRevision)
         throw new Error("Simulation book revision conflict");
       const before = SimulationBookStateSchema.parse(book.state);
+      const target = await financialTarget(tx, actor.ownerUserId, mandate.id, action, facts);
+      const reservations = await tx.tradingRiskReservation.findMany({
+        where: {
+          accountId: context.accountId,
+          mode: "SIMULATION",
+          status: { in: ["RESERVED", "COMMITTED", "UNCERTAIN"] },
+        },
+        take: 10001,
+      });
+      if (reservations.length > 10000) throw new Error("Simulation reservation capacity exceeded");
+      const other = reservations.filter((row) => row.effectId !== effectId);
+      const own = other.filter((row) => row.mandateId === mandate.id);
+      const sum = (key: "risk" | "exposure") =>
+        financialDecimal(
+          own.reduce((total, row) => total + financialUnits(row[key].toFixed()), 0n),
+        );
+      const unresolved = await tx.externalEffect.count({
+        where: {
+          id: { not: effectId },
+          status: { in: ["executing", "uncertain", "reconciling"] },
+          AND: [
+            { financialContext: { path: ["accountId"], equals: context.accountId } },
+            { financialContext: { path: ["mode"], equals: "SIMULATION" } },
+          ],
+        },
+      });
+      const { assessment, settlement } = attributedFinancialAssessment({
+        action,
+        envelope,
+        facts,
+        attribution: target,
+        now: this.now(),
+        state: {
+          version: 1,
+          missionPnl: mandate.missionPnl.toFixed(),
+          dailyPnl: mandate.dailyPnl.toFixed(),
+          openRisk: sum("risk"),
+          openNotional: sum("exposure"),
+          positions: own.filter((row) => row.kind === "POSITION").length,
+          pendingOrders: own.filter((row) => row.kind === "PENDING").length,
+          missionActive: true,
+          accountFrozen: false,
+          unresolvedEffects: unresolved > 0,
+        },
+      });
+      if (
+        assessment.decision !== "ALLOW" ||
+        reservation.risk.toFixed() !== assessment.incrementalRisk ||
+        reservation.exposure.toFixed() !== assessment.notional ||
+        reservation.margin.toFixed() !== assessment.margin
+      )
+        throw new Error("Simulation admission evidence changed");
+      const capacity = accountRiskCapacity({
+        action,
+        mandateId: mandate.id,
+        envelope,
+        limits,
+        facts,
+        assessment,
+        reservations: other.map((row) => ({
+          ...row,
+          risk: row.risk.toFixed(),
+          exposure: row.exposure.toFixed(),
+          margin: row.margin.toFixed(),
+        })),
+      });
+      if (capacity) throw new Error("Simulation account capacity changed");
       const result = applySimulationAction({
         state: before,
         action,
@@ -263,9 +332,31 @@ export class SimulationBroker {
             balanceAfter: result.state.balance,
             reference: result.outcome.providerReference,
             releasedEffectIds: result.releasedEffectIds,
+            targetOriginEffectId: target?.reservation.effectId ?? null,
+            targetRiskBefore: target?.reservation.risk.toFixed() ?? null,
+            targetRiskAfter: settlement?.risk ?? null,
           },
         },
       });
+      if (target && settlement) {
+        const remaining = [...result.state.positions, ...result.state.orders].find(
+          (row) => row.id === target.target.id,
+        );
+        await tx.tradingRiskReservation.update({
+          where: { id: target.reservation.id },
+          data: {
+            status: remaining ? "COMMITTED" : "RELEASED",
+            risk: settlement.risk,
+            exposure: settlement.exposure,
+            margin: settlement.margin,
+          },
+        });
+        // The management delta is now incorporated in the original exposure's reservation.
+        await tx.tradingRiskReservation.update({
+          where: { id: reservation.id },
+          data: { status: "RELEASED", providerReference: result.outcome.providerReference },
+        });
+      }
       await tx.financialJournal.create({
         data: {
           ownerUserId: actor.ownerUserId,

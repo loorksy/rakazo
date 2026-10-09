@@ -50,9 +50,14 @@ Reservations are not released merely because a request timed out or a worker die
 
 ## Current checkpoint limitations
 
-The reservation path currently supports OPEN only. Verified management attribution,
-provider-confirmed release/reconciliation, cash-flow-aware account drawdown baselines,
-mission/goal/plan command/UI lifecycle and simulation execution remain pending.
+The reservation path supports new OPEN exposure and attributed simulation management.
+Management deltas use MANAGEMENT reservations; confirmed local provider acceptance updates
+the original exposure's risk/margin/notional and releases the delta in the same transaction.
+The shared `assessAttributedFinancialAction` preserves forward risk checks and adds exact
+original-entry loss/cost accounting. State, receipts and journal are protected runtime data.
+Cash-flow-aware account drawdown baselines, real-account supervision and controlled LIVE
+provider release/reconciliation remain pending. Goals/plans/mandates and simulation
+execution use the existing command, chat and effect infrastructure.
 Configured account drawdown without a verified baseline is refused. LIVE reservations
 are refused even when an operator flag is supplied: readiness has not been established
 and no broker mutation port is exposed. The new goal/plan/mandate tables support

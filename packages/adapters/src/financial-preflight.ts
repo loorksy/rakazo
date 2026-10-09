@@ -1,6 +1,7 @@
 import type { FinancialAction } from "@rakazo/contracts";
 import {
   BrokerQuoteSchema,
+  FinancialActionSchema,
   FinancialRiskFactsSchema,
   SimulationBookStateSchema,
 } from "@rakazo/contracts";
@@ -17,6 +18,42 @@ export async function financialPreflight(
   signal?: AbortSignal,
 ) {
   signal?.throwIfAborted();
+  const book =
+    action.mode === "SIMULATION"
+      ? await prisma.simulationBook.findFirst({
+          where: { accountId: action.accountId, ownerUserId: actor.ownerUserId },
+        })
+      : null;
+  const state = book ? SimulationBookStateSchema.parse(book.state) : null;
+  let providerAction = action;
+  if (action.mode === "SIMULATION" && action.operation === "MODIFY_ORDER") {
+    const target = state?.orders.find(
+      (row) =>
+        row.id === action.orderId &&
+        row.instrumentId === action.instrumentId &&
+        row.brokerSymbol === action.brokerSymbol,
+    );
+    if (!target) throw new Error("Simulation pending target unavailable");
+    // Ask the broker for entry margin evidence, never a mutation against a synthetic order ID.
+    providerAction = FinancialActionSchema.parse({
+      version: 1,
+      mode: action.mode,
+      provider: action.provider,
+      accountId: action.accountId,
+      instrumentId: action.instrumentId,
+      brokerSymbol: action.brokerSymbol,
+      operation: "OPEN",
+      side: target.side,
+      orderType: target.orderType,
+      volume: action.volume,
+      price: action.price,
+      stopLimitPrice: null,
+      stopLoss: action.stopLoss,
+      takeProfit: action.takeProfit,
+      expiresAt: action.expiresAt,
+      fillingMode: null,
+    });
+  }
   const facts = FinancialRiskFactsSchema.parse(
     await requestBrokerRead(
       prisma,
@@ -25,16 +62,12 @@ export async function financialPreflight(
         operation: "preflight",
         accountId: action.accountId,
         instrumentId: action.instrumentId,
-        action,
+        action: providerAction,
       },
       signal,
     ),
   );
   if (action.mode !== "SIMULATION") return facts;
-  const book = await prisma.simulationBook.findFirst({
-    where: { accountId: action.accountId, ownerUserId: actor.ownerUserId },
-  });
-  const state = book ? SimulationBookStateSchema.parse(book.state) : null;
   const instruments = [
     ...new Set(state?.positions.map((position) => position.instrumentId) ?? []),
   ].filter((id) => id !== action.instrumentId);

@@ -17,8 +17,9 @@ A preview lasts at most fifteen seconds. It is an inspection snapshot, not an
 approval, risk reservation or guarantee that capacity will remain available.
 Execution must repeat authoritative admission atomically. Provider failures leave
 the proposal unchanged. Unknown mission accounting blocks new exposure; this module
-does not invent an empty account. Management previews currently block until trusted
-position/order attribution is available. LIVE remains disabled at this checkpoint.
+does not invent an empty account. Simulation management previews resolve protected book
+positions/orders and confirmed origin receipts; unattributed targets fail closed. LIVE
+remains disabled at this checkpoint.
 
 Protected PostgreSQL proposal/preview records have no chat, Run or Bot cascade.
 Database triggers prevent material rewrites, deletion and rewriting historical

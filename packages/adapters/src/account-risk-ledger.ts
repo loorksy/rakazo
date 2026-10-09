@@ -8,7 +8,6 @@ import {
 } from "@rakazo/contracts";
 import {
   accountRiskCapacity,
-  assessFinancialAction,
   financialDecimal,
   financialUnits,
   MAIN_TRADING_AGENT_SPAWN_KEY,
@@ -22,6 +21,7 @@ import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
+import { attributedFinancialAssessment, financialTarget } from "./financial-target.js";
 
 const consuming = ["RESERVED", "COMMITTED", "UNCERTAIN"];
 /** Protected accounting only. This class exposes no broker mutation or model-facing risk input. */
@@ -236,13 +236,12 @@ export class AccountRiskLedger {
         ],
       },
     });
-    // Management reservations require provider-owned target attribution; this first ledger path
-    // accepts new exposure only and cannot accidentally reinterpret a modification as an open.
-    if (action.operation !== "OPEN") throw new Error("Verified management attribution required");
-    const assessment = assessFinancialAction({
+    const target = await financialTarget(tx, actor.ownerUserId, mandate.id, action, facts);
+    const { assessment } = attributedFinancialAssessment({
       action,
       envelope,
       facts,
+      attribution: target,
       now: this.now(),
       state: {
         version: 1,
@@ -273,7 +272,7 @@ export class AccountRiskLedger {
       })),
     });
     if (capacity) throw new Error(`Account capacity denied: ${capacity}`);
-    const pending = action.orderType !== "MARKET";
+    const pending = action.operation === "OPEN" && action.orderType !== "MARKET";
     const reservationData = {
       ownerUserId: actor.ownerUserId,
       accountId: account.id,
@@ -281,7 +280,7 @@ export class AccountRiskLedger {
       mandateId,
       effectId,
       actionFingerprint,
-      kind: pending ? "PENDING" : "POSITION",
+      kind: action.operation === "OPEN" ? (pending ? "PENDING" : "POSITION") : "MANAGEMENT",
       risk: assessment.incrementalRisk,
       exposure: assessment.notional,
       margin: assessment.margin,

@@ -36,6 +36,6 @@ updates attributed mission accounting and pins the book revision. No LLM is call
 accounting step. Too-old or missing data blocks execution.
 
 After STARTED, any uncertain error remains UNCERTAIN with risk retained. Reconciliation
-reads immutable simulator acceptance receipts and never sends another mutation. Management,
-automatic pending fills/protective exits and LIVE dispatch remain
+reads immutable simulator acceptance receipts and never sends another mutation. Attributed
+simulation management uses the same path. Automatic pending fills/protective exits and LIVE dispatch remain
 separate unfinished integration work; the current tools do not claim those capabilities.

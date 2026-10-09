@@ -179,3 +179,20 @@ The mission PostgreSQL suite passes 52 tests; the eight account-ledger PostgreSQ
 also pass against all 114 forward migrations. Database/adapters/API/Worker type checks
 pass. Simulation/live mode separation, stale-worker rejection and immutable receipts remain
 enforced. Management and LIVE readiness are still incomplete.
+
+## Attributed simulation management checkpoint
+
+The existing financial tool path now manages simulator-attributed positions and pending
+orders: protective changes, partial/full close, order changes and cancellation. A protected
+target resolver binds the current book object to its confirmed origin/receipt/reservation.
+The shared deterministic risk engine enforces forward risk and remaining original-entry
+loss/cost accounting; management deltas do not increment position/order counts. Acceptance
+updates the book, exact receipt and original reservation atomically. Stale edits and
+unauthorized widening/increases are rejected. No broker mutation is performed.
+
+The mission PostgreSQL suite passes 60 tests, including actual process death after partial
+close acceptance and replay-free reconciliation. Core risk/simulator/preflight tests pass
+57 tests. The eight account-ledger PostgreSQL tests remain passing; core, database,
+adapters, API and Worker type checks pass. See `simulation-management.md` for precise
+semantics and remaining scope. LIVE, real manual-position supervision, inactive-mandate
+management and automatic simulator observations remain unfinished.

@@ -11,7 +11,6 @@ import {
 } from "@rakazo/contracts";
 import {
   accountRiskCapacity,
-  assessFinancialAction,
   financialDecimal,
   financialUnits,
   MAIN_TRADING_AGENT_SPAWN_KEY,
@@ -25,6 +24,7 @@ import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
 import { financialPreflight } from "./financial-preflight.js";
+import { attributedFinancialAssessment, financialTarget } from "./financial-target.js";
 
 type Proposal = Prisma.TradeProposalGetPayload<Record<never, never>>;
 type TrustedPreflight = (
@@ -285,10 +285,15 @@ export class TradeProposals {
         orderBy: { version: "desc" },
       });
       if ((latest?.version ?? 0) >= 128) throw new Error("Preview capacity reached");
-      let risk = assessFinancialAction({ action, envelope, facts, state, now: this.now() });
-      // Management needs provider-owned target attribution, not a guessed model position snapshot.
-      if (action.operation !== "OPEN")
-        risk = { decision: "DENY", code: "MANAGEMENT_ATTRIBUTION_REQUIRED" };
+      const target = await financialTarget(tx, actor.ownerUserId, mandate.id, action, facts);
+      let { assessment: risk } = attributedFinancialAssessment({
+        action,
+        envelope,
+        facts,
+        state,
+        attribution: target,
+        now: this.now(),
+      });
       if (
         !mandate.observedAt ||
         this.now().getTime() - mandate.observedAt.getTime() > 15000 ||

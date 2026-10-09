@@ -53,7 +53,7 @@ export function accountRiskCapacity(input: {
     const rows = input.reservations.map((row) => {
       if (
         !row.mandateId ||
-        !["POSITION", "PENDING"].includes(row.kind) ||
+        !["POSITION", "PENDING", "MANAGEMENT"].includes(row.kind) ||
         !["RESERVED", "COMMITTED", "UNCERTAIN"].includes(row.status)
       )
         throw new Error("Invalid reservation");

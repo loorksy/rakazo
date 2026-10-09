@@ -10,6 +10,7 @@ import {
   FinancialRiskFactsSchema,
   FinancialRiskStateSchema,
   FinancialRiskTargetSchema,
+  TradingDecimalSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
 import {
@@ -32,6 +33,123 @@ export type FinancialRiskAssessment =
       classification: "REDUCES_RISK" | "SAME_RISK" | "INCREASES_RISK";
     };
 class RiskFailure extends Error {}
+/** Forward risk and original-entry loss accounting remain distinct, both enforced deterministically. */
+export function assessAttributedFinancialAction(input: {
+  action: FinancialAction;
+  envelope: TradingMandateEnvelope;
+  facts: FinancialRiskFacts;
+  state: FinancialRiskState;
+  now: Date;
+  target?: FinancialRiskTarget;
+  reservation?: { risk: string; exposure: string; margin: string };
+}): {
+  assessment: FinancialRiskAssessment;
+  settlement: { risk: string; exposure: string; margin: string } | null;
+} {
+  try {
+    const assessment = assessFinancialAction(input);
+    if (assessment.decision !== "ALLOW" || input.action.operation === "OPEN")
+      return { assessment, settlement: null };
+    const { action, envelope, facts, state, target, reservation } = input;
+    const deny = (code: string) => ({
+      assessment: { decision: "DENY" as const, code },
+      settlement: null,
+    });
+    if (!target || !reservation) return deny("MANAGEMENT_ATTRIBUTION_REQUIRED");
+    for (const value of Object.values(reservation)) TradingDecimalSchema.parse(value);
+    let volume = u(target.volume),
+      entry = target.entry,
+      stop = target.stopLoss;
+    let margin = u(reservation.margin);
+    if (
+      action.operation === "CANCEL_ORDER" ||
+      (action.operation === "CLOSE_POSITION" && action.volume === null)
+    ) {
+      volume = 0n;
+      margin = 0n;
+    } else if (action.operation === "CLOSE_POSITION") {
+      volume -= u(action.volume ?? target.volume);
+      margin = financialCeil(margin * volume, u(target.volume));
+    } else if (action.operation === "MODIFY_PROTECTION") stop = action.stopLoss;
+    else {
+      volume = u(action.volume);
+      entry = action.price;
+      stop = action.stopLoss;
+      if (facts.proposedMargin === null) return deny("UNKNOWN_MARGIN");
+      margin = u(facts.proposedMargin);
+    }
+    if (volume > 0n && stop === null) return deny("UNBOUNDED_LOSS");
+    let risk = 0n;
+    if (volume > 0n && stop !== null) {
+      risk =
+        protectedRisk(target.side, entry, stop, financialDecimal(volume), facts) +
+        u(envelope.costReservePerTrade);
+    }
+    let exposure = 0n;
+    if (volume > 0n) {
+      if (action.operation === "MODIFY_ORDER") {
+        if (facts.contractSize === null || facts.profitCurrency !== facts.currency)
+          return deny("UNKNOWN_ACCOUNT_NOTIONAL");
+        exposure = financialCeil(
+          u(entry) * u(facts.contractSize) * volume,
+          FINANCIAL_SCALE * FINANCIAL_SCALE,
+        );
+      } else exposure = financialCeil(u(reservation.exposure) * volume, u(target.volume));
+    }
+    const delta = (after: bigint, before: bigint) => (after > before ? after - before : 0n);
+    const max = (a: bigint, b: bigint) => (a > b ? a : b);
+    const incrementalRisk = max(u(assessment.incrementalRisk), delta(risk, u(reservation.risk)));
+    const incrementalExposure = max(
+      u(assessment.notional),
+      delta(exposure, u(reservation.exposure)),
+    );
+    const incrementalMargin = max(u(assessment.margin), delta(margin, u(reservation.margin)));
+    if (incrementalRisk > 0n || incrementalExposure > 0n || incrementalMargin > 0n) {
+      if (
+        !state.missionActive ||
+        state.accountFrozen ||
+        Date.parse(envelope.expiresAt) <= input.now.getTime()
+      )
+        return deny("MISSION_NOT_ACTIVE");
+      const loss = u(state.missionPnl) < 0n ? -u(state.missionPnl) : 0n;
+      const dailyLoss = u(state.dailyPnl) < 0n ? -u(state.dailyPnl) : 0n;
+      if (risk > u(envelope.maxRiskPerTrade)) return deny("PER_TRADE_RISK_LIMIT");
+      if (loss + u(state.openRisk) + incrementalRisk > u(envelope.maxMissionLoss))
+        return deny("MISSION_LOSS_LIMIT");
+      if (
+        envelope.maxDailyLoss !== null &&
+        dailyLoss + u(state.openRisk) + incrementalRisk > u(envelope.maxDailyLoss)
+      )
+        return deny("DAILY_LOSS_LIMIT");
+      if (u(state.openRisk) + incrementalRisk > u(envelope.maxOpenRisk))
+        return deny("OPEN_RISK_LIMIT");
+      if (u(state.openNotional) + incrementalExposure > u(envelope.maxNotional))
+        return deny("NOTIONAL_LIMIT");
+    }
+    return {
+      assessment: {
+        ...assessment,
+        incrementalRisk: financialDecimal(incrementalRisk),
+        notional: financialDecimal(incrementalExposure),
+        margin: financialDecimal(incrementalMargin),
+        classification:
+          incrementalRisk > 0n || incrementalExposure > 0n || incrementalMargin > 0n
+            ? "INCREASES_RISK"
+            : assessment.classification,
+      },
+      settlement: {
+        risk: financialDecimal(risk),
+        exposure: financialDecimal(exposure),
+        margin: financialDecimal(margin),
+      },
+    };
+  } catch {
+    return {
+      assessment: { decision: "DENY", code: "INVALID_RESERVATION_INPUT" },
+      settlement: null,
+    };
+  }
+}
 function requireRisk(condition: boolean, code: string): asserts condition {
   if (!condition) throw new RiskFailure(code);
 }
@@ -274,14 +392,27 @@ export function assessFinancialAction(input: {
           requireRisk(remaining > 0n, "INVALID_PARTIAL_CLOSE");
           validVolume(financialDecimal(remaining), facts);
           after = financialCeil(before * remaining, u(target.volume));
+          reductionRequested = true;
         }
       } else if (action.operation === "MODIFY_PROTECTION") {
         protectivePrices(target.side, entry, action.stopLoss, action.takeProfit, facts, false);
         after = protectedRisk(target.side, entry, action.stopLoss, target.volume, facts);
+        const widens =
+          target.stopLoss !== null &&
+          action.stopLoss !== null &&
+          (target.side === "BUY"
+            ? u(action.stopLoss) < u(target.stopLoss)
+            : u(action.stopLoss) > u(target.stopLoss));
         requireRisk(
-          after <= before || envelope.riskIncreasePermissions.includes("WIDEN_STOP"),
+          !widens || envelope.riskIncreasePermissions.includes("WIDEN_STOP"),
           "STOP_WIDENING_NOT_AUTHORIZED",
         );
+        reductionRequested =
+          target.stopLoss !== null &&
+          action.stopLoss !== null &&
+          (target.side === "BUY"
+            ? u(action.stopLoss) > u(target.stopLoss)
+            : u(action.stopLoss) < u(target.stopLoss));
       } else if (action.operation === "MODIFY_ORDER") {
         validVolume(action.volume, facts);
         requireRisk(

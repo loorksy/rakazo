@@ -11,12 +11,26 @@ Currency and initial equity are immutable. New execution receipts and the corres
 virtual account change commit atomically. Receipts and accounting survive conversation
 deletion and backend restart. A duplicate effect returns its original receipt.
 
-Current integrated simulation admission supports market and pending OPEN actions after
-independent review, atomic risk reservation and STARTED. The deterministic calculator also
-supports order cancellation/modification, protective updates and partial/full closes;
-management dispatch remains unavailable until protected target attribution and management
-reservation are connected. Pending fills, expiry and protective automatic exits are not
+Integrated simulation admission supports market/pending entries, order cancellation and
+modification, protective updates and partial/full closes through mandatory review, atomic
+risk reservation and STARTED. Management resolves the exact exposure from the protected
+virtual book and its confirmed original effect/acceptance receipt. A model-provided ID
+does not confer ownership. Pending fills, expiry and protective automatic exits are not
 yet observed by this checkpoint.
+
+Management reserves its incremental risk as MANAGEMENT, rather than counting it as a new
+position/order. Acceptance updates the original exposure's reservation, releases the
+temporary management reservation and commits virtual state/receipt/journal atomically.
+Cancellation/full close release the original reservation; partial close retains conservative
+remaining margin and the cost reserve. Process death after partial-close acceptance can be
+reconciled without closing another portion. Book revisions reject stale concurrent edits.
+
+Both forward quote-to-stop risk and original-entry loss accounting are enforced. The shared
+deterministic risk engine calculates remaining original-entry loss plus the approved cost
+reserve, and admits the larger incremental risk/exposure estimate. Profit-protecting stops
+retain the cost reserve. Pending margin-increasing changes use a conservative full margin
+reservation during admission. Stop widening and pending-volume increases require explicit
+permissions and still obey mission/account ceilings.
 
 Preflight projects virtual positions/orders, equity, margin and free margin into the same
 trusted risk contract, without altering broker-native symbol/specification/quote facts.

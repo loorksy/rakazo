@@ -228,7 +228,7 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       await db.pool.end();
     }
   });
-  async function proposed() {
+  async function proposed(riskProposal = draft) {
     const created = TradingGoalViewSchema.parse(
       await missions.command(actor, { operation: "goal_create", goal }, "request"),
     );
@@ -237,7 +237,7 @@ suite("owner-only durable trading goals/plans/mandates", () => {
         operation: "plan_create",
         goalId: created.id,
         expectedVersion: 0,
-        plan,
+        plan: { ...plan, riskProposal },
       }),
     );
     const mandate = TradingMandateViewSchema.parse(
@@ -245,8 +245,8 @@ suite("owner-only durable trading goals/plans/mandates", () => {
     );
     return { created, createdPlan, mandate };
   }
-  async function activated() {
-    const rows = await proposed();
+  async function activated(riskProposal = draft) {
+    const rows = await proposed(riskProposal);
     await missions.setAccountGuardrails(owner, limits);
     const active = await missions.resolveMandate(owner, {
       id: rows.mandate.id,
@@ -320,8 +320,9 @@ suite("owner-only durable trading goals/plans/mandates", () => {
     async function prepared(
       overrideAction = action,
       preflight: () => Promise<FinancialRiskFacts> = vi.fn(async () => facts),
+      riskProposal = draft,
     ) {
-      const { active, createdPlan } = await activated();
+      const { active, createdPlan } = await activated(riskProposal);
       // Trusted observer fixture, not an agent tool; initial accounting is known empty here.
       await db.prisma.tradingMandate.update({
         where: { id: active.id },
@@ -342,8 +343,12 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       );
       return { service, proposal, active, createdPlan, command, preflight };
     }
-    async function financialPrepared(preflight?: () => Promise<FinancialRiskFacts>) {
-      const rows = await prepared(action, preflight);
+    async function financialPrepared(
+      preflight?: () => Promise<FinancialRiskFacts>,
+      overrideAction = action,
+      riskProposal = draft,
+    ) {
+      const rows = await prepared(overrideAction, preflight, riskProposal);
       const previewed = TradeProposalViewSchema.parse(
         await rows.service.command(actor, {
           operation: "preview",
@@ -368,9 +373,13 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       };
       return { ...rows, previewed, effects, effect, reviewContext };
     }
-    async function simulatedPrepared() {
+    async function simulatedPrepared(overrideAction = action, riskProposal = draft) {
       const simulator = new SimulationBroker(db.prisma, () => now);
-      const rows = await financialPrepared(() => simulator.preflight(actor, facts));
+      const rows = await financialPrepared(
+        () => simulator.preflight(actor, facts),
+        overrideAction,
+        riskProposal,
+      );
       const simulatedFacts = await simulator.preflight(actor, facts);
       await rows.effects.review(
         actor,
@@ -397,6 +406,422 @@ suite("owner-only durable trading goals/plans/mandates", () => {
         },
       };
     }
+    const managementScope: typeof draft = {
+      ...draft,
+      allowedOperations: [
+        "OPEN",
+        "MODIFY_PROTECTION",
+        "CLOSE_POSITION",
+        "MODIFY_ORDER",
+        "CANCEL_ORDER",
+      ],
+    };
+    async function acceptedExposure(overrideAction = action, scope = managementScope) {
+      const rows = await simulatedPrepared(overrideAction, scope);
+      await rows.effects.begin(actor, rows.effect.id, rows.simulatedFacts);
+      const outcome = await rows.simulator.execute(actor, rows.effect.id, rows.simulatedFacts);
+      await rows.effects.settle(actor, rows.effect.id, outcome);
+      return rows;
+    }
+    async function managementProposal(
+      rows: Awaited<ReturnType<typeof simulatedPrepared>>,
+      managedAction: FinancialAction,
+      brokerFacts = facts,
+    ) {
+      const preflight = () => rows.simulator.preflight(actor, brokerFacts);
+      const service = new TradeProposals(db.prisma, () => now, preflight);
+      const proposal = TradeProposalViewSchema.parse(
+        await service.command(
+          actor,
+          {
+            operation: "create",
+            mandateId: rows.active.id,
+            planId: rows.createdPlan.id,
+            action: managedAction,
+            rationaleSummary: "Manage only the exact attributed exposure",
+            evidenceRefs: [],
+            chartRefs: [],
+          },
+          JSON.stringify(managedAction),
+        ),
+      );
+      const previewed = TradeProposalViewSchema.parse(
+        await service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 1,
+        }),
+      );
+      return {
+        previewed,
+        facts: await preflight(),
+        execute: () =>
+          new FinancialExecution(db.prisma, () => now, preflight).execute(
+            actor,
+            { proposalId: proposal.id, previewId: previewed.preview?.id ?? "missing" },
+            new ScriptedAutoReviewProvider(),
+            rows.reviewContext,
+          ),
+      };
+    }
+    const managementIdentity = {
+      version: 1 as const,
+      mode: "SIMULATION" as const,
+      provider: "metaapi",
+      accountId: "account",
+      instrumentId: "gold",
+      brokerSymbol: "GOLD.a",
+    };
+    it("tightens protection and partially/full closes without duplicating exposure reservations", async () => {
+      const rows = await acceptedExposure({ ...action, volume: "0.02" });
+      const positionId = `sim_${rows.effect.id}`;
+      const tighten = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "MODIFY_PROTECTION",
+        positionId,
+        stopLoss: "2699",
+        takeProfit: "2710",
+      });
+      expect(await tighten.execute()).toMatchObject({ status: "SUCCEEDED" });
+      let reservation = await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+        where: { effectId: rows.effect.id },
+      });
+      expect(reservation.risk.toFixed()).toBe("3.2");
+      const partial = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "CLOSE_POSITION",
+        positionId,
+        volume: "0.01",
+      });
+      expect(await partial.execute()).toMatchObject({ status: "SUCCEEDED" });
+      let book = SimulationBookStateSchema.parse(
+        (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+          .state,
+      );
+      expect(book.positions).toMatchObject([
+        { id: positionId, volume: "0.01", margin: "15", stopLoss: "2699" },
+      ]);
+      reservation = await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+        where: { effectId: rows.effect.id },
+      });
+      expect(reservation.risk.toFixed()).toBe("2.1");
+      expect(
+        await db.prisma.tradingRiskReservation.findMany({ where: { status: "COMMITTED" } }),
+      ).toHaveLength(1);
+      const close = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "CLOSE_POSITION",
+        positionId,
+        volume: null,
+      });
+      const result = await close.execute();
+      expect(result.status).toBe("SUCCEEDED");
+      expect(await close.execute()).toEqual(result);
+      book = SimulationBookStateSchema.parse(
+        (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+          .state,
+      );
+      expect(book.positions).toEqual([]);
+      expect(book.balance).toBe("9999.8");
+      expect(book.performance).toMatchObject([{ mandateId: rows.active.id, realized: "-0.2" }]);
+      expect(
+        await db.prisma.tradingRiskReservation.count({
+          where: { status: { in: ["RESERVED", "COMMITTED", "UNCERTAIN"] } },
+        }),
+      ).toBe(0);
+      expect(await db.prisma.simulationExecution.count()).toBe(4);
+    });
+    it("can protect a profitable position but cannot widen protection without explicit scope", async () => {
+      const rows = await acceptedExposure();
+      const positionId = `sim_${rows.effect.id}`;
+      const profitable = {
+        ...facts,
+        quote: { ...facts.quote, bid: "2720", ask: "2720.1", revision: "profit" },
+      };
+      const protect = await managementProposal(
+        rows,
+        {
+          ...managementIdentity,
+          operation: "MODIFY_PROTECTION",
+          positionId,
+          stopLoss: "2710",
+          takeProfit: "2730",
+        },
+        profitable,
+      );
+      expect(await protect.execute()).toMatchObject({ status: "SUCCEEDED" });
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).risk.toFixed(),
+      ).toBe("1");
+      const widen = await managementProposal(
+        rows,
+        {
+          ...managementIdentity,
+          operation: "MODIFY_PROTECTION",
+          positionId,
+          stopLoss: "2705",
+          takeProfit: "2730",
+        },
+        profitable,
+      );
+      expect(widen.previewed.preview?.risk).toEqual({
+        decision: "DENY",
+        code: "STOP_WIDENING_NOT_AUTHORIZED",
+      });
+      await expect(widen.execute()).rejects.toThrow();
+      expect(await db.prisma.simulationExecution.count()).toBe(2);
+    });
+    it("reserves explicitly authorized stop widening without exceeding mission risk", async () => {
+      const rows = await acceptedExposure(action, {
+        ...managementScope,
+        riskIncreasePermissions: ["WIDEN_STOP"],
+      });
+      const change = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "MODIFY_PROTECTION",
+        positionId: `sim_${rows.effect.id}`,
+        stopLoss: "2693",
+        takeProfit: "2710",
+      });
+      expect(change.previewed.preview?.risk).toMatchObject({
+        decision: "ALLOW",
+        incrementalRisk: "2",
+        classification: "INCREASES_RISK",
+      });
+      expect(await change.execute()).toMatchObject({ status: "SUCCEEDED" });
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).risk.toFixed(),
+      ).toBe("8.1");
+      expect(await db.prisma.tradingRiskReservation.count({ where: { status: "COMMITTED" } })).toBe(
+        1,
+      );
+    });
+    it("updates and cancels an attributed pending order while retaining risk until acceptance", async () => {
+      const rows = await acceptedExposure({
+        ...action,
+        orderType: "LIMIT",
+        price: "2699",
+        stopLoss: "2695",
+        expiresAt: "2026-10-09T20:00:00Z",
+      });
+      const orderId = `sim_${rows.effect.id}`;
+      const update = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "MODIFY_ORDER",
+        orderId,
+        price: "2698",
+        volume: "0.01",
+        stopLoss: "2696",
+        takeProfit: "2710",
+        expiresAt: "2026-10-09T18:00:00Z",
+        stopLimitPrice: null,
+      });
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).risk.toFixed(),
+      ).toBe("5");
+      expect(await update.execute()).toMatchObject({ status: "SUCCEEDED" });
+      const updated = await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+        where: { effectId: rows.effect.id },
+      });
+      expect(updated.risk.toFixed()).toBe("3");
+      expect(updated.exposure.toFixed()).toBe("2698");
+      const cancel = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "CANCEL_ORDER",
+        orderId,
+      });
+      expect(await cancel.execute()).toMatchObject({ status: "SUCCEEDED" });
+      expect(
+        SimulationBookStateSchema.parse(
+          (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+            .state,
+        ).orders,
+      ).toEqual([]);
+      expect(
+        await db.prisma.tradingRiskReservation.count({
+          where: { status: { in: ["COMMITTED", "RESERVED", "UNCERTAIN"] } },
+        }),
+      ).toBe(0);
+    });
+    it("counts the additional volume/risk/margin of an explicitly authorized pending-order increase", async () => {
+      const rows = await acceptedExposure(
+        {
+          ...action,
+          orderType: "LIMIT",
+          price: "2699",
+          stopLoss: "2695",
+          expiresAt: "2026-10-09T20:00:00Z",
+        },
+        { ...managementScope, riskIncreasePermissions: ["INCREASE_PENDING_VOLUME"] },
+      );
+      const increase = await managementProposal(
+        rows,
+        {
+          ...managementIdentity,
+          operation: "MODIFY_ORDER",
+          orderId: `sim_${rows.effect.id}`,
+          price: "2699",
+          volume: "0.02",
+          stopLoss: "2695",
+          takeProfit: "2710",
+          expiresAt: "2026-10-09T18:00:00Z",
+          stopLimitPrice: null,
+        },
+        { ...facts, proposedMargin: "60" },
+      );
+      expect(increase.previewed.preview?.risk).toMatchObject({
+        decision: "ALLOW",
+        incrementalRisk: "4",
+        notional: "2699",
+      });
+      expect(await increase.execute()).toMatchObject({ status: "SUCCEEDED" });
+      const reserved = await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+        where: { effectId: rows.effect.id },
+      });
+      expect(reserved.risk.toFixed()).toBe("9");
+      expect(reserved.margin.toFixed()).toBe("60");
+      expect(reserved.exposure.toFixed()).toBe("5398");
+    });
+    it("rejects concurrent stale management facts instead of overwriting the newer protection", async () => {
+      const rows = await acceptedExposure();
+      const first = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "MODIFY_PROTECTION",
+        positionId: `sim_${rows.effect.id}`,
+        stopLoss: "2698",
+        takeProfit: "2710",
+      });
+      const second = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "MODIFY_PROTECTION",
+        positionId: `sim_${rows.effect.id}`,
+        stopLoss: "2699",
+        takeProfit: "2710",
+      });
+      const prepared = await rows.effects.prepare(
+        actor,
+        second.previewed.id,
+        second.previewed.preview?.id ?? "missing",
+      );
+      await rows.effects.review(
+        actor,
+        prepared.id,
+        new ScriptedAutoReviewProvider(),
+        rows.reviewContext,
+      );
+      expect(await first.execute()).toMatchObject({ status: "SUCCEEDED" });
+      await expect(rows.effects.begin(actor, prepared.id, second.facts)).rejects.toThrow(
+        "revision conflict",
+      );
+      expect(
+        SimulationBookStateSchema.parse(
+          (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+            .state,
+        ).positions[0]?.stopLoss,
+      ).toBe("2698");
+    });
+    it("does not partially close again after actual process death following management acceptance", async () => {
+      const rows = await acceptedExposure({ ...action, volume: "0.02" });
+      const partial = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "CLOSE_POSITION",
+        positionId: `sim_${rows.effect.id}`,
+        volume: "0.01",
+      });
+      const effect = await rows.effects.prepare(
+        actor,
+        partial.previewed.id,
+        partial.previewed.preview?.id ?? "missing",
+      );
+      await rows.effects.review(
+        actor,
+        effect.id,
+        new ScriptedAutoReviewProvider(),
+        rows.reviewContext,
+      );
+      await killAfterPersisted(
+        `import {createDb} from '@rakazo/db'; import {FinancialEffects} from './src/financial-effects.ts'; import {SimulationBroker} from './src/simulation-broker.ts';
+        const db=createDb(process.env.MISSION_TEST_DATABASE_URL); const time=()=>new Date(process.env.FIXTURE_TIME);
+        const actor=JSON.parse(process.env.FIXTURE_ACTOR); const facts=JSON.parse(process.env.FIXTURE_FACTS);
+        await new FinancialEffects(db.prisma,time).begin(actor,process.env.FIXTURE_EFFECT,facts);
+        await new SimulationBroker(db.prisma,time).execute(actor,process.env.FIXTURE_EFFECT,facts);
+        console.log('PERSISTED'); setInterval(()=>{},1000);`,
+        {
+          FIXTURE_TIME: now.toISOString(),
+          FIXTURE_ACTOR: JSON.stringify(actor),
+          FIXTURE_EFFECT: effect.id,
+          FIXTURE_FACTS: JSON.stringify(partial.facts),
+        },
+      );
+      await db.prisma.run.update({
+        where: { id: "claimed" },
+        data: { leaseFence: 2, leaseOwner: "worker-b" },
+      });
+      const current = {
+        ...actor,
+        execution: { runId: "claimed", holder: "worker-b", generation: 2 },
+      };
+      await rows.effects.recoverInterrupted();
+      expect((await rows.effects.reconcileSimulation(current, effect.id)).status).toBe("completed");
+      expect((await rows.effects.reconcileSimulation(current, effect.id)).status).toBe("completed");
+      const book = SimulationBookStateSchema.parse(
+        (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+          .state,
+      );
+      expect(book.positions).toMatchObject([{ volume: "0.01", margin: "15" }]);
+      expect(book.balance).toBe("9999.9");
+      expect(await db.prisma.simulationExecution.count()).toBe(2);
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).risk.toFixed(),
+      ).toBe("6.1");
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: effect.id },
+          })
+        ).status,
+      ).toBe("RELEASED");
+    });
+    it("rejects invalid remaining volume and unknown/unattributed target IDs without financial effects", async () => {
+      const rows = await acceptedExposure();
+      const invalid = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "CLOSE_POSITION",
+        positionId: `sim_${rows.effect.id}`,
+        volume: "0.01",
+      });
+      expect(invalid.previewed.preview?.risk).toEqual({
+        decision: "DENY",
+        code: "INVALID_PARTIAL_CLOSE",
+      });
+      await expect(invalid.execute()).rejects.toThrow();
+      await expect(
+        managementProposal(rows, {
+          ...managementIdentity,
+          operation: "CLOSE_POSITION",
+          positionId: "unattributed-broker-position",
+          volume: null,
+        }),
+      ).rejects.toThrow("attributed mandate");
+      expect(await db.prisma.simulationExecution.count()).toBe(1);
+      expect(await db.prisma.externalEffect.count()).toBe(1);
+    });
     it("runs the full approved-mandate/review/risk/effect/simulation pipeline once", async () => {
       const rows = await executionReady();
       const result = await rows.execution.execute(
