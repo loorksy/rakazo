@@ -364,6 +364,10 @@ describe("planActionGate", () => {
 });
 
 describe("applyJudgeDecision", () => {
+  it("never converts independent denial into approval, even for an otherwise exempt action", () => {
+    expect(applyJudgeDecision({ decision: "deny", consequential: true })).toBe("deny");
+    expect(applyJudgeDecision({ decision: "deny", consequential: false })).toBe("deny");
+  });
   it("maps pass and ask", () => {
     expect(applyJudgeDecision({ decision: "pass", consequential: true })).toBe("allow");
     expect(applyJudgeDecision({ decision: "ask", consequential: true })).toBe("ask");

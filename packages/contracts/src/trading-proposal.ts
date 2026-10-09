@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TradingMandateEnvelopeSchema } from "./financial-risk.js";
 import { FinancialActionSchema, TradingDecimalSchema } from "./trading.js";
 
 const Id = z.string().min(1).max(128);
@@ -67,3 +68,20 @@ export const TradePrepareResponseSchema = z.union([
 ]);
 export type TradeProposalView = z.infer<typeof TradeProposalViewSchema>;
 export type TradePreviewView = z.infer<typeof TradePreviewViewSchema>;
+
+export const FinancialReviewContextSchema = z.strictObject({
+  version: z.literal(1),
+  policyVersion: z.literal("financial-v1"),
+  action: FinancialActionSchema,
+  actionFingerprint: Hash,
+  mandateId: Id,
+  mandateFingerprint: Hash,
+  envelope: TradingMandateEnvelopeSchema,
+  planVersion: z.number().int().positive(),
+  risk: FinancialRiskAssessmentSchema,
+  observedAt: z.iso.datetime({ offset: true }),
+  rationaleSummary: z.string().trim().min(1).max(2000),
+  evidenceRefs: Refs,
+  chartRefs: Refs,
+});
+export type FinancialReviewContext = z.infer<typeof FinancialReviewContextSchema>;

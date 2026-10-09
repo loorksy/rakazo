@@ -4278,7 +4278,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 checkerConfigured,
               });
           let reviewReason: string | undefined;
-          let gateDecision: "ask" | "allow" = plan === "ask" ? "ask" : "allow";
+          let gateDecision: "ask" | "allow" | "deny" = plan === "ask" ? "ask" : "allow";
           const needsApprovalEarly = plan === "ask" || plan === "judge";
           // A resumed approval keeps its key even if "Always allow" changed the policy.
           const usesApprovalKey =
@@ -4442,7 +4442,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await runAutoReview();
             } else {
               const priorDecision = applied.effect.reviewDecision;
-              if (priorDecision === "ask" || priorDecision === "error") {
+              if (priorDecision === "deny") {
+                gateDecision = "deny";
+              } else if (priorDecision === "ask" || priorDecision === "error") {
                 reviewReason =
                   typeof applied.effect.reviewReason === "string"
                     ? applied.effect.reviewReason
@@ -4462,6 +4464,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             gateDecision = "ask";
           }
           if (context.signal.aborted) return pauseForApproval();
+
+          if (gateDecision === "deny") {
+            if (applied && ["executing", "uncertain"].includes(applied.effect.status))
+              return settleUncertainEffect(deps.prisma, applied.effect.id, name);
+            const result = { error: "Independent review denied this action." };
+            if (applied)
+              await deps.prisma.externalEffect.updateMany({
+                where: { id: applied.effect.id, status: { in: ["intended", "approved"] } },
+                data: { status: "denied", result },
+              });
+            return result;
+          }
 
           const needsApproval = gateDecision === "ask";
           const bypassApproval = gateDecision === "allow" && requiresApprovalByDefault;

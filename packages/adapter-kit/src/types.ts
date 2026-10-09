@@ -1,6 +1,7 @@
 import type {
   CacheCapabilities as ConnectionCacheCapabilities,
   ConnectionCatalogItem,
+  FinancialReviewContext,
   SandboxKind,
 } from "@rakazo/contracts";
 
@@ -970,7 +971,7 @@ export interface AutoReviewCapabilities {
   keyless?: boolean;
 }
 
-export type AutoReviewDecision = "pass" | "ask" | "error";
+export type AutoReviewDecision = "pass" | "ask" | "deny" | "error";
 
 export interface AutoReviewMatchingRule {
   effect: string;
@@ -986,6 +987,8 @@ export interface AutoReviewRequest {
   userTask: string;
   botDescription: string;
   matchingRules: AutoReviewMatchingRule[];
+  /** Trusted structured financial admission context. Never contains credentials or approval tokens. */
+  financial?: FinancialReviewContext;
 }
 
 export interface AutoReviewResult {

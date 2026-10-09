@@ -156,9 +156,19 @@ function fixture({
       Object.assign(effects.find((effect) => effect.id === where.id)!, data);
     }),
     updateMany: vi.fn(
-      async ({ where, data }: { where: { id: string; status: string }; data: Partial<Effect> }) => {
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string; status: string | { in: string[] } };
+        data: Partial<Effect>;
+      }) => {
         const effect = effects.find(
-          (effect) => effect.id === where.id && effect.status === where.status,
+          (effect) =>
+            effect.id === where.id &&
+            (typeof where.status === "string"
+              ? effect.status === where.status
+              : where.status.in.includes(effect.status)),
         );
         if (!effect) return { count: 0 };
         Object.assign(effect, data);
@@ -634,7 +644,7 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(f.pauseRunForInput).toHaveBeenCalledOnce();
     });
 
-    it.each(["ask", "error", "pass"] as const)(
+    it.each(["ask", "error", "pass", "deny"] as const)(
       "honors automatic review %s despite a read-only hint",
       async (decision) => {
         reviewMock.mockResolvedValue({
@@ -651,7 +661,19 @@ describe("connector read-only metadata and approval enforcement", () => {
         );
         expect(f.effects[0]?.reviewDecision).toBe(decision);
         expect(f.execute).toHaveBeenCalledTimes(decision === "pass" ? 1 : 0);
-        expect(f.pauseRunForInput).toHaveBeenCalledTimes(decision === "pass" ? 0 : 1);
+        expect(f.pauseRunForInput).toHaveBeenCalledTimes(
+          decision === "ask" || decision === "error" ? 1 : 0,
+        );
+        if (decision === "deny") {
+          expect(f.effects[0]?.status).toBe("denied");
+          expect(f.results.at(-1)).toEqual({ error: "Independent review denied this action." });
+          reviewMock.mockResolvedValue({ decision: "pass", model: "fixture" });
+          f.setCalls([{ args: { id: "item-1" }, executionId: "call-2" }]);
+          await f.run();
+          expect(f.execute).not.toHaveBeenCalled();
+          expect(f.effects).toHaveLength(1);
+          expect(f.effects[0]?.status).toBe("denied");
+        }
       },
     );
 

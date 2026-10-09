@@ -123,10 +123,12 @@ export class JevAutoReviewProvider implements AutoReviewProvider {
           questions: {
             decision: {
               type: "choice",
-              instructions: "Should this bot tool call auto-pass or ask the user to approve?",
+              instructions:
+                "Should this bot tool call pass, ask the user, or be denied? Financial policy and risk failures cannot be overridden.",
               criteria: {
                 pass: "Clearly fits the user task and looks low risk",
                 ask: "Unexpected, high risk, or outside the task. Ask the user",
+                deny: "Unsafe action. Do not authorize it",
               },
             },
           },
@@ -154,6 +156,7 @@ export class JevAutoReviewProvider implements AutoReviewProvider {
 
     const answer = body.data.answers.decision;
     const model = body.data.model ? `jev/${body.data.model}` : modelLabel;
+    if (answer.choice === "deny") return { decision: "deny", model };
     if (answer.choice === "ask") {
       return { decision: "ask", model };
     }

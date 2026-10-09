@@ -173,6 +173,12 @@ describe("autoReviewMinConfidence", () => {
 });
 
 describe("parseAutoReviewJudgeText", () => {
+  it("preserves explicit denial", () => {
+    expect(parseAutoReviewJudgeText('{"decision":"deny","reason":"Unsafe."}')).toEqual({
+      decision: "deny",
+      reason: "Unsafe.",
+    });
+  });
   it("accepts strict JSON and rejects garbage", () => {
     expect(parseAutoReviewJudgeText('{"decision":"pass","reason":"Fits the task."}')).toEqual({
       decision: "pass",

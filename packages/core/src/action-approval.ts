@@ -220,12 +220,12 @@ export function resolveActionApproval(input: {
   return resolveActionApprovalDetail(input).decision;
 }
 
-export type AutoReviewJudgeDecision = "pass" | "ask" | "error";
+export type AutoReviewJudgeDecision = "pass" | "ask" | "deny" | "error";
 
 /**
  * Pure combiner for Auto Review after rule resolution.
  * Rules win: require_approval asks, always_allow runs. Only the default path may call a judge.
- * The judge only escalates to ask; it never silent-denies.
+ * An independent reviewer may reject an action; that rejection cannot become approval.
  */
 export function planActionGate(input: {
   resolved: ActionApprovalResolved;
@@ -246,11 +246,12 @@ export function planActionGate(input: {
   return "allow";
 }
 
-/** Map a judge outcome onto ask/allow. Errors fail closed on consequential tools. */
+/** Errors fail closed on consequential tools; an explicit denial always remains a denial. */
 export function applyJudgeDecision(input: {
   decision: AutoReviewJudgeDecision;
   consequential: boolean;
-}): "ask" | "allow" {
+}): "ask" | "allow" | "deny" {
+  if (input.decision === "deny") return "deny";
   if (input.decision === "pass") return "allow";
   if (input.decision === "ask") return "ask";
   return input.consequential ? "ask" : "allow";
