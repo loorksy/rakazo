@@ -316,3 +316,27 @@ describe("broker financial normalization", () => {
     ).toThrow(BrokerProviderError);
   });
 });
+
+describe("provider numeric normalization", () => {
+  it.each([1e-8, "1e-8", "0.000000010000", "1.000e-8"])(
+    "preserves tiny tick sizes %s without floating-point re-rounding",
+    (tickSize) => {
+      expect(normalizeSpecification({ ...spec, tickSize }, "a", "GOLD.a", at).tickSize).toBe(
+        "0.00000001",
+      );
+    },
+  );
+  it.each([1e-20, "1e-1000", "1e1000", 9007199254740992, "NaN", "Infinity"])(
+    "rejects unrepresentable financial input %s",
+    (tickSize) => {
+      expect(() => normalizeSpecification({ ...spec, tickSize }, "a", "GOLD.a", at)).toThrow(
+        BrokerProviderError,
+      );
+    },
+  );
+  it("preserves signed provider P&L and never converts exact large text amounts to Number", () => {
+    expect(
+      normalizeAccount({ ...accountInfo, balance: "9007199254740992", equity: "-1e-8" }, "a", at),
+    ).toMatchObject({ balance: "9007199254740992", equity: "-0.00000001" });
+  });
+});

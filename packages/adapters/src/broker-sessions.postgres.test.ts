@@ -383,6 +383,47 @@ suite("protected broker sessions (PostgreSQL)", () => {
       (await db.prisma.brokerReadRequest.findUniqueOrThrow({ where: { id: history.id } })).result,
     ).toEqual([]);
   });
+  it("coalesces chart/indicator history reads and expires current pages without storing quote history", async () => {
+    const f = providerFixture();
+    await f.supervisor.tick();
+    await f.supervisor.drain();
+    const instrument = await db.prisma.brokerInstrument.create({
+      data: { accountId, brokerSymbol: "GOLD.a", displayName: "Gold" },
+    });
+    const request = () =>
+      db.prisma.brokerReadRequest.create({
+        data: {
+          accountId,
+          ownerUserId: owner,
+          operation: "candles",
+          parameters: {
+            operation: "candles",
+            accountId,
+            instrumentId: instrument.id,
+            timeframe: "1h",
+            limit: 200,
+          },
+          deadline: new Date(initialTime.getTime() + 120000),
+        },
+      });
+    const first = await request();
+    const second = await request();
+    f.advance();
+    await f.supervisor.tick();
+    await f.supervisor.drain();
+    expect(f.session.candles).toHaveBeenCalledTimes(1);
+    const result = await db.prisma.brokerReadRequest.findMany({
+      where: { id: { in: [first.id, second.id] } },
+    });
+    expect(result.every((r) => r.status === "SUCCEEDED")).toBe(true);
+    f.advance();
+    f.advance();
+    await request();
+    await f.supervisor.tick();
+    await f.supervisor.drain();
+    expect(f.session.candles).toHaveBeenCalledTimes(2);
+    expect(f.provider.connect).toHaveBeenCalledTimes(1);
+  });
   it("coalesces quotes and rejects duplicate/out-of-order updates without agent inference", async () => {
     const f = providerFixture();
     await f.supervisor.tick();

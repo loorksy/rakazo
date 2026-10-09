@@ -32,8 +32,31 @@ export function sanitizedBrokerError(error: unknown): BrokerProviderError {
 }
 
 const text = z.string().min(1).max(256);
+/** Expand provider scientific notation as decimal text; never round an unsafe numeric integer. */
+function providerDecimal(value: string | number): string {
+  if (typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value))
+    return "invalid";
+  const raw = String(value);
+  if (raw.length > 64) return "invalid";
+  const match = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d{1,3})$/.exec(raw);
+  if (!match) return raw;
+  const sign = match[1] ?? "";
+  const whole = match[2] ?? "";
+  const fraction = match[3] ?? "";
+  const exponent = Number(match[4]);
+  if (Math.abs(exponent) > 30) return "invalid";
+  const digits = whole + fraction;
+  const offset = whole.length + exponent;
+  const expanded =
+    offset <= 0
+      ? `0.${"0".repeat(-offset)}${digits}`
+      : offset >= digits.length
+        ? `${digits}${"0".repeat(offset - digits.length)}`
+        : `${digits.slice(0, offset)}.${digits.slice(offset)}`;
+  return sign + expanded.replace(/^0+(?=\d)/, "");
+}
 const numeric = z.union([z.string(), z.number().finite()]).transform((value, context) => {
-  const result = TradingDecimalSchema.safeParse(String(value));
+  const result = TradingDecimalSchema.safeParse(providerDecimal(value));
   if (!result.success) {
     context.addIssue({ code: "custom", message: "Invalid bounded financial decimal" });
     return z.NEVER;
@@ -41,7 +64,7 @@ const numeric = z.union([z.string(), z.number().finite()]).transform((value, con
   return result.data;
 });
 const signed = z.union([z.string(), z.number().finite()]).transform((value, context) => {
-  const raw = String(value);
+  const raw = providerDecimal(value);
   const negative = raw.startsWith("-");
   const result = TradingDecimalSchema.safeParse(negative ? raw.slice(1) : raw);
   if (!result.success) {

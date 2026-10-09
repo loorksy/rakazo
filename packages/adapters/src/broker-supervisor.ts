@@ -6,6 +6,7 @@ import type {
   RealtimeFanout,
   SecretStore,
 } from "@rakazo/adapter-kit";
+import type { BrokerCandle } from "@rakazo/contracts";
 import { BrokerReadCommandSchema } from "@rakazo/contracts";
 import type { BrokerLeaseToken, PrismaClient } from "@rakazo/db";
 import {
@@ -34,6 +35,7 @@ interface Slot {
   readAt: number;
   quoteTimes: Map<string, { time: string; revision: string }>;
   abort: AbortController;
+  history: Map<string, { expires: number; candles: BrokerCandle[] }>;
 }
 
 /** Account socket lifecycle inside the existing Worker; not an agent runtime or job scheduler. */
@@ -107,6 +109,7 @@ export class BrokerConnectionSupervisor {
               readAt: 0,
               quoteTimes: new Map(),
               abort: new AbortController(),
+              history: new Map(),
             };
             this.slots.set(row.id, slot);
           }
@@ -261,6 +264,7 @@ export class BrokerConnectionSupervisor {
       slot.release = undefined;
       await slot.session?.close().catch(() => undefined);
       slot.session = undefined;
+      slot.history.clear();
       slot.observed = "";
       if (error instanceof StaleBrokerSessionError) {
         await this.drop(token.accountId, slot);
@@ -381,15 +385,34 @@ export class BrokerConnectionSupervisor {
       });
       return z.json().parse(await session.quote(instrument.brokerSymbol, instrument.id));
     }
-    return z.json().parse(
-      await session.candles({
-        symbol: instrument.brokerSymbol,
-        instrumentId: instrument.id,
-        timeframe: command.timeframe,
-        before: command.before,
-        limit: command.limit,
-      }),
-    );
+    const key = JSON.stringify([
+      instrument.id,
+      command.timeframe,
+      command.before ?? null,
+      command.limit,
+    ]);
+    const cached = slot.history.get(key);
+    if (cached && cached.expires > this.now().getTime()) return z.json().parse(cached.candles);
+    const candles = await session.candles({
+      symbol: instrument.brokerSymbol,
+      instrumentId: instrument.id,
+      timeframe: command.timeframe,
+      before: command.before,
+      limit: command.limit,
+    });
+    // Shared by observers, indicators and visual inspection in this account's fenced session.
+    // Historical pages are rebuildable; live pages expire rapidly and never authorize execution.
+    slot.history.delete(key);
+    while (slot.history.size >= 16) {
+      const oldest = slot.history.keys().next().value;
+      if (oldest === undefined) break;
+      slot.history.delete(oldest);
+    }
+    slot.history.set(key, {
+      expires: this.now().getTime() + (command.before ? 30000 : 2000),
+      candles,
+    });
+    return z.json().parse(candles);
   }
   private observe(slot: Slot, event: BrokerEvent) {
     if (this.stopping || this.slots.get(slot.token.accountId) !== slot) return;
