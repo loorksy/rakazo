@@ -1,3 +1,4 @@
+/// <reference path="./metaapi-sdk.d.ts" />
 import type { BrokerEvent, BrokerProvider, BrokerReadSession } from "@rakazo/adapter-kit";
 import { TradingCapabilitiesSchema } from "@rakazo/contracts";
 import MetaApi, { SynchronizationListener } from "metaapi.cloud-sdk/esm-node";
@@ -167,8 +168,22 @@ export class MetaApiBrokerProvider implements BrokerProvider {
       throw new BrokerProviderError("INVALID_REQUEST");
     let sdk: MetaApiSdkPort | undefined;
     let rpc: MetaApiRpcPort | undefined;
+    let opened: MetaApiReadSession | undefined;
+    const abort = () => {
+      if (opened) void opened.close();
+      else {
+        try {
+          sdk?.close();
+        } catch {
+          /* Never leak raw SDK diagnostics. */
+        }
+      }
+    };
+    if (input.signal?.aborted) throw new BrokerProviderError("DISCONNECTED");
+    input.signal?.addEventListener("abort", abort, { once: true });
     try {
       const credential = await input.resolveCredential();
+      if (input.signal?.aborted) throw new BrokerProviderError("DISCONNECTED");
       if (!credential || credential.length > 16384)
         throw new BrokerProviderError("INVALID_REQUEST");
       sdk = this.factory(credential, input.region);
@@ -180,12 +195,20 @@ export class MetaApiBrokerProvider implements BrokerProvider {
       rpc = account.getRPCConnection();
       await rpc.connect();
       await rpc.waitSynchronized(20);
+      if (input.signal?.aborted) throw new BrokerProviderError("DISCONNECTED");
       const session = new MetaApiReadSession(input.accountId, sdk, account, rpc, this.now);
+      opened = session;
       await session.account(); // Validate authentic account reads before advertising readiness.
+      input.signal?.removeEventListener("abort", abort);
       return session;
     } catch (error) {
+      input.signal?.removeEventListener("abort", abort);
       await rpc?.close().catch(() => undefined);
-      sdk?.close();
+      try {
+        sdk?.close();
+      } catch {
+        /* Only normalized errors cross the provider boundary. */
+      }
       throw sanitizedBrokerError(error);
     }
   }
@@ -394,6 +417,10 @@ class MetaApiReadSession implements BrokerReadSession {
     this.subscriptions.clear();
     await this.stream?.close().catch(() => undefined);
     await this.rpc.close().catch(() => undefined);
-    this.sdk.close();
+    try {
+      this.sdk.close();
+    } catch {
+      /* The trusted host records normalized shutdown state. */
+    }
   }
 }

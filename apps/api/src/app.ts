@@ -528,6 +528,7 @@ export async function createApp(
   reconciler?.start();
 
   const router = createRouter({
+    realtime,
     cloudAgent,
     codexCatalog,
     prisma,

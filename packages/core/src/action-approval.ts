@@ -38,6 +38,8 @@ const APPROVAL_REQUIRED_BUILTIN_TOOLS = new Set([
 const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set(["create_space"]);
 
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
+  "trading_accounts",
+  "broker_read",
   "browser_snapshot",
   "cloud_agent_status",
   "computer_observe",

@@ -1,6 +1,7 @@
 import type { ConnectorTool } from "@rakazo/adapter-kit";
 import {
   BotSecretName,
+  BrokerReadCommandSchema,
   botSecretDestinationSchema,
   SecretAskPurpose,
   SecretHttpRequest,
@@ -142,6 +143,18 @@ const scheduleCreateInputSchema = {
 };
 
 export const builtinAgentTools: ConnectorTool[] = [
+  {
+    name: "trading_accounts",
+    description:
+      "List the owner's broker connections and connection health. Credentials are never returned. Choose the exact account before market or account reads; a connected account does not grant live execution authority.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "broker_read",
+    description:
+      "Read broker-native account, positions, pending orders, capabilities, instruments, specifications, pricing or candles. First list trading_accounts, then discover exact account-scoped instrument IDs using operation instruments. Use those IDs; do not guess broker symbol suffixes. History is paged (limit 1–1000); timeframe uses MetaTrader units such as 15m, 1h, 4h, 1d. This tool cannot execute or modify trades.",
+    inputSchema: z.toJSONSchema(BrokerReadCommandSchema, { io: "input" }),
+  },
   {
     name: "computer_observe",
     description:

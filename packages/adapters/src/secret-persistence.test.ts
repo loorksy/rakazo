@@ -42,6 +42,7 @@ function database() {
     ["secret", []],
     ["botSecret", []],
     ["integrationProviderConfig", []],
+    ["tradingConnection", []],
     ["user", [{ id: "user" }]],
     ["space", [{ id: "space", organizationId: "organization" }]],
     ["organization", [{ id: "organization" }]],

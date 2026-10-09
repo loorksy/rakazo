@@ -17,6 +17,8 @@ export {
 } from "./bot-secrets.js";
 export * from "./box-emulator.js";
 export * from "./box-sandbox.js";
+export * from "./broker-stream.js";
+export * from "./broker-supervisor.js";
 export * from "./browser-emulator.js";
 export * from "./browser-provider-factory.js";
 export * from "./browser-tools.js";
@@ -130,6 +132,7 @@ export * from "./task-catalog.js";
 export * from "./teaching-session.js";
 export * from "./team-chat-messaging.js";
 export * from "./third-party-connector-emulator.js";
+export * from "./trading-connections.js";
 export * from "./voice-factory.js";
 export * from "./wakeup.js";
 export * from "./web-limits.js";

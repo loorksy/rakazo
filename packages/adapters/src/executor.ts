@@ -264,6 +264,7 @@ import {
 import { loadAgentMemoryContext } from "./memory-context.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { selectMemoryTools } from "./memory-tools.js";
+import { sanitizedBrokerError } from "./metaapi-normalize.js";
 import {
   isCatalogModelChoice,
   selectConfiguredModel,
@@ -363,6 +364,7 @@ import {
 } from "./thread-artifacts.js";
 import { advanceToolCallLoopGuard } from "./tool-loop.js";
 import { textContentArg } from "./tool-text.js";
+import { requestBrokerRead, TradingConnections } from "./trading-connections.js";
 import {
   botMessageOutcomeFromMidTurn,
   clampUserProgressMessage,
@@ -5129,6 +5131,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
+          }
+          if (name === "trading_accounts" || name === "broker_read") {
+            try {
+              const result =
+                name === "trading_accounts"
+                  ? await new TradingConnections(deps.prisma, deps.secretStore).list(run.userId)
+                  : await requestBrokerRead(deps.prisma, run.userId, args, context.signal);
+              return finish(result);
+            } catch (error) {
+              return finish({ error: sanitizedBrokerError(error).message });
+            }
           }
           if (name === "web_fetch") {
             return finish(await webFetchFromTool(web, context, args));

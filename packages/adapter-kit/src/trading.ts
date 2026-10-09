@@ -104,5 +104,6 @@ export interface BrokerProvider {
     providerAccountId: string;
     region?: string;
     resolveCredential: () => Promise<string>;
+    signal?: AbortSignal;
   }): Promise<BrokerReadSession>;
 }

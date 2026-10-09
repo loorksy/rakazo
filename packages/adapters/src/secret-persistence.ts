@@ -19,7 +19,8 @@ async function cleanupUnreferenced(
         (await prisma.botSecret.count({ where: { ciphertext: row.ciphertext } })) ||
         (await prisma.integrationProviderConfig.count({
           where: { ciphertext: row.ciphertext },
-        }))
+        })) ||
+        (await prisma.tradingConnection.count({ where: { ciphertext: row.ciphertext } }))
       )
         continue;
       await deleteSecretBestEffort(store, row.ciphertext, row.id);
@@ -60,6 +61,7 @@ const secretTables = {
   Secret: "secrets",
   BotSecret: "bot_secrets",
   IntegrationProviderConfig: "integration_provider_configs",
+  TradingConnection: "trading_connections",
 };
 const parentTables = { User: "user", Space: "spaces", Bot: "bots", Organization: "organization" };
 

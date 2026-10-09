@@ -94,6 +94,12 @@ import {
 import { MessageReactionSchema } from "./reactions.js";
 import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
+import {
+  BrokerLivePacketSchema,
+  BrokerReadCommandSchema,
+  TradingConnectionInputSchema,
+  TradingConnectionViewSchema,
+} from "./trading.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -157,6 +163,17 @@ const threadSendInput = threadTarget
 const spaceName = z.string().trim().min(1).max(60);
 
 export const appContract = {
+  trading: {
+    connections: {
+      list: oc.output(z.array(TradingConnectionViewSchema)),
+      save: oc.input(TradingConnectionInputSchema).output(z.object({ id: Id })),
+      revoke: oc.input(z.object({ accountId: Id })).output(z.object({ ok: z.literal(true) })),
+    },
+    read: oc.input(BrokerReadCommandSchema).output(z.json()),
+    subscribe: oc
+      .input(z.object({ accountId: Id, instrumentIds: z.array(Id).max(16) }))
+      .output(eventIterator(BrokerLivePacketSchema)),
+  },
   aiConsent: {
     status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
     allow: oc

@@ -7,6 +7,7 @@ import type {
   ConnectorCatalogItem,
   JobPublisher,
   MemoryStore,
+  RealtimeFanout,
   SandboxProvider,
   SecretStore,
   UsageOperationKind,
@@ -61,6 +62,7 @@ import {
   displayBotWorkspacePath,
   enqueueTakeoverContinuation,
   expireComputerControl,
+  followBrokerData,
   forgetBotSecret,
   hasActiveComputerControl,
   hostCredentialSource,
@@ -93,6 +95,7 @@ import {
   queueComputerUpdate,
   releaseComputerExecutionLease,
   replaceComputer,
+  requestBrokerRead,
   resolveAutoReviewChecker,
   resolveBotUploadPath,
   resolveBotWorkspaceCwd,
@@ -107,6 +110,7 @@ import {
   selectDefaultCredentialId,
   serializeModelSecret,
   storeBotSecret,
+  TradingConnections,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -525,6 +529,7 @@ function mcpAssignmentDto(row: {
 }
 
 export interface RouterDeps {
+  realtime?: RealtimeFanout;
   cloudAgent?: CloudAgentConnection | null;
   prisma: PrismaClient;
   events: ThreadEvents;
@@ -745,6 +750,7 @@ export function createRouter(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma);
+  const tradingConnections = new TradingConnections(deps.prisma, deps.secrets);
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -752,6 +758,33 @@ export function createRouter(deps: RouterDeps) {
   });
 
   return os.router({
+    trading: {
+      connections: {
+        list: authed.trading.connections.list.handler(({ context }) =>
+          tradingConnections.list(context.actor.userId),
+        ),
+        save: authed.trading.connections.save.handler(({ context, input }) =>
+          tradingConnections.save(context.actor.userId, context.actor.spaceId, input),
+        ),
+        revoke: authed.trading.connections.revoke.handler(({ context, input }) =>
+          tradingConnections.revoke(context.actor.userId, input.accountId),
+        ),
+      },
+      read: authed.trading.read.handler(({ context, input }) =>
+        requestBrokerRead(deps.prisma, context.actor.userId, input, context.signal),
+      ),
+      subscribe: authed.trading.subscribe.handler(async function* ({ context, input }) {
+        if (!deps.realtime) throw new ORPCError("SERVICE_UNAVAILABLE");
+        yield* followBrokerData({
+          ...input,
+          prisma: deps.prisma,
+          realtime: deps.realtime,
+          ownerUserId: context.actor.userId,
+          signal: context.signal,
+          stillAuthorized: context.stillAuthorized,
+        });
+      }),
+    },
     aiConsent: {
       status: authed.aiConsent.status.handler(({ context, input }) =>
         aiConsentStatus(deps, context.actor, input),

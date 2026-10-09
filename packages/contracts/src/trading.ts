@@ -217,3 +217,68 @@ export const BrokerCandleSchema = z
 export type TradingCapabilities = z.infer<typeof TradingCapabilitiesSchema>;
 export type BrokerQuote = z.infer<typeof BrokerQuoteSchema>;
 export type BrokerCandle = z.infer<typeof BrokerCandleSchema>;
+
+export const TradingConnectionViewSchema = z.strictObject({
+  id: Reference,
+  label: z.string().max(80),
+  provider: z.literal("metaapi"),
+  providerAccountId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
+  region: Reference.nullable(),
+  environment: BrokerEnvironmentSchema.nullable(),
+  verifiedAt: Timestamp.nullable(),
+  revokedAt: Timestamp.nullable(),
+  state: z.enum(["DISCONNECTED", "CONNECTING", "CONNECTED", "RECONNECTING"]),
+  lastHealthyAt: Timestamp.nullable(),
+  failureCode: z.string().nullable(),
+});
+
+export const TradingConnectionInputSchema = z.strictObject({
+  label: z.string().trim().min(1).max(80),
+  providerAccountId: Reference,
+  region: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]{0,31}$/)
+    .optional(),
+  token: z.string().min(1).max(16384),
+});
+export type TradingConnectionView = z.infer<typeof TradingConnectionViewSchema>;
+export const BrokerLiveEventSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("quote"), quote: BrokerQuoteSchema }),
+  z.strictObject({
+    type: z.literal("account_changed"),
+    accountId: Reference,
+    kind: Reference,
+    reference: Reference.nullable(),
+    receivedAt: Timestamp,
+  }),
+  z.strictObject({
+    type: z.literal("connection_changed"),
+    accountId: Reference,
+    connected: z.boolean(),
+    receivedAt: Timestamp,
+  }),
+]);
+export const BrokerLivePacketSchema = z.strictObject({
+  generation: z.number().int().positive(),
+  events: z.array(BrokerLiveEventSchema).max(16),
+});
+
+const brokerReadIdentity = { accountId: Reference };
+const instrumentRead = { ...brokerReadIdentity, instrumentId: Reference };
+export const BrokerReadCommandSchema = z.discriminatedUnion("operation", [
+  z.strictObject({ ...brokerReadIdentity, operation: z.literal("account") }),
+  z.strictObject({ ...brokerReadIdentity, operation: z.literal("positions") }),
+  z.strictObject({ ...brokerReadIdentity, operation: z.literal("orders") }),
+  z.strictObject({ ...brokerReadIdentity, operation: z.literal("instruments") }),
+  z.strictObject({ ...brokerReadIdentity, operation: z.literal("capabilities") }),
+  z.strictObject({ ...instrumentRead, operation: z.literal("specification") }),
+  z.strictObject({ ...instrumentRead, operation: z.literal("quote") }),
+  z.strictObject({
+    ...instrumentRead,
+    operation: z.literal("candles"),
+    timeframe: Reference,
+    before: Timestamp.optional(),
+    limit: z.number().int().min(1).max(1000),
+  }),
+]);
+export type BrokerReadCommand = z.infer<typeof BrokerReadCommandSchema>;

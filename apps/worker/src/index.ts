@@ -6,6 +6,7 @@ import { createWorkerSecretStore } from "./secret-store.js";
 loadRootEnv();
 
 import {
+  BrokerConnectionSupervisor,
   ChatSdkMessagingSurface,
   CodexCatalogCache,
   createBackgroundJobHandlers,
@@ -31,6 +32,7 @@ import {
   LocalArtifactStore,
   McpConnector,
   McpOAuthBroker,
+  MetaApiBrokerProvider,
   messagingEnvFromProcess,
   messagingPlatformsFromEnv,
   PiAgentRuntime,
@@ -86,6 +88,13 @@ async function main() {
   const events = createThreadEvents(prisma, realtime, {
     runSecretWriter: createRunSecretWriter(secrets),
   });
+  const brokerSupervisor = new BrokerConnectionSupervisor(
+    prisma,
+    secrets,
+    new MetaApiBrokerProvider(),
+    realtime,
+  );
+  brokerSupervisor.start();
   const dataDir = process.env.DATA_DIR ?? "./data";
   const runtime =
     process.env.AGENT_RUNTIME === "scripted"
@@ -268,6 +277,7 @@ async function main() {
     stopping = true;
     try {
       await reconciler.stop();
+      await brokerSupervisor.close();
       await jobHost.stop();
       await jobs.close();
       await secrets.close();

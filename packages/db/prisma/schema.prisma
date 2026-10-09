@@ -7,6 +7,100 @@ datasource db {
   provider = "postgresql"
 }
 
+// Financial authority/audit identities intentionally survive ordinary chat/Bot deletion.
+model TradingConnection {
+  id                String   @id @default(cuid())
+  formatVersion     Int      @default(1)
+  ownerUserId       String
+  label             String
+  provider          String   @default("metaapi")
+  providerAccountId String
+  region            String?
+  ciphertext        String
+  credentialVersion Int      @default(1)
+  environment       String?
+  capabilities      Json?
+  verifiedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lease             BrokerSessionLease?
+  instruments       BrokerInstrument[]
+  requests          BrokerReadRequest[]
+  subscriptions     BrokerMarketSubscription[]
+
+  @@unique([ownerUserId, provider, providerAccountId])
+  @@index([ownerUserId, revokedAt])
+  @@map("trading_connections")
+}
+
+model BrokerSessionLease {
+  accountId         String   @id
+  connection        TradingConnection @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  generation        Int      @default(0)
+  holder            String?
+  expiresAt         DateTime?
+  credentialVersion Int      @default(0)
+  state             String   @default("DISCONNECTED")
+  lastEventAt       DateTime?
+  lastHealthyAt     DateTime?
+  failureCode       String?
+  reconnectCount    Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("broker_session_leases")
+}
+
+model BrokerInstrument {
+  id                String   @id @default(cuid())
+  accountId         String
+  connection        TradingConnection @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  brokerSymbol      String
+  displayName       String
+  specification     Json?
+  verifiedAt        DateTime?
+  active            Boolean  @default(true)
+  revision          Int      @default(1)
+
+  @@unique([accountId, brokerSymbol])
+  @@map("broker_instruments")
+}
+
+model BrokerReadRequest {
+  id                String   @id @default(cuid())
+  accountId         String
+  connection        TradingConnection @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  ownerUserId       String
+  operation         String
+  parameters        Json
+  status            String   @default("PENDING")
+  claimedGeneration Int?
+  result            Json?
+  failureCode       String?
+  deadline          DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([accountId, status, deadline])
+  @@index([createdAt])
+  @@map("broker_read_requests")
+}
+
+model BrokerMarketSubscription {
+  id          String   @id @default(cuid())
+  accountId   String
+  connection  TradingConnection @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  ownerUserId String
+  instrumentId String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([accountId, expiresAt])
+  @@index([expiresAt])
+  @@map("broker_market_subscriptions")
+}
+
 model AiDataConsent {
   userId String
   spaceId String
