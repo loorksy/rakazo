@@ -63,6 +63,7 @@ import {
   deploymentAutoReviewDefault,
   destroyBot,
   displayBotWorkspacePath,
+  enqueueMissionWakes,
   enqueueTakeoverContinuation,
   expireComputerControl,
   followBrokerData,
@@ -766,12 +767,24 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
-      missions: authed.trading.missions.handler(({ context, input }) =>
-        new TradingMissions(deps.prisma).command({ ownerUserId: context.actor.userId }, input),
-      ),
-      resolveMandate: authed.trading.resolveMandate.handler(({ context, input }) =>
-        new TradingMissions(deps.prisma).resolveMandate(context.actor.userId, input),
-      ),
+      missions: authed.trading.missions.handler(async ({ context, input }) => {
+        const result = await new TradingMissions(deps.prisma).command(
+          { ownerUserId: context.actor.userId },
+          input,
+        );
+        if (input.operation === "plan_create")
+          await enqueueMissionWakes(deps.prisma, deps.jobs).catch(() => undefined);
+        return result;
+      }),
+      resolveMandate: authed.trading.resolveMandate.handler(async ({ context, input }) => {
+        const result = await new TradingMissions(deps.prisma).resolveMandate(
+          context.actor.userId,
+          input,
+        );
+        if (input.approve)
+          await enqueueMissionWakes(deps.prisma, deps.jobs, result.id).catch(() => undefined);
+        return result;
+      }),
       controlMandate: authed.trading.controlMandate.handler(({ context, input }) =>
         new TradingMissions(deps.prisma).controlMandate(context.actor.userId, input),
       ),

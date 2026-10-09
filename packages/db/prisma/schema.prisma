@@ -1686,3 +1686,23 @@ model TradingRiskReservation {
   @@index([mandateId, status])
   @@map("trading_risk_reservations")
 }
+
+/// Durable wake metadata only; execution uses the existing Task/Run/Worker.
+model TradingMissionWake {
+  id String @id @default(cuid())
+  formatVersion Int @default(1)
+  mandateId String
+  wakeKey String @unique
+  kind String
+  dueAt DateTime
+  status String @default("WAITING")
+  runId String?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, dueAt])
+  @@index([runId])
+  @@index([mandateId, status])
+  @@map("trading_mission_wakes")
+}

@@ -21,6 +21,7 @@ import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
+import { saveMissionWakes, savePlanWakes } from "./trading-mission-wakes.js";
 
 type Goal = Prisma.TradingGoalGetPayload<Record<never, never>>;
 type Plan = Prisma.TradingPlanGetPayload<Record<never, never>>;
@@ -190,7 +191,8 @@ export class TradingMissions {
         for (const timestamp of plan.monitoring.reevaluationAt)
           if (
             Date.parse(timestamp) > Date.parse(envelope.expiresAt) ||
-            Date.parse(timestamp) <= this.now().getTime()
+            Date.parse(timestamp) <= this.now().getTime() ||
+            Date.parse(timestamp) < Date.parse(definition.startsAt)
           )
             throw new Error("Choose reevaluation times inside the proposed window");
         const instruments = await tx.brokerInstrument.count({
@@ -202,11 +204,15 @@ export class TradingMissions {
         });
         if (instruments !== new Set(envelope.allowedInstruments).size)
           throw new Error("Choose exact account-scoped broker instruments");
-        return projectPlan(
-          await tx.tradingPlan.create({
-            data: { goalId: goal.id, version: command.expectedVersion + 1, definition: plan },
-          }),
-        );
+        const created = await tx.tradingPlan.create({
+          data: { goalId: goal.id, version: command.expectedVersion + 1, definition: plan },
+        });
+        const active = await tx.tradingMandate.findMany({
+          where: { goalId: goal.id, ...scope, status: { in: ["ACTIVE", "APPROVED_WAITING"] } },
+          take: 100,
+        });
+        for (const mandate of active) await savePlanWakes(tx, mandate, created.id);
+        return projectPlan(created);
       }
       const plan = await tx.tradingPlan.findUnique({ where: { id: command.planId } });
       if (!plan) throw new Error("Plan unavailable");
@@ -301,10 +307,6 @@ export class TradingMissions {
       if (mandate.expiresAt <= this.now()) throw new Error("Mandate expired");
       const goal = await tx.tradingGoal.findUniqueOrThrow({ where: { id: mandate.goalId } });
       const objective = TradingGoalInputSchema.parse(goal.definition);
-      if (Date.parse(objective.startsAt) > this.now().getTime())
-        throw new Error(
-          "Goal has not started; future activation requires a durable scheduled wake",
-        );
       if (mandate.mode === "LIVE")
         throw new Error("LIVE readiness incomplete; live activation is disabled");
       const bot = await this.main(tx, ownerUserId);
@@ -330,13 +332,15 @@ export class TradingMissions {
       const next = await tx.tradingMandate.update({
         where: { id: mandate.id },
         data: {
-          status: "ACTIVE",
+          status:
+            Date.parse(objective.startsAt) > this.now().getTime() ? "APPROVED_WAITING" : "ACTIVE",
           approvedFingerprint: fingerprint,
           approvedByUserId: ownerUserId,
           approvedAt: this.now(),
           revision: { increment: 1 },
         },
       });
+      await saveMissionWakes(tx, next);
       await tx.financialJournal.create({
         data: {
           ownerUserId,
@@ -348,7 +352,7 @@ export class TradingMissions {
           entry: { version: 1, fingerprint, revision: next.revision },
         },
       });
-      await tx.tradingGoal.update({ where: { id: mandate.goalId }, data: { status: "ACTIVE" } });
+      await tx.tradingGoal.update({ where: { id: mandate.goalId }, data: { status: next.status } });
       return projectMandate(next);
     });
   }
@@ -426,7 +430,7 @@ export class TradingMissions {
       const mandate = await tx.tradingMandate.findUniqueOrThrow({ where: { id: initial.id } });
       if (mandate.ownerUserId !== ownerUserId || mandate.revision !== command.expectedRevision)
         throw new Error("Mandate revision conflict");
-      if (!["ACTIVE", "PAUSED", "NEEDS_ATTENTION"].includes(mandate.status))
+      if (!["ACTIVE", "APPROVED_WAITING", "PAUSED", "NEEDS_ATTENTION"].includes(mandate.status))
         throw new Error("Mandate cannot change from its current state");
       if (command.action === "EMERGENCY_STOP") {
         const row = await tx.accountRiskGuardrail.findUniqueOrThrow({

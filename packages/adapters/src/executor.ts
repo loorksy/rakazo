@@ -376,6 +376,7 @@ import {
 import { advanceToolCallLoopGuard } from "./tool-loop.js";
 import { textContentArg } from "./tool-text.js";
 import { requestBrokerRead, TradingConnections } from "./trading-connections.js";
+import { enqueueMissionWakes } from "./trading-mission-wakes.js";
 import { TradingMissions } from "./trading-missions.js";
 import {
   botMessageOutcomeFromMidTurn,
@@ -5168,6 +5169,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 args,
                 runScopedToolExecutionId(runId, executionId),
               );
+              if (args.operation === "plan_create")
+                await enqueueMissionWakes(deps.prisma, deps.jobs).catch(() => undefined);
               if (
                 args.operation === "mandate_propose" &&
                 !Array.isArray(result) &&

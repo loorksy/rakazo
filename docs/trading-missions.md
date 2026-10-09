@@ -27,8 +27,7 @@ repeating the proposal. There is currently no resume command.
 Only SIMULATION activation is available at this checkpoint. LIVE activation and
 LIVE guardrail configuration fail closed until the execution/reconciliation/readiness
 gate is implemented. Simulation approval itself performs no broker mutation. The
-remaining simulator, mission event scheduling and financial execution path are not
-implemented by this module.
+remaining simulator and financial execution path are not implemented by this module.
 
 Pause/cancel immediately invalidate new active authority. Emergency stop additionally
 freezes the account/mode guardrail atomically. They do not silently close positions.
@@ -50,6 +49,22 @@ as well as the authoritative backend. Frontend conflicts leave current authority
 unchanged. The mobile details view currently uses the exact structured envelope;
 further presentation work is independent of authorization.
 
-Future goals currently fail activation before their start rather than acquiring
-early authority; the risk ledger independently validates the goal's time window.
-Scheduled activation will use durable wakes in the existing job host.
+Future approved goals wait in `APPROVED_WAITING` without early authority. Durable
+START, selected plan REEVALUATE and EXPIRE metadata use the existing Graphile job
+host with exact requested deadlines. The periodic reconciler repairs enqueue gaps;
+it does not invoke a model when nothing is due. The risk ledger independently checks
+the goal's time window. Scheduled activation rechecks owner, account and guardrails.
+
+Each logical deadline has an immutable wake identity and terminal receipt. Duplicate
+delivery creates at most one ordinary Task/Run. If chat delivery disappears, the wake
+remains `DELIVERY_NEEDED` and relinks only to the same authorized Bot. Run completion
+is recorded independently of chat deletion. Failed analysis blocks new risk until
+attention is resolved. Plan replacement cancels future analysis deadlines without
+changing approved authority or extending expiry.
+
+After downtime, obsolete analysis deadlines coalesce into a current reevaluation;
+independent user reports and account/effect events are not discarded by this policy.
+An overdue expiry prevents new risk before its notification Run is submitted. This
+checkpoint marks expiry and notifies; it does not claim broker finishing effects
+have run. An actual SIGKILL test covers commit-before-enqueue and recovery through
+the existing Run reconciler.

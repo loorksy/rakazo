@@ -16,6 +16,7 @@ import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
+import { createDurableBotWake } from "./durable-bot-wake.js";
 
 type Row = Prisma.MarketWatchGetPayload<Record<never, never>>;
 function project(row: Row): MarketWatch {
@@ -225,53 +226,18 @@ export async function observeMarketWatches(
   return runs;
 }
 async function deliverMarketWake(tx: Prisma.TransactionClient, watch: Row): Promise<string | null> {
-  const settings = await tx.deploymentSettings.findUnique({ where: { id: "default" } });
-  if (settings?.ownerUserId !== watch.ownerUserId || !settings.ownerSpaceId) return null;
-  const bot = await tx.bot.findFirst({
-    where: { id: watch.botId, userId: watch.ownerUserId, spaceId: settings.ownerSpaceId },
+  const runId = await createDurableBotWake(tx, {
+    ownerUserId: watch.ownerUserId,
+    botId: watch.botId,
+    key: `market-watch:${watch.id}:${watch.wakeGeneration}`,
+    prompt: `A saved broker market condition occurred. Watch ${watch.id}: ${watch.summary}\nEvidence: ${JSON.stringify(watch.pendingEvidence)}\nReport the useful result through this conversation. This observation grants no financial authority.`,
   });
-  if (!bot) return null;
-  const thread = await tx.thread.upsert({
-    where: { botId: bot.id },
-    create: { botId: bot.id, userId: watch.ownerUserId, spaceId: bot.spaceId },
-    update: {},
-  });
-  if (thread.userId !== watch.ownerUserId || thread.spaceId !== bot.spaceId) return null;
-  const key = `market-watch:${watch.id}:${watch.wakeGeneration}`;
-  let run = await tx.run.findUnique({
-    where: { spaceId_clientNonce: { spaceId: bot.spaceId, clientNonce: key } },
-    select: { id: true },
-  });
-  if (!run) {
-    const task = await tx.task.create({
-      data: {
-        spaceId: bot.spaceId,
-        botId: bot.id,
-        threadId: thread.id,
-        userId: watch.ownerUserId,
-        status: "queued",
-        prompt: `A saved broker market condition occurred. Watch ${watch.id}: ${watch.summary}\nEvidence: ${JSON.stringify(watch.pendingEvidence)}\nReport the useful result through this conversation. This observation grants no financial authority.`,
-      },
-    });
-    run = await tx.run.create({
-      data: {
-        spaceId: bot.spaceId,
-        botId: bot.id,
-        threadId: thread.id,
-        taskId: task.id,
-        userId: watch.ownerUserId,
-        status: "queued",
-        trigger: "routine",
-        clientNonce: key,
-      },
-      select: { id: true },
-    });
-  }
+  if (!runId) return null;
   await tx.marketWatch.update({
     where: { id: watch.id },
-    data: { status: "FIRED", triggeredRunId: run.id, revision: { increment: 1 } },
+    data: { status: "FIRED", triggeredRunId: runId, revision: { increment: 1 } },
   });
-  return run.id;
+  return runId;
 }
 /** Recovery of captured delivery is metadata-only; the existing Run reconciler owns job recovery. */
 export async function recoverMarketWakes(

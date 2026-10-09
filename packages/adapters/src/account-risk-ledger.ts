@@ -101,6 +101,12 @@ export class AccountRiskLedger {
         Date.parse(goalDefinition.endsAt) <= this.now().getTime()
       )
         throw new Error("Goal time window is not active");
+      if (
+        await tx.tradingMissionWake.count({
+          where: { mandateId: mandate.id, status: "NEEDS_ATTENTION" },
+        })
+      )
+        throw new Error("Mission wake needs attention before new risk");
       const effect = await tx.externalEffect.findUnique({ where: { id: effectId } });
       if (!effect) throw new Error("Financial effect missing");
       const context = FinancialEffectContextSchema.parse(effect.financialContext);

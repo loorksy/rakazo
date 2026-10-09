@@ -20,6 +20,7 @@ import { compactHistory } from "./history-compaction.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
+import { wakeTradingMission } from "./trading-mission-wakes.js";
 
 export function createBackgroundJobHandlers(deps: {
   executor: ReturnType<typeof createRunExecutor>;
@@ -53,6 +54,8 @@ export function createBackgroundJobHandlers(deps: {
   };
 
   return {
+    "trading.mission-wake": ({ wakeId, scheduledFor }) =>
+      wakeTradingMission(deps.prisma, deps.jobs, wakeId, scheduledFor),
     "run.continue": async (payload) => {
       await deps.executor.continueRun(payload.runId, deps.workerId);
       // Automatic messaging mirror: once the run's bot messages are durable,

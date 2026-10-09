@@ -119,6 +119,9 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
       </Text>
       <Text style={{ color: tokens.foreground }}>{detail.goal.goal.userObjective}</Text>
       <Text style={{ color: tokens.foreground }}>
+        {t("Starts")}: {new Date(detail.goal.goal.startsAt).toLocaleString()}
+      </Text>
+      <Text style={{ color: tokens.foreground }}>
         {t("Maximum loss")}: {envelope.maxMissionLoss} {envelope.currency}
       </Text>
       <Text style={{ color: tokens.foreground }}>
@@ -239,7 +242,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
           />
         </>
       ) : null}
-      {mandate.status === "ACTIVE" ? (
+      {mandate.status === "ACTIVE" || mandate.status === "APPROVED_WAITING" ? (
         <>
           <NativeActionButton
             label={t("Pause")}
@@ -255,7 +258,9 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
           />
         </>
       ) : null}
-      {mandate.status === "ACTIVE" || mandate.status === "PAUSED" ? (
+      {mandate.status === "ACTIVE" ||
+      mandate.status === "APPROVED_WAITING" ||
+      mandate.status === "PAUSED" ? (
         <NativeActionButton
           label={t("Cancel mandate")}
           disabled={readOnly || busy}

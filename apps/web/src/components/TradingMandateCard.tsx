@@ -133,6 +133,10 @@ export function TradingMandateCard({
           <Trans>Expires</Trans>
         </dt>
         <dd>{new Date(envelope.expiresAt).toLocaleString()}</dd>
+        <dt>
+          <Trans>Starts</Trans>
+        </dt>
+        <dd>{new Date(detail.goal.goal.startsAt).toLocaleString()}</dd>
       </dl>
       <details>
         <summary className="cursor-pointer">
@@ -366,7 +370,9 @@ export function TradingMandateCard({
             </Button>
           </>
         )}
-        {mandate.status === "ACTIVE" || mandate.status === "PAUSED" ? (
+        {mandate.status === "ACTIVE" ||
+        mandate.status === "APPROVED_WAITING" ||
+        mandate.status === "PAUSED" ? (
           <Button
             variant="outline"
             disabled={busy || readOnly}

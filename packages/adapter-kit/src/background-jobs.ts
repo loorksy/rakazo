@@ -7,6 +7,10 @@ import type {
 } from "./types.js";
 
 const payloadSchemas = {
+  "trading.mission-wake": z.strictObject({
+    wakeId: z.string().min(1),
+    scheduledFor: z.iso.datetime({ offset: true }),
+  }),
   "run.continue": z.object({ runId: z.string().min(1) }),
   "routine.wakeup": z.object({
     routineId: z.string().min(1),
@@ -68,6 +72,15 @@ export function runContinueJob(runId: string): BackgroundJob {
     name: "run.continue",
     payload: { runId },
     replaceKey: runJobKey(runId),
+  };
+}
+
+export function tradingMissionWakeJob(wakeId: string, scheduledFor: Date): BackgroundJob {
+  return {
+    name: "trading.mission-wake",
+    payload: { wakeId, scheduledFor: scheduledFor.toISOString() },
+    availableAt: scheduledFor,
+    replaceKey: `trading.mission-wake:${wakeId}`,
   };
 }
 

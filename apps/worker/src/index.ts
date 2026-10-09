@@ -21,6 +21,7 @@ import {
   createWebProvider,
   databaseCapacityBackoffMs,
   ExpoPushProvider,
+  enqueueMissionWakes,
   GraphileJobPublisher,
   GraphileJobWorkerHost,
   InMemoryJobQueue,
@@ -270,6 +271,7 @@ async function main() {
     notifications,
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
+    reconcileTradingMissions: () => enqueueMissionWakes(prisma, jobs),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
   });
   reconciler.start();

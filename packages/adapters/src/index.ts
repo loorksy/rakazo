@@ -139,6 +139,7 @@ export * from "./teaching-session.js";
 export * from "./team-chat-messaging.js";
 export * from "./third-party-connector-emulator.js";
 export * from "./trading-connections.js";
+export { enqueueMissionWakes, wakeTradingMission } from "./trading-mission-wakes.js";
 export { TradingMissions } from "./trading-missions.js";
 export * from "./voice-factory.js";
 export * from "./wakeup.js";
