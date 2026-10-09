@@ -32,7 +32,8 @@ library in conformance tests.
 The web/Electron client uses Apache-2.0 KLineChart Pro **0.1.1** with KLineChart
 **9.8.12**. SolidJS stays inside the vendor instance; React owns its container.
 `patches/@klinecharts__pro@0.1.1.patch` adds only a native chart accessor and a
-Solid render-disposer/destroy method to the ESM distribution and type declarations.
+Solid render-disposer/destroy method to the ESM distribution. Local TypeScript
+augmentation describes those two patched methods; vendor declarations remain intact.
 The upstream source is the published 0.1.1 package pinned with its lockfile integrity.
 No upstream source is duplicated and no installed `node_modules` file is edited.
 UMD consumers are not supported by this patch; the product uses the ESM adapter.

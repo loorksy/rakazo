@@ -1,32 +1,30 @@
-diff --git a/dist/index.d.ts b/dist/index.d.ts
-index 1cb6404c4d0076e12a89d53cf3be412f8baee928..859bf1e7f46e3e5c44d409034e0870004a99d846 100644
---- a/dist/index.d.ts
-+++ b/dist/index.d.ts
-@@ -1 +1 @@
--import { DeepPartial, KLineData, Styles } from 'klinecharts';
-+import { Chart, DeepPartial, KLineData, Styles } from 'klinecharts';
-@@ -54,0 +55,2 @@
-+	getChartApi(): Chart;
-+	destroy(): void;
-@@ -81,0 +84,2 @@
-+	getChartApi(): Chart;
-+	destroy(): void;
 diff --git a/dist/klinecharts-pro.js b/dist/klinecharts-pro.js
-index 6f78d0ed0c3b7d7f8da940e87811fab4f59db138..b4ce3ef7a6b1bda219eb4ec8ce7c765f7e6900ae 100644
 --- a/dist/klinecharts-pro.js
 +++ b/dist/klinecharts-pro.js
-@@ -3392 +3392,2 @@
+@@ -3390,5 +3390,6 @@
+     getSymbol: () => y(),
+     setPeriod: M,
 -    getPeriod: () => L()
 +    getPeriod: () => L(),
 +    getChartApi: () => n
-@@ -3878 +3879 @@
+   });
+   const c1 = () => {
+@@ -3876,5 +3877,5 @@
+     this._container.classList.add("klinecharts-pro"), this._container.setAttribute("data-theme", t.theme ?? "light");
+     const n = this;
 -    H5(() => d(Dl, {
 +    this._dispose = H5(() => d(Dl, {
-@@ -3958,0 +3960,7 @@
-+  }
+       ref: (r) => {
+         n._chartApi = r;
+@@ -3958,4 +3959,11 @@
+     }), this._container);
+   }
 +  getChartApi() {
 +    return this._chartApi.getChartApi();
 +  }
 +  destroy() {
 +    this._dispose?.();
 +    this._dispose = undefined;
++  }
+   setTheme(t) {
+     var n;
