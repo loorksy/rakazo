@@ -41,6 +41,7 @@ const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "trading_accounts",
   "chart_workspace",
   "chart_indicators",
+  "chart_inspect",
   "broker_read",
   "browser_snapshot",
   "cloud_agent_status",

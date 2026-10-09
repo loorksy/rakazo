@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { followChartEvents } from "./chart-events.js";
 import { ChartIndicators } from "./chart-indicators.js";
 import type { ChartActor } from "./cloud-charts.js";
-import { CloudCharts } from "./cloud-charts.js";
+import { CloudCharts, guardChartProjection } from "./cloud-charts.js";
 import { InMemoryRealtimeFanout } from "./realtime.js";
 
 const url = process.env.CHART_TEST_DATABASE_URL;
@@ -126,6 +126,36 @@ suite("durable chart workspace (PostgreSQL)", () => {
       execution: { runId: run.id, holder: "a", generation: 1 },
     };
   }
+  it("rejects stale rendered artifacts after takeover or chart revision change", async () => {
+    const actor = await worker();
+    const chart = await create("MAIN", actor);
+    await expect(
+      db.prisma.$transaction((tx) => guardChartProjection(tx, actor, chart.id, chart.revision)),
+    ).resolves.toBeUndefined();
+    await new CloudCharts(db.prisma).command(principal, {
+      operation: "zoom",
+      chartId: chart.id,
+      expectedRevision: chart.revision,
+      factor: 2,
+    });
+    await expect(
+      db.prisma.$transaction((tx) => guardChartProjection(tx, actor, chart.id, chart.revision)),
+    ).rejects.toThrow("Chart changed");
+    await db.prisma.run.update({
+      where: { id: actor.execution.runId },
+      data: { leaseOwner: "b", leaseFence: 2 },
+    });
+    const current = CloudChartSchema.parse(
+      await new CloudCharts(db.prisma).command(principal, { operation: "get", chartId: chart.id }),
+    );
+    await expect(
+      db.prisma.$transaction((tx) => guardChartProjection(tx, actor, chart.id, current.revision)),
+    ).rejects.toThrow();
+    const newer = { ...actor, execution: { ...actor.execution, holder: "b", generation: 2 } };
+    await expect(
+      db.prisma.$transaction((tx) => guardChartProjection(tx, newer, chart.id, current.revision)),
+    ).resolves.toBeUndefined();
+  });
   const drawing = {
     type: "horizontalStraightLine",
     points: [{ time: "2026-10-09T00:00:00Z", price: "2700.123456789123" }],

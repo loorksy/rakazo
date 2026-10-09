@@ -18,7 +18,7 @@ import {
   messageBlockForArtifact,
   validateAttachmentMimeType,
 } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { Prisma, PrismaClient } from "@rakazo/db";
 import { withResolvedArtifactVersion } from "@rakazo/db";
 import { resolveBotWorkspacePath } from "./computer-support.js";
 
@@ -33,6 +33,7 @@ export async function attachWorkspaceFileToThread(
   deps: {
     prisma: PrismaClient;
     artifacts: ArtifactStore;
+    ownershipGuard?: (tx: Prisma.TransactionClient) => Promise<void>;
   },
   input: {
     spaceId: string;
@@ -77,8 +78,8 @@ export async function attachWorkspaceFileToThread(
       groupId: input.groupId,
       name,
     },
-    (tx, { rootArtifactId, version }) =>
-      tx.artifact.create({
+    async (tx, { rootArtifactId, version }) => {
+      return tx.artifact.create({
         data: {
           spaceId: input.spaceId,
           userId: input.userId,
@@ -94,7 +95,9 @@ export async function attachWorkspaceFileToThread(
           rootArtifactId,
           version,
         },
-      }),
+      });
+    },
+    deps.ownershipGuard,
   ).catch(async (error) => {
     await deps.artifacts.remove(stored.id, context).catch(() => undefined);
     throw error;

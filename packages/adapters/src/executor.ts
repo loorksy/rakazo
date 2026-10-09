@@ -44,6 +44,7 @@ import {
   BOT_TITLE_MAX_LENGTH,
   BotSecretName,
   botSecretSubmissionSchema,
+  ChartInspectionCommandSchema,
   CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE,
   COMPUTER_COMMAND_OUTPUT_MAX_CHARS,
   disabledBuiltinToolSet,
@@ -197,13 +198,15 @@ import {
   browserSnapshotFromTool,
 } from "./browser-tools.js";
 import { agentConnectionTools, builtinAgentTools, sharedMemorySaveError } from "./builtin-tools.js";
+import { chartEvidence } from "./chart-evidence.js";
 import { ChartIndicators } from "./chart-indicators.js";
+import { chartVisionResult, renderChartView } from "./chart-scene.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-factory.js";
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
 import { validCloudAgentArgs } from "./cloud-agent-tools.js";
 import { selectCloudAgentTools } from "./cloud-agent-tools-select.js";
-import { CloudCharts } from "./cloud-charts.js";
+import { CloudCharts, guardChartProjection } from "./cloud-charts.js";
 import { cloudflareGatewayProviderEnv } from "./cloudflare-ai-gateway.js";
 import {
   collectLogIds,
@@ -5138,6 +5141,73 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
           }
+          if (name === "chart_inspect") {
+            try {
+              const command = ChartInspectionCommandSchema.parse(args);
+              const actor = {
+                ownerUserId: run.userId,
+                botId: run.botId,
+                execution: { runId, holder: workerId, generation: fence },
+              };
+              const evidence = await chartEvidence(
+                deps.prisma,
+                actor,
+                command.chartId,
+                context.signal,
+              );
+              if (command.operation === "evidence") return finish(evidence);
+              if (command.operation === "candle") {
+                const candle = evidence.candles.find(
+                  (c) => Date.parse(c.openTime) === Date.parse(command.timestamp),
+                );
+                return finish(
+                  candle ?? {
+                    error: "Candle outside loaded history; choose a historical viewport first",
+                  },
+                );
+              }
+              const rendered = await renderChartView(evidence);
+              const guard = (tx: Prisma.TransactionClient) =>
+                guardChartProjection(tx, actor, command.chartId, evidence.chart.revision);
+              await deps.prisma.$transaction(guard);
+              let artifactId: string | undefined;
+              if (command.attach) {
+                if (!deps.artifacts) throw new Error("Artifact storage unavailable");
+                const attached = await attachWorkspaceFileToThread(
+                  { prisma: deps.prisma, artifacts: deps.artifacts, ownershipGuard: guard },
+                  {
+                    spaceId: run.spaceId,
+                    userId: run.userId,
+                    botId: run.botId,
+                    runId,
+                    filePath: "chart.png",
+                    bytes: rendered.png,
+                    operationId: context.operationId,
+                    name: `chart-${evidence.chart.id}-r${evidence.chart.revision}.png`,
+                  },
+                );
+                artifactId = attached.artifactId;
+                await publishMessage(
+                  deps,
+                  run,
+                  "bot",
+                  [attached.block],
+                  undefined,
+                  undefined,
+                  guard,
+                );
+              }
+              const result = chartVisionResult(evidence, rendered, acceptsImages, artifactId);
+              return finish(result);
+            } catch (error) {
+              return finish({
+                error:
+                  error instanceof ChartConflictError
+                    ? error.message
+                    : "Chart inspection unavailable; chart state is preserved",
+              });
+            }
+          }
           if (name === "chart_indicators") {
             try {
               return finish(
@@ -8046,10 +8116,12 @@ async function publishMessage(
   blocks: MessageBlock[],
   markUnread?: boolean,
   clientNonce?: string,
+  ownershipGuard?: (tx: Prisma.TransactionClient) => Promise<void>,
 ) {
-  const committed = await deps.prisma.$transaction((tx) =>
-    persistMessageInTransaction(tx, run, role, blocks, markUnread, clientNonce),
-  );
+  const committed = await deps.prisma.$transaction(async (tx) => {
+    await ownershipGuard?.(tx);
+    return persistMessageInTransaction(tx, run, role, blocks, markUnread, clientNonce);
+  });
   await deps.events.notify(run.threadId, committed.eventSeq).catch((error) => {
     getLogger().error("thread message realtime notification", error);
   });

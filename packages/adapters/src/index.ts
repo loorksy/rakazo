@@ -28,6 +28,7 @@ export * from "./cartesia-voice.js";
 export * from "./chart-events.js";
 export * from "./chart-evidence.js";
 export * from "./chart-indicators.js";
+export { renderChartView } from "./chart-scene.js";
 export * from "./chat-sdk-surface.js";
 export * from "./child-bots.js";
 export * from "./cloud-agent-emulator.js";

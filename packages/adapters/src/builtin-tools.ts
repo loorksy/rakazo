@@ -4,6 +4,7 @@ import {
   BrokerReadCommandSchema,
   botSecretDestinationSchema,
   ChartCommandSchema,
+  ChartInspectionCommandSchema,
   IndicatorRegistryCommandSchema,
   SecretAskPurpose,
   SecretHttpRequest,
@@ -145,6 +146,12 @@ const scheduleCreateInputSchema = {
 };
 
 export const builtinAgentTools: ConnectorTool[] = [
+  {
+    name: "chart_inspect",
+    description:
+      "Inspect exact candles or current chart evidence. Render a chart-only PNG with saved viewport, drawings and indicators for visual inspection when useful; attach:true sends the real image into this conversation. No computer/browser is needed. Non-vision models receive precise structured metadata instead.",
+    inputSchema: z.toJSONSchema(ChartInspectionCommandSchema, { io: "input" }),
+  },
   {
     name: "chart_indicators",
     description:

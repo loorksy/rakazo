@@ -13,6 +13,7 @@ import {
   IndicatorRegistryCommandSchema,
   IndicatorRegistryResponseSchema,
 } from "./chart-indicator.js";
+import { ChartRenderResponseSchema } from "./chart-inspection.js";
 import { ChartCommandSchema, ChartEventSchema, ChartResponseSchema } from "./cloud-chart.js";
 import {
   ActionApprovalRuleSchema,
@@ -170,6 +171,7 @@ const spaceName = z.string().trim().min(1).max(60);
 
 export const appContract = {
   trading: {
+    chartRender: oc.input(z.object({ chartId: Id })).output(ChartRenderResponseSchema),
     chartEvidence: oc.input(z.object({ chartId: Id })).output(ChartEvidenceSchema),
     indicators: oc.input(IndicatorRegistryCommandSchema).output(IndicatorRegistryResponseSchema),
     charts: oc.input(ChartCommandSchema).output(ChartResponseSchema),

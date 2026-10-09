@@ -5,6 +5,7 @@ export const BUILTIN_TOOL_NAMES = [
   "trading_accounts",
   "chart_workspace",
   "chart_indicators",
+  "chart_inspect",
   "broker_read",
   "computer_observe",
   "computer_act",

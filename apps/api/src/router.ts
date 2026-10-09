@@ -98,6 +98,7 @@ import {
   provisionComputer,
   queueComputerUpdate,
   releaseComputerExecutionLease,
+  renderChartView,
   replaceComputer,
   requestBrokerRead,
   resolveAutoReviewChecker,
@@ -763,6 +764,20 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      chartRender: authed.trading.chartRender.handler(async ({ context, input }) => {
+        const evidence = await chartEvidence(
+          deps.prisma,
+          { ownerUserId: context.actor.userId },
+          input.chartId,
+          context.signal,
+        );
+        const rendered = await renderChartView(evidence);
+        return {
+          mimeType: "image/png" as const,
+          data: rendered.png.toString("base64"),
+          metadata: rendered.metadata,
+        };
+      }),
       chartEvidence: authed.trading.chartEvidence.handler(({ context, input }) =>
         chartEvidence(
           deps.prisma,

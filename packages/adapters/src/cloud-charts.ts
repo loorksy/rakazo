@@ -9,6 +9,7 @@ import {
 } from "@rakazo/contracts";
 import {
   CHART_DRAWING_CAPABILITIES,
+  ChartConflictError,
   ChartPermissionError,
   changeChartState,
   indicatorParameters,
@@ -250,4 +251,20 @@ export async function fenceChartExecution(tx: Prisma.TransactionClient, input: C
     },
   });
   if (!run) throw new ChartPermissionError();
+}
+
+/** Prevent a delayed render from publishing over changed chart state or execution ownership. */
+export async function guardChartProjection(
+  tx: Prisma.TransactionClient,
+  actor: ChartActor,
+  chartId: string,
+  revision: number,
+) {
+  await fenceChartExecution(tx, actor);
+  await tx.$queryRaw`SELECT id FROM cloud_charts WHERE id = ${chartId} FOR UPDATE`;
+  const current = await tx.cloudChart.findFirst({
+    where: { id: chartId, ownerUserId: actor.ownerUserId },
+    select: { revision: true },
+  });
+  if (current?.revision !== revision) throw new ChartConflictError();
 }

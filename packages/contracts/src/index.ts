@@ -5,6 +5,7 @@ export * from "./bot-avatar.js";
 export * from "./bot-secrets.js";
 export * from "./builtin-tools.js";
 export * from "./chart-indicator.js";
+export * from "./chart-inspection.js";
 export * from "./cloud-chart.js";
 export * from "./cloudflare-ai-gateway.js";
 export * from "./desktop.js";

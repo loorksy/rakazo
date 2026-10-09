@@ -94,9 +94,47 @@ indicator. Five-second chart-only refresh is active only while a client is obser
 visible live indicators; it does not call an LLM and stops on unmount. Ordinary quotes
 remain streamed and do not reinitialize the chart or steal the user's viewport.
 
+## Chart-only visual inspection and image delivery
+
+`chart_inspect` provides exact loaded candles, shared chart evidence and optional PNG
+rendering. Rendering consumes the same backend candles, saved viewport, visible
+instrument-scoped drawings and immutable indicator versions/parameters. Semantic
+anchors are projected on candle indices, including gaps. This deterministic SVG/Sharp
+renderer has fixed width and bounded pane count/pixels; it has no navigation, Computer,
+external images, uploaded SVG, model code or browser session. Text is XML-escaped and
+uses DejaVu Sans with Arabic glyph support. Colors come from shared semantic tokens.
+The renderer is identified as `chart-svg-v1`: mathematical scene correspondence,
+not pixel-identical KLineChart Pro chrome. It implements all exposed drawing types,
+including the vendor's mirrored third price-channel line and Fibonacci levels.
+
+The existing Pi/provider-neutral `agent_tool_result` image interface forwards PNG
+content only when the selected runtime accepts images. Non-vision runtimes receive
+exact candle values, indicator calculations and metadata. No automatic vision call
+occurs after drawing, cursor movement or quote receipt. `attach:true` stores a real PNG
+in the existing ArtifactStore and publishes an image block in the current thread; the
+agent does not need a generic filesystem or Computer path to send it. Saved image
+metadata contains chart/revision identity; it does not persist private reasoning or
+image base64 in the effects journal.
+
+Late render publication locks the current Run generation and chart row before artifact
+version allocation and again before chat publication. Stale ownership or changed chart
+revision rejects publication. An orphaned stored blob is removed when guarded artifact
+metadata creation fails. Financial authority is never conferred by an image request.
+
+## Native mobile surface
+
+The existing thread action menu opens a contextual Chart screen, without top-level
+navigation. Saved charts restore; the owner can select any account's broker symbols,
+open/reuse a chart, change timeframe and zoom through the same revision-checked commands.
+Native mobile currently displays the chart-only backend PNG with explicit refresh.
+This is a native fallback, not a second rendering/data engine or a general WebView.
+The full KLineChart Pro interaction and virtual cursor remain available in responsive
+web/Electron; native mobile freehand drawing/cursor animation are not yet implemented.
+
 ## Current scope
 
-Chart-only vision rendering and mobile native chart integration remain subsequent
-implementation work. This checkpoint verifies the web/Electron adapter, safe indicator
-factory and import/version persistence. No financial execution authority is granted
-by chart or indicator tools.
+Chart storage, web/Electron workstation, safe indicator factory/import versions and
+chart-only vision/image delivery are implemented. Native mobile has the contextual
+structured-control/image fallback above. The remaining financial migration, watcher
+integration and live-readiness gate are separate implementation work; chart/indicator
+features do not grant trading authority.

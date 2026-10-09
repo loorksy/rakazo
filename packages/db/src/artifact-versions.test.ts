@@ -100,6 +100,33 @@ function versioningClient(findFirst: (...args: unknown[]) => unknown) {
 }
 
 describe("withResolvedArtifactVersion", () => {
+  it("rejects stale execution before acquiring an artifact name or writing metadata", async () => {
+    const client = versioningClient(vi.fn().mockResolvedValue(null));
+    const attempt = vi.fn();
+    const guard = vi.fn().mockRejectedValue(new Error("Stale execution"));
+    await expect(
+      withResolvedArtifactVersion(client.prisma, params, attempt, guard),
+    ).rejects.toThrow("Stale execution");
+    expect(client.order).toEqual([]);
+    expect(attempt).not.toHaveBeenCalled();
+    expect(guard).toHaveBeenCalledWith(client.tx);
+  });
+  it("guards ownership in the same transaction before name/version allocation", async () => {
+    const client = versioningClient(vi.fn().mockResolvedValue(null));
+    const guard = vi.fn(async () => {
+      client.order.push("ownership");
+    });
+    await withResolvedArtifactVersion(
+      client.prisma,
+      params,
+      async () => {
+        client.order.push("write");
+        return "published";
+      },
+      guard,
+    );
+    expect(client.order).toEqual(["ownership", "lock", "read", "write"]);
+  });
   it("locks the name, then resolves and writes inside that transaction", async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     const client = versioningClient(findFirst);

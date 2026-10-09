@@ -50,11 +50,13 @@ export async function withResolvedArtifactVersion<T>(
     db: Pick<Prisma.TransactionClient, "artifact">,
     version: ArtifactVersionWrite,
   ) => Promise<T>,
+  ownershipGuard?: (tx: Prisma.TransactionClient) => Promise<void>,
 ): Promise<T> {
   let lastError: unknown;
   for (let i = 0; i < MAX_VERSION_ALLOCATION_ATTEMPTS; i++) {
     try {
       return await prisma.$transaction(async (tx) => {
+        await ownershipGuard?.(tx);
         await tx.$queryRaw(Prisma.sql`
           SELECT pg_advisory_xact_lock(hashtextextended(${artifactVersionLockKey(params)}, 0))::text AS "lock"
         `);
