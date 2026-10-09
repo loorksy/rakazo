@@ -14,6 +14,7 @@ export * from "./bot-messages.js";
 export * from "./bot-sections.js";
 export * from "./call-nonce.js";
 export * from "./chart-controller.js";
+export * from "./chart-indicator.js";
 export * from "./cloud-agent.js";
 export * from "./compose-update.js";
 export * from "./composer-mention-picker.js";
