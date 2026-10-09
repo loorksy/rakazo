@@ -774,4 +774,17 @@ export const DE_MESSAGES: Record<string, string> = {
     "Melde dich bei deinem bestehenden Konto an, um SSO zu verknüpfen",
   "SSO is temporarily unavailable. Try again.":
     "SSO ist vorübergehend nicht verfügbar. Versuche es erneut.",
+  "API token": "API-Token",
+  "Account name": "Kontoname",
+  "Broker accounts": "Brokerkonten",
+  Chart: "Chart",
+  "Connect account": "Konto verbinden",
+  "MetaApi account ID": "MetaApi-Konto-ID",
+  "Open chart": "Chart öffnen",
+  Refresh: "Aktualisieren",
+  "Region (optional)": "Region (optional)",
+  "Search symbols": "Symbole suchen",
+  "Setup key": "Einrichtungsschlüssel",
+  "Zoom in": "Vergrößern",
+  "Zoom out": "Verkleinern",
 };

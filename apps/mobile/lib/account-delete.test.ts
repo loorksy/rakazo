@@ -15,6 +15,18 @@ function sliceBetween(source: string, start: string, end: string) {
 }
 
 describe("Account delete", () => {
+  it("hides both deletion entry and dialog when the server protects deployment ownership", () => {
+    const entry = sliceBetween(
+      screen,
+      "{security?.accountDeletionEnabled !== false ?",
+      "</SettingsGroup>",
+    );
+    expect(entry).toContain("onPress={requestDeletion}");
+    expect(screen).toContain("{deleteOpen && security?.accountDeletionEnabled !== false ?");
+    const disabled = new Function("security", "return security?.accountDeletionEnabled !== false");
+    expect(disabled({ accountDeletionEnabled: false })).toBe(false);
+    expect(disabled({ accountDeletionEnabled: true })).toBe(true);
+  });
   it("uses one destructive row and asks for the password only after it is tapped", () => {
     expect(screen).not.toContain("dangerZone");
     expect(screen).not.toContain("styles.deleteButton");
@@ -26,7 +38,11 @@ describe("Account delete", () => {
     expect(row).toContain("setDeleteOpen(true)");
     const press = screen.indexOf("onPress={requestDeletion}");
     expect(screen.slice(screen.lastIndexOf("<SettingsRow", press), press)).toContain("destructive");
-    const visible = sliceBetween(screen, "onPress={requestDeletion}", "{deleteOpen ?");
+    const visible = sliceBetween(
+      screen,
+      "onPress={requestDeletion}",
+      "{deleteOpen && security?.accountDeletionEnabled !== false ?",
+    );
     expect(visible).toContain('t("Delete account")');
     expect(visible).not.toContain("secureTextEntry");
     expect(visible).not.toContain("<TextInput");
@@ -38,7 +54,11 @@ describe("Account delete", () => {
     expect(deletion).toContain('replaceWithSignIn("/sign-in")');
     expect(deletion).toContain('t("Could not delete account")');
     expect(deletion).toContain("setDeleteError");
-    const dialog = sliceBetween(screen, "{deleteOpen ?", "</Modal>");
+    const dialog = sliceBetween(
+      screen,
+      "{deleteOpen && security?.accountDeletionEnabled !== false ?",
+      "</Modal>",
+    );
     expect(dialog).toContain("secureTextEntry");
     expect(dialog).toContain('t("Current password")');
     expect(dialog).toContain('t("Delete")');
@@ -63,7 +83,11 @@ describe("Account delete", () => {
     expect(signOutControl).toContain("signOutError");
     expect(signOutControl).toContain('accessibilityRole="alert"');
     expect(signOutControl).not.toContain("deleteError");
-    const visible = sliceBetween(screen, "onPress={requestDeletion}", "{deleteOpen ?");
+    const visible = sliceBetween(
+      screen,
+      "onPress={requestDeletion}",
+      "{deleteOpen && security?.accountDeletionEnabled !== false ?",
+    );
     expect(visible).toContain("deleteError");
     expect(visible).not.toContain("signOutError");
     const actions = sliceBetween(screen, "dialogAction: {", "dialogCancel:");

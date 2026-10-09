@@ -230,6 +230,7 @@ export default function Layout() {
                     />
                     <Stack.Screen name="thread" options={{ title: t("Thread") }} />
                     <Stack.Screen name="routine" options={glassHeaderOptions(t("Routine"))} />
+                    <Stack.Screen name="chart" options={{ title: t("Chart") }} />
                     <Stack.Screen name="computer" options={{ title: t("Computer") }} />
                     <Stack.Screen
                       name="image"

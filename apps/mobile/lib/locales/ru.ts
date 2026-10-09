@@ -778,4 +778,17 @@ export const RU_MESSAGES: Record<string, string> = {
   "Sign in to your existing account to link SSO":
     "Войдите в существующий аккаунт, чтобы привязать SSO",
   "SSO is temporarily unavailable. Try again.": "SSO временно недоступен. Попробуйте снова.",
+  "API token": "Токен API",
+  "Account name": "Название счёта",
+  "Broker accounts": "Брокерские счета",
+  Chart: "График",
+  "Connect account": "Подключить счёт",
+  "MetaApi account ID": "ID счёта MetaApi",
+  "Open chart": "Открыть график",
+  Refresh: "Обновить",
+  "Region (optional)": "Регион (необязательно)",
+  "Search symbols": "Поиск инструментов",
+  "Setup key": "Ключ настройки",
+  "Zoom in": "Увеличить",
+  "Zoom out": "Уменьшить",
 };

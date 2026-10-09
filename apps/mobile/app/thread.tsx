@@ -917,6 +917,7 @@ function Thread() {
   }
 
   const botActions = [
+    { text: t("Open chart"), onPress: () => router.push("/chart") },
     {
       text: t("Chat settings"),
       onPress: () =>
