@@ -65,5 +65,6 @@ export * from "./thread-message-updates.js";
 export * from "./thread-subscription.js";
 export * from "./time-separators.js";
 export * from "./tool-activity.js";
+export * from "./trading-simulation.js";
 export * from "./user-error.js";
 export * from "./voice-chat-groups.js";

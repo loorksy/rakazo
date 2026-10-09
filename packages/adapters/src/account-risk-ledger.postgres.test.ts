@@ -24,7 +24,7 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
   let action: FinancialAction;
   const reset = () =>
     db.prisma
-      .$executeRaw`TRUNCATE trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE simulation_executions, simulation_books, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
   beforeAll(() => {
     if (!url || !new URL(url).pathname.endsWith("_test"))
       throw new Error("Dedicated fixture _test database required");

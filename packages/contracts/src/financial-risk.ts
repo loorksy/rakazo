@@ -48,6 +48,8 @@ export type TradingMandateEnvelope = z.infer<typeof TradingMandateEnvelopeSchema
 /** Trusted provider snapshot. Never accept this structure as a model-supplied risk claim. */
 export const FinancialRiskFactsSchema = z.strictObject({
   version: z.literal(1),
+  /** Trusted simulation preflight pins the virtual book revision; never a tool argument. */
+  simulationRevision: z.number().int().positive().optional(),
   accountId: Id,
   instrumentId: Id,
   brokerSymbol: Id,

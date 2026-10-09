@@ -1751,3 +1751,32 @@ model TradePreview {
   @@unique([proposalId, version])
   @@map("trade_previews")
 }
+
+/// Isolated virtual account. No broker mutations and no cascade from conversations/accounts.
+model SimulationBook {
+  accountId String @id
+  ownerUserId String
+  formatVersion Int @default(1)
+  revision Int @default(1)
+  state Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("simulation_books")
+}
+
+/// Immutable simulated provider acceptance; reconciliation can prove a local fill after process death.
+model SimulationExecution {
+  effectId String @id
+  accountId String
+  ownerUserId String
+  mandateId String
+  actionFingerprint String
+  formatVersion Int @default(1)
+  outcome Json
+  changes Json
+  createdAt DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@map("simulation_executions")
+}

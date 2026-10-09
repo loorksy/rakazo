@@ -319,6 +319,7 @@ export class FinancialEffects {
       });
       await this.journal(tx, updated, context, "REVIEWED", {
         decision: decision.decision,
+        reviewedAt: this.now().toISOString(),
         model: decision.model,
         reason: decision.reason ?? null,
       });
@@ -338,14 +339,33 @@ export class FinancialEffects {
         initialContext.accountId,
       );
       await this.authority(tx, context);
+      const humanApproved =
+        effect.financialApprovedByUserId === actor.ownerUserId && !!effect.financialApprovedAt;
       if (
         effect.status !== "approved" ||
         effect.financialStartedAt ||
         !effect.financialExpiresAt ||
         effect.financialExpiresAt <= this.now() ||
-        (effect.reviewDecision !== "pass" && effect.financialApprovedByUserId !== actor.ownerUserId)
+        (effect.reviewDecision !== "pass" && !humanApproved)
       )
         throw new Error("Exact authorized unstarted effect required");
+      if (!humanApproved) {
+        const receipt = await tx.financialJournal.findFirst({
+          where: { effectId: id, event: "REVIEWED" },
+          orderBy: { createdAt: "desc" },
+        });
+        const entry = receipt?.entry;
+        const reviewedAt =
+          entry &&
+          typeof entry === "object" &&
+          !Array.isArray(entry) &&
+          typeof entry.reviewedAt === "string"
+            ? Date.parse(entry.reviewedAt)
+            : Number.NaN;
+        const age = this.now().getTime() - reviewedAt;
+        if (!Number.isFinite(age) || age < -2000 || age > 15000)
+          throw new Error("Fresh independent review required; create a new proposal");
+      }
       const reservation = await new AccountRiskLedger(this.prisma, this.now).reserveInTransaction(
         tx,
         actor,
@@ -425,6 +445,91 @@ export class FinancialEffects {
       await this.journal(tx, updated, context, outcome.status, {
         providerReference: outcome.providerReference,
         code: outcome.code,
+      });
+      return updated;
+    });
+  }
+  /** Simulation acceptance is atomic with its immutable local receipt. No outbound retry. */
+  async reconcileSimulation(actor: ChartActor, id: string) {
+    await requireTradingOwner(this.prisma, actor.ownerUserId);
+    const initial = await this.prisma.externalEffect.findUniqueOrThrow({ where: { id } });
+    const initialContext = contextOf(initial);
+    if (initialContext.mode !== "SIMULATION") throw new Error("Simulation reconciliation only");
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM trading_connections WHERE id = ${initialContext.accountId} FOR UPDATE`;
+      const execution = await this.actor(tx, actor);
+      await tx.$queryRaw`SELECT id FROM external_effects WHERE id = ${id} FOR UPDATE`;
+      const effect = await tx.externalEffect.findUniqueOrThrow({ where: { id } });
+      const context = contextOf(effect);
+      if (
+        context.ownerUserId !== actor.ownerUserId ||
+        context.botId !== actor.botId ||
+        effect.runId !== execution.runId ||
+        effect.financialGeneration > execution.generation
+      )
+        throw new Error("Current reconciliation principal required");
+      if (["completed", "failed"].includes(effect.status)) return effect;
+      if (effect.status !== "uncertain" || !effect.financialStartedAt)
+        throw new Error("Uncertain STARTED effect required");
+      const receipt = await tx.simulationExecution.findUnique({ where: { effectId: id } });
+      if (
+        receipt &&
+        (receipt.ownerUserId !== context.ownerUserId ||
+          receipt.accountId !== context.accountId ||
+          receipt.mandateId !== context.authorizationId ||
+          receipt.actionFingerprint !== context.actionFingerprint)
+      )
+        throw new Error("Simulation reconciliation binding mismatch");
+      // An absent receipt is proof of no local mutation only after fencing out the old Run.
+      // This rule MUST NOT be used for remote broker requests.
+      const outcome = receipt
+        ? FinancialEffectOutcomeSchema.parse(receipt.outcome)
+        : FinancialEffectOutcomeSchema.parse({
+            version: 1,
+            status: "FAILED",
+            providerReference: null,
+            code: "SIMULATION_NOT_ACCEPTED",
+          });
+      if (outcome.status === "UNCERTAIN") throw new Error("Ambiguous simulation receipt");
+      const updated = await tx.externalEffect.update({
+        where: { id },
+        data: {
+          status: outcome.status === "SUCCEEDED" ? "completed" : "failed",
+          financialGeneration: execution.generation,
+          financialHolder: execution.holder,
+          result: outcome,
+          financialProviderReference: outcome.providerReference,
+          financialFailureCode: outcome.code,
+        },
+      });
+      await tx.tradingRiskReservation.updateMany({
+        where: { effectId: id, status: "UNCERTAIN" },
+        data: {
+          status: outcome.status === "SUCCEEDED" ? "COMMITTED" : "RELEASED",
+          providerReference: outcome.providerReference,
+          executionGeneration: execution.generation,
+        },
+      });
+      if (
+        !(await tx.externalEffect.count({
+          where: {
+            status: { in: ["executing", "uncertain", "reconciling"] },
+            AND: [
+              { financialContext: { path: ["accountId"], equals: context.accountId } },
+              { financialContext: { path: ["mode"], equals: "SIMULATION" } },
+            ],
+          },
+        }))
+      )
+        await tx.tradingMandate.updateMany({
+          where: { id: context.authorizationId, status: "NEEDS_RECONCILIATION" },
+          data: { status: "PAUSED", revision: { increment: 1 } },
+        });
+      await this.journal(tx, updated, context, "RECONCILED", {
+        status: outcome.status,
+        providerReference: outcome.providerReference,
+        code: outcome.code,
+        proof: receipt ? "SIMULATION_ACCEPTANCE_RECEIPT" : "FENCED_LOCAL_RECEIPT_ABSENCE",
       });
       return updated;
     });

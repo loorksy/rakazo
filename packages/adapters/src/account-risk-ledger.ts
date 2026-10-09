@@ -197,6 +197,14 @@ export class AccountRiskLedger {
       throw new Error("LIVE readiness has not been established");
     }
     if (limits.maxDrawdown !== null) throw new Error("Verified account drawdown baseline required");
+    if (mandate.mode === "SIMULATION") {
+      const book = await tx.simulationBook.findUnique({ where: { accountId: account.id } });
+      if (
+        book &&
+        (book.ownerUserId !== actor.ownerUserId || facts.simulationRevision !== book.revision)
+      )
+        throw new Error("Simulation book revision conflict");
+    }
     if (
       !mandate.observedAt ||
       this.now().getTime() - mandate.observedAt.getTime() > 15000 ||

@@ -31,3 +31,4 @@ export * from "./trading.js";
 
 export * from "./trading-mission.js";
 export * from "./trading-proposal.js";
+export * from "./trading-simulation.js";

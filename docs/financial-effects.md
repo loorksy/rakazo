@@ -14,6 +14,9 @@ Independent review records ALLOW, DENY or escalation. A recorded DENY cannot be 
 escalation cannot be retried to obtain a different review. PostgreSQL preserves review,
 expiry, approval, STARTED and terminal receipts. Receipt protection permits deletion of
 ordinary conversation/Run links without deleting the financial evidence.
+An automatic ALLOW review must remain fresh (15 seconds) when execution begins. Refreshing
+broker facts cannot reuse an old model decision. Owner escalation has its own bounded
+effect expiry and still requires fresh deterministic admission checks.
 
 Starting an effect locks the account, checks current Run ownership, current exact mandate,
 owner guardrails, expiry and fresh trusted facts, then recomputes and reserves risk and

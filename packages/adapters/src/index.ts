@@ -132,6 +132,7 @@ export * from "./secret-store-factory.js";
 export * from "./secrets.js";
 export * from "./sendblue-emulator.js";
 export { SerenityMemoryProvider } from "./serenity-memory-provider.js";
+export { SimulationBroker } from "./simulation-broker.js";
 export * from "./skill-tools.js";
 export * from "./smtp-email.js";
 export * from "./stripe-billing.js";

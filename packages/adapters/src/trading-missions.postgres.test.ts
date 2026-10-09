@@ -7,6 +7,7 @@ import type {
   TradingPlanInput,
 } from "@rakazo/contracts";
 import {
+  SimulationBookStateSchema,
   TradeProposalViewSchema,
   TradingGoalViewSchema,
   TradingMandateViewSchema,
@@ -18,6 +19,7 @@ import type { ChartActor } from "./cloud-charts.js";
 import { FinancialEffects } from "./financial-effects.js";
 import { createJobReconciler } from "./job-reconciler.js";
 import { ScriptedAutoReviewProvider } from "./scripted-auto-review.js";
+import { SimulationBroker } from "./simulation-broker.js";
 import { TradeProposals } from "./trade-proposals.js";
 import { enqueueMissionWakes, wakeTradingMission } from "./trading-mission-wakes.js";
 import { TradingMissions } from "./trading-missions.js";
@@ -137,7 +139,7 @@ suite("owner-only durable trading goals/plans/mandates", () => {
   let missions: TradingMissions;
   const reset = () =>
     db.prisma
-      .$executeRaw`TRUNCATE trade_previews, trade_proposals, trading_mission_wakes, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE simulation_executions, simulation_books, trade_previews, trade_proposals, trading_mission_wakes, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
   beforeAll(() => {
     if (!url || !new URL(url).pathname.endsWith("_test"))
       throw new Error("Dedicated fixture _test database required");
@@ -314,7 +316,10 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       openPositions: [],
       pendingOrders: [],
     };
-    async function prepared(overrideAction = action, preflight = vi.fn(async () => facts)) {
+    async function prepared(
+      overrideAction = action,
+      preflight: () => Promise<FinancialRiskFacts> = vi.fn(async () => facts),
+    ) {
       const { active, createdPlan } = await activated();
       // Trusted observer fixture, not an agent tool; initial accounting is known empty here.
       await db.prisma.tradingMandate.update({
@@ -336,8 +341,8 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       );
       return { service, proposal, active, createdPlan, command, preflight };
     }
-    async function financialPrepared() {
-      const rows = await prepared();
+    async function financialPrepared(preflight?: () => Promise<FinancialRiskFacts>) {
+      const rows = await prepared(action, preflight);
       const previewed = TradeProposalViewSchema.parse(
         await rows.service.command(actor, {
           operation: "preview",
@@ -362,6 +367,187 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       };
       return { ...rows, previewed, effects, effect, reviewContext };
     }
+    async function simulatedPrepared() {
+      const simulator = new SimulationBroker(db.prisma, () => now);
+      const rows = await financialPrepared(() => simulator.preflight(actor, facts));
+      const simulatedFacts = await simulator.preflight(actor, facts);
+      await rows.effects.review(
+        actor,
+        rows.effect.id,
+        new ScriptedAutoReviewProvider(),
+        rows.reviewContext,
+      );
+      return { ...rows, simulator, simulatedFacts };
+    }
+    it("executes a reserved simulation once, preserves immutable receipts and attributes fresh virtual P&L", async () => {
+      const rows = await simulatedPrepared();
+      expect(rows.simulatedFacts.simulationRevision).toBe(1);
+      await expect(
+        rows.simulator.execute(actor, rows.effect.id, rows.simulatedFacts),
+      ).rejects.toThrow("STARTED");
+      await rows.effects.begin(actor, rows.effect.id, rows.simulatedFacts);
+      const outcome = await rows.simulator.execute(actor, rows.effect.id, rows.simulatedFacts);
+      expect(outcome).toMatchObject({
+        status: "SUCCEEDED",
+        providerReference: `sim_${rows.effect.id}`,
+      });
+      expect(await rows.simulator.execute(actor, rows.effect.id, rows.simulatedFacts)).toEqual(
+        outcome,
+      );
+      expect(await db.prisma.simulationExecution.count()).toBe(1);
+      await rows.effects.settle(actor, rows.effect.id, outcome);
+      const fresh = await rows.simulator.preflight(actor, facts);
+      expect(fresh).toMatchObject({
+        simulationRevision: 2,
+        margin: "30",
+        equity: "9999.9",
+        openPositions: [{ id: `sim_${rows.effect.id}`, volume: "0.01" }],
+      });
+      expect(
+        (
+          await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } })
+        ).missionPnl.toFixed(),
+      ).toBe("-0.1");
+      expect(await rows.simulator.receipt(owner, rows.effect.id)).toEqual(outcome);
+      await expect(rows.simulator.receipt("peer", rows.effect.id)).rejects.toThrow();
+      await expect(
+        db.prisma.simulationExecution.update({
+          where: { effectId: rows.effect.id },
+          data: { outcome: {} },
+        }),
+      ).rejects.toThrow("immutable");
+      const book = await db.prisma.simulationBook.findUniqueOrThrow({
+        where: { accountId: "account" },
+      });
+      await expect(
+        db.prisma.simulationBook.update({
+          where: { accountId: "account" },
+          data: {
+            state: { ...SimulationBookStateSchema.parse(book.state), mode: "LIVE" },
+            revision: { increment: 1 },
+          },
+        }),
+      ).rejects.toThrow();
+    });
+    it("rejects stale simulation facts and stale workers before any virtual provider mutation", async () => {
+      const rows = await simulatedPrepared();
+      const book = await db.prisma.simulationBook.findUniqueOrThrow({
+        where: { accountId: "account" },
+      });
+      await db.prisma.simulationBook.update({
+        where: { accountId: "account" },
+        data: { state: SimulationBookStateSchema.parse(book.state), revision: { increment: 1 } },
+      });
+      await expect(rows.effects.begin(actor, rows.effect.id, rows.simulatedFacts)).rejects.toThrow(
+        "revision conflict",
+      );
+      const current = await rows.simulator.preflight(actor, facts);
+      await rows.effects.begin(actor, rows.effect.id, current);
+      await db.prisma.run.update({
+        where: { id: "claimed" },
+        data: { leaseFence: 2, leaseOwner: "worker-b" },
+      });
+      await expect(rows.simulator.execute(actor, rows.effect.id, current)).rejects.toThrow();
+      expect(await db.prisma.simulationExecution.count()).toBe(0);
+    });
+    it("rolls back a simulated fill if provider acceptance cannot be recorded", async () => {
+      const rows = await simulatedPrepared();
+      await rows.effects.begin(actor, rows.effect.id, rows.simulatedFacts);
+      await db.prisma
+        .$executeRaw`ALTER TABLE simulation_executions ADD CONSTRAINT fixture_test_reject_simulation CHECK (false) NOT VALID`;
+      try {
+        await expect(
+          rows.simulator.execute(actor, rows.effect.id, rows.simulatedFacts),
+        ).rejects.toThrow();
+        expect(
+          (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+            .revision,
+        ).toBe(1);
+        expect(await db.prisma.simulationExecution.count()).toBe(0);
+      } finally {
+        await db.prisma
+          .$executeRaw`ALTER TABLE simulation_executions DROP CONSTRAINT fixture_test_reject_simulation`;
+      }
+    });
+    it("reconciles actual process death after simulation acceptance without a duplicate fill", async () => {
+      const rows = await simulatedPrepared();
+      await killAfterPersisted(
+        `import {createDb} from '@rakazo/db'; import {FinancialEffects} from './src/financial-effects.ts'; import {SimulationBroker} from './src/simulation-broker.ts';
+        const db=createDb(process.env.MISSION_TEST_DATABASE_URL);
+        const time=()=>new Date(process.env.FIXTURE_TIME); const actor=JSON.parse(process.env.FIXTURE_ACTOR); const facts=JSON.parse(process.env.FIXTURE_FACTS);
+        await new FinancialEffects(db.prisma,time).begin(actor,process.env.FIXTURE_EFFECT,facts);
+        await new SimulationBroker(db.prisma,time).execute(actor,process.env.FIXTURE_EFFECT,facts);
+        console.log('PERSISTED'); setInterval(()=>{},1000);`,
+        {
+          FIXTURE_TIME: now.toISOString(),
+          FIXTURE_ACTOR: JSON.stringify(actor),
+          FIXTURE_EFFECT: rows.effect.id,
+          FIXTURE_FACTS: JSON.stringify(rows.simulatedFacts),
+        },
+      );
+      expect(await db.prisma.simulationExecution.count()).toBe(1);
+      await db.prisma.run.update({
+        where: { id: "claimed" },
+        data: { leaseFence: 2, leaseOwner: "worker-b" },
+      });
+      await rows.effects.recoverInterrupted();
+      await expect(rows.effects.reconcileSimulation(actor, rows.effect.id)).rejects.toThrow();
+      const current = {
+        ...actor,
+        execution: { runId: "claimed", holder: "worker-b", generation: 2 },
+      };
+      const result = await rows.effects.reconcileSimulation(current, rows.effect.id);
+      expect(result).toMatchObject({
+        status: "completed",
+        financialProviderReference: `sim_${rows.effect.id}`,
+      });
+      expect((await rows.effects.reconcileSimulation(current, rows.effect.id)).id).toBe(result.id);
+      expect(await db.prisma.simulationExecution.count()).toBe(1);
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).status,
+      ).toBe("COMMITTED");
+      expect(
+        await db.prisma.financialJournal.count({
+          where: { effectId: rows.effect.id, event: "RECONCILED" },
+        }),
+      ).toBe(1);
+      expect(
+        (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+          .status,
+      ).toBe("PAUSED");
+    });
+    it("proves an interrupted local simulation never accepted and safely releases its reserved risk", async () => {
+      const rows = await simulatedPrepared();
+      await rows.effects.begin(actor, rows.effect.id, rows.simulatedFacts);
+      await db.prisma.run.update({
+        where: { id: "claimed" },
+        data: { leaseFence: 2, leaseOwner: "worker-b" },
+      });
+      await rows.effects.recoverInterrupted();
+      const current = {
+        ...actor,
+        execution: { runId: "claimed", holder: "worker-b", generation: 2 },
+      };
+      expect(await rows.effects.reconcileSimulation(current, rows.effect.id)).toMatchObject({
+        status: "failed",
+        financialFailureCode: "SIMULATION_NOT_ACCEPTED",
+      });
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).status,
+      ).toBe("RELEASED");
+      await expect(
+        rows.simulator.execute(actor, rows.effect.id, rows.simulatedFacts),
+      ).rejects.toThrow();
+      expect(await db.prisma.simulationExecution.count()).toBe(0);
+    });
     async function financialAsk() {
       const rows = await financialPrepared();
       await rows.effects.review(
@@ -601,6 +787,30 @@ suite("owner-only durable trading goals/plans/mandates", () => {
         await db.prisma
           .$executeRaw`ALTER TABLE financial_journal DROP CONSTRAINT fixture_test_reject_started`;
       }
+    });
+    it("cannot use an old model review even after refreshing trusted broker facts", async () => {
+      const rows = await financialPrepared();
+      await rows.effects.review(
+        actor,
+        rows.effect.id,
+        new ScriptedAutoReviewProvider(),
+        rows.reviewContext,
+      );
+      const later = new Date(now.getTime() + 16000);
+      const freshFacts = {
+        ...facts,
+        observedAt: later.toISOString(),
+        specificationObservedAt: later.toISOString(),
+        quote: { ...facts.quote, sourceTime: later.toISOString(), receivedAt: later.toISOString() },
+      };
+      await db.prisma.tradingMandate.update({
+        where: { id: rows.active.id },
+        data: { observedAt: later },
+      });
+      await expect(
+        new FinancialEffects(db.prisma, () => later).begin(actor, rows.effect.id, freshFacts),
+      ).rejects.toThrow("Fresh independent review");
+      expect(await db.prisma.tradingRiskReservation.count()).toBe(0);
     });
     it("emergency freeze between review and begin prevents STARTED and any risk reservation", async () => {
       const { effects, effect, active, reviewContext } = await financialPrepared();
