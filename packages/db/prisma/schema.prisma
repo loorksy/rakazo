@@ -1585,3 +1585,100 @@ model MarketWatch {
   @@index([triggeredRunId])
   @@map("market_watches")
 }
+
+// Account-level authority dominates every Bot and mandate. Ledgers never mix modes.
+model AccountRiskGuardrail {
+  id String @id @default(cuid())
+  formatVersion Int @default(1)
+  ownerUserId String
+  accountId String
+  mode String
+  revision Int @default(1)
+  limits Json
+  frozen Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, mode])
+  @@map("account_risk_guardrails")
+}
+
+model TradingGoal {
+  id String @id @default(cuid())
+  formatVersion Int @default(1)
+  ownerUserId String
+  botId String
+  accountId String
+  mode String
+  definition Json
+  status String @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerUserId, accountId, mode, status])
+  @@map("trading_goals")
+}
+
+model TradingPlan {
+  id String @id @default(cuid())
+  formatVersion Int @default(1)
+  goalId String
+  version Int
+  definition Json
+  createdAt DateTime @default(now())
+
+  @@unique([goalId, version])
+  @@map("trading_plans")
+}
+
+model TradingMandate {
+  id String @id @default(cuid())
+  formatVersion Int @default(1)
+  ownerUserId String
+  botId String
+  accountId String
+  mode String
+  goalId String
+  planId String
+  envelope Json
+  fingerprint String
+  approvedFingerprint String?
+  approvedByUserId String?
+  approvedAt DateTime?
+  status String @default("AWAITING_APPROVAL")
+  revision Int @default(1)
+  expiresAt DateTime
+  missionPnl Decimal @default(0) @db.Decimal(38, 12)
+  dailyPnl Decimal @default(0) @db.Decimal(38, 12)
+  observedAt DateTime?
+  observedState Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerUserId, accountId, mode, status])
+  @@map("trading_mandates")
+}
+
+model TradingRiskReservation {
+  id String @id @default(cuid())
+  formatVersion Int @default(1)
+  ownerUserId String
+  accountId String
+  mode String
+  mandateId String
+  effectId String @unique
+  actionFingerprint String
+  kind String
+  risk Decimal @db.Decimal(38, 12)
+  exposure Decimal @db.Decimal(38, 12)
+  margin Decimal @db.Decimal(38, 12)
+  status String @default("RESERVED")
+  executionGeneration Int
+  providerReference String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId, mode, status])
+  @@index([mandateId, status])
+  @@map("trading_risk_reservations")
+}

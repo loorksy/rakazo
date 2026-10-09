@@ -1,6 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { FinancialAction } from "@rakazo/contracts";
-import { FinancialActionSchema, TradingAuthorityEnvelopeSchema } from "@rakazo/contracts";
+import {
+  FinancialActionSchema,
+  TradingAuthorityEnvelopeSchema,
+  TradingMandateEnvelopeSchema,
+} from "@rakazo/contracts";
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -56,4 +60,21 @@ export function verifyOwnerBootstrapProof(expectedDigest: string | null, proof: 
     Buffer.from(expectedDigest, "hex"),
     Buffer.from(ownerBootstrapProofDigest(proof), "hex"),
   );
+}
+
+/** Full mandate hash includes every hard bound/permission, not just the legacy envelope subset. */
+export function tradingMandateFingerprint(input: unknown): string {
+  const envelope = TradingMandateEnvelopeSchema.parse(input);
+  const normalized = {
+    ...envelope,
+    allowedInstruments: [...new Set(envelope.allowedInstruments)].sort(),
+    allowedOperations: [...new Set(envelope.allowedOperations)].sort(),
+    allowedOrderTypes: [...new Set(envelope.allowedOrderTypes)].sort(),
+    riskIncreasePermissions: [...new Set(envelope.riskIncreasePermissions)].sort(),
+    supervisedOrderIds: [...new Set(envelope.supervisedOrderIds)].sort(),
+    expiresAt: new Date(envelope.expiresAt).toISOString(),
+  };
+  return createHash("sha256")
+    .update(`trading-mandate:v1\n${canonicalJson(normalized)}`)
+    .digest("hex");
 }

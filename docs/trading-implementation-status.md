@@ -102,3 +102,19 @@ deletion. Three PostgreSQL retention/immutability tests pass; 126 combined polic
 executor, broker and chart tests pass. All 105 migrations apply to two fresh fixture
 databases without reset or verification bypass. Seven package type checks pass.
 Risk engine, simulation, financial missions and live execution remain in progress.
+
+## Deterministic risk and account-capacity checkpoint
+
+Versioned full mandate envelopes, exact decimal risk arithmetic, account guardrail
+and reservation storage, and the protected account-row-locked ledger are implemented.
+The risk calculation covers bounded entry/protection, pending risk, supervision
+reductions, volume/price constraints, attribution, margin and loss/exposure limits.
+The ledger currently reserves new OPEN exposure only; management settlement, real
+simulation execution and mission command/UI lifecycle remain pending.
+
+Thirty-six focused risk/hash/PostgreSQL tests pass, including two concurrent missions
+competing for the same account capacity, duplicate requests, stale Run ownership,
+LIVE refusal, mode separation, immutable plans/mandates and exact broker mappings.
+Seven package type checks, scoped Biome and whitespace checks pass. All 106 migrations
+apply to a fresh fixture database. LIVE remains unavailable until the execution and
+readiness work is completed. See `financial-risk-accounting.md` for precise semantics.
