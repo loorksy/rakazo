@@ -39,8 +39,9 @@ export function financialToolPolicy(input: {
 }): FinancialToolDecision {
   if (!input.tradingProduct) return { decision: "ALLOW" };
   if (
-    input.toolName === "broker_read" &&
-    ["account", "positions", "orders", "preflight"].includes(input.operation ?? "") &&
+    (input.toolName === "trading_mission" ||
+      (input.toolName === "broker_read" &&
+        ["account", "positions", "orders", "preflight"].includes(input.operation ?? ""))) &&
     input.accountReadsAllowed !== true
   )
     return {

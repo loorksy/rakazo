@@ -215,7 +215,19 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
         botId: "fixture-main",
         accountId: "fixture-account",
         mode: approved.mode,
-        definition: { objective: "Attempt profit; not guaranteed" },
+        definition: {
+          version: 1,
+          accountId: "fixture-account",
+          mode: approved.mode,
+          objectiveType: "ATTEMPT_PROFIT",
+          targetProfit: "300",
+          currency: "USD",
+          startsAt: now.toISOString(),
+          endsAt: approved.expiresAt,
+          allowedInstruments: ["gold"],
+          userObjective: "Attempt profit; not guaranteed",
+          positionId: null,
+        },
       },
     });
     await db.prisma.tradingPlan.create({

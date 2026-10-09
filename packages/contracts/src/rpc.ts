@@ -93,6 +93,7 @@ import {
   VoiceStatusSchema,
 } from "./domain.js";
 import { ComputerCommandSchema, ProductEventSchema } from "./events.js";
+import { AccountRiskGuardrailsSchema } from "./financial-risk.js";
 import { Id, IsoDate } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
@@ -108,6 +109,13 @@ import {
   TradingConnectionInputSchema,
   TradingConnectionViewSchema,
 } from "./trading.js";
+import {
+  MandateControlSchema,
+  MandateResolutionSchema,
+  TradingMandateViewSchema,
+  TradingMissionCommandSchema,
+  TradingMissionResponseSchema,
+} from "./trading-mission.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -172,6 +180,13 @@ const spaceName = z.string().trim().min(1).max(60);
 
 export const appContract = {
   trading: {
+    missions: oc.input(TradingMissionCommandSchema).output(TradingMissionResponseSchema),
+    resolveMandate: oc.input(MandateResolutionSchema).output(TradingMandateViewSchema),
+    controlMandate: oc.input(MandateControlSchema).output(TradingMandateViewSchema),
+    accountGuardrails: oc
+      .input(z.strictObject({ accountId: Id, mode: z.enum(["SIMULATION", "LIVE"]) }))
+      .output(AccountRiskGuardrailsSchema.nullable()),
+    setAccountGuardrails: oc.input(AccountRiskGuardrailsSchema).output(AccountRiskGuardrailsSchema),
     watches: oc
       .input(MarketWatchCommandSchema)
       .output(z.union([MarketWatchSchema, z.array(MarketWatchSchema).max(1000)])),

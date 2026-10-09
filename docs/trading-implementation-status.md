@@ -130,3 +130,23 @@ MetaApi/risk tests pass (53), central scope/executor tests pass (83), and the ex
 broker PostgreSQL lifecycle/process-death suite passes (15). Five changed-package type
 checks, scoped Biome and whitespace checks pass. Mission command/UI lifecycle,
 simulation execution and controlled LIVE execution remain unfinished.
+
+## Goals, plans and owner-bound mandate checkpoint
+
+Protected goals and immutable operational plan versions now have a real Main-only
+`trading_mission` tool. Mandate proposals use exact owner/Bot/account/mode hashes;
+human resolution, account guardrail administration and stop controls are separate
+authenticated RPCs. Database constraints preserve goal, plan and mandate identity.
+The risk ledger independently checks the goal time window. Owner emergency stop
+freezes account capacity atomically and journals the event. Chat deletion preserves
+the mission. LIVE activation is still unavailable.
+
+Ten mission PostgreSQL tests pass on a fresh database with all 108 migrations.
+The existing seven ledger PostgreSQL tests also pass with full goal definitions.
+Focused central-policy/executor tests pass (94 at their earlier nine-mission checkpoint).
+Five web mandate-card tests pass; the combined card/chart/approval suite passes (38).
+Shared history/quote tests pass (64). Adapters/API/web and native-mobile TypeScript,
+scoped Biome, whitespace checks and production web build pass. The native chart
+remains the documented structured/image fallback. Simulation execution, durable
+mission scheduling and controlled LIVE execution/reconciliation are still unfinished.
+See `trading-missions.md` for current scope.

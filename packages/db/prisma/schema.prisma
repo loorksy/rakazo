@@ -861,7 +861,10 @@ model FinancialJournal {
   ownerUserId String
   accountId String
   mode String
-  effectId String
+  effectId String?
+  goalId String?
+  mandateId String?
+  planVersion Int?
   event String
   entry Json
   createdAt DateTime @default(now())
@@ -1605,6 +1608,7 @@ model AccountRiskGuardrail {
 
 model TradingGoal {
   id String @id @default(cuid())
+  requestKey String @unique @default(cuid())
   formatVersion Int @default(1)
   ownerUserId String
   botId String

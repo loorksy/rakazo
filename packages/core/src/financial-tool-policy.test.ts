@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { financialToolPolicy } from "./financial-tool-policy.js";
 
 describe("hard financial tool boundary", () => {
+  it("mandate proposal capability belongs only to Main, not research peers", () => {
+    expect(
+      financialToolPolicy({
+        tradingProduct: true,
+        toolName: "trading_mission",
+        viaConnector: false,
+        accountReadsAllowed: false,
+      }).decision,
+    ).toBe("DENY");
+    expect(
+      financialToolPolicy({
+        tradingProduct: true,
+        toolName: "trading_mission",
+        viaConnector: false,
+        accountReadsAllowed: true,
+      }).decision,
+    ).toBe("ALLOW");
+  });
   it.each([
     "read_file",
     "list_files",

@@ -9,6 +9,7 @@ import {
   MarketWatchCommandSchema,
   SecretAskPurpose,
   SecretHttpRequest,
+  TradingMissionCommandSchema,
 } from "@rakazo/contracts";
 import { z } from "zod";
 import { allowPrivateHttpSecretOrigins } from "./bot-secrets.js";
@@ -147,6 +148,12 @@ const scheduleCreateInputSchema = {
 };
 
 export const builtinAgentTools: ConnectorTool[] = [
+  {
+    name: "trading_mission",
+    description:
+      "Create a bounded Trading Goal, version its operational Plan, and propose an exact Mandate for human approval. First inspect the selected broker account and market using broker_read. Profit targets are aspirational; allocation is accounting, not segregated capital. This tool cannot approve, activate, enlarge account guardrails or execute trades. LIVE activation remains disabled until readiness is verified.",
+    inputSchema: z.toJSONSchema(TradingMissionCommandSchema, { io: "input" }),
+  },
   {
     name: "market_watch",
     description:

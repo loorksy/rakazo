@@ -208,7 +208,7 @@ import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-fac
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
 import { validCloudAgentArgs } from "./cloud-agent-tools.js";
 import { selectCloudAgentTools } from "./cloud-agent-tools-select.js";
-import { CloudCharts, guardChartProjection } from "./cloud-charts.js";
+import { CloudCharts, fenceChartExecution, guardChartProjection } from "./cloud-charts.js";
 import { cloudflareGatewayProviderEnv } from "./cloudflare-ai-gateway.js";
 import {
   collectLogIds,
@@ -376,6 +376,7 @@ import {
 import { advanceToolCallLoopGuard } from "./tool-loop.js";
 import { textContentArg } from "./tool-text.js";
 import { requestBrokerRead, TradingConnections } from "./trading-connections.js";
+import { TradingMissions } from "./trading-missions.js";
 import {
   botMessageOutcomeFromMidTurn,
   clampUserProgressMessage,
@@ -5154,6 +5155,41 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
+          }
+          if (name === "trading_mission") {
+            try {
+              const actor = {
+                ownerUserId: run.userId,
+                botId: run.botId,
+                execution: { runId, holder: workerId, generation: fence },
+              };
+              const result = await new TradingMissions(deps.prisma).command(
+                actor,
+                args,
+                runScopedToolExecutionId(runId, executionId),
+              );
+              if (
+                args.operation === "mandate_propose" &&
+                !Array.isArray(result) &&
+                "fingerprint" in result
+              ) {
+                await publishMessage(
+                  deps,
+                  run,
+                  "bot",
+                  [{ kind: "trading_mandate", goalId: result.goalId, mandateId: result.id }],
+                  undefined,
+                  `mandate-card:${result.id}`,
+                  (tx) => fenceChartExecution(tx, actor),
+                );
+              }
+              return finish(result);
+            } catch {
+              return finish({
+                error:
+                  "Trading mission request rejected. Read the current goal/plan, use verified account/instrument IDs and explicit bounded limits. Only the owner may approve the exact mandate.",
+              });
+            }
           }
           if (name === "market_watch") {
             try {

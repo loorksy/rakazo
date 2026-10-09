@@ -107,6 +107,8 @@ export function blocksToAgentHistoryText(blocks: MessageBlock[]): string {
     .map((block) => {
       if (block.kind === "text") return block.text;
       if (block.kind === "chart") return `[chart: ${block.name}]`;
+      if (block.kind === "trading_mandate")
+        return `[mandate proposal ${block.mandateId}; goal ${block.goalId}; read current backend approval state before any action]`;
       if (block.kind === "image") return `[image: ${block.name}]`;
       if (block.kind === "file") {
         return `[file: ${block.name} (${block.mimeType}, ${block.size} bytes)]`;

@@ -93,6 +93,7 @@ export const SecretAskPurpose = z.enum(["otp", "password", "api_key"]);
 export type SecretAskPurpose = z.infer<typeof SecretAskPurpose>;
 
 export const MessageBlock = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("trading_mandate"), goalId: Id, mandateId: Id }),
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({
     kind: z.literal("card"),

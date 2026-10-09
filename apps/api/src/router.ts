@@ -117,6 +117,7 @@ import {
   serializeModelSecret,
   storeBotSecret,
   TradingConnections,
+  TradingMissions,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -765,6 +766,25 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      missions: authed.trading.missions.handler(({ context, input }) =>
+        new TradingMissions(deps.prisma).command({ ownerUserId: context.actor.userId }, input),
+      ),
+      resolveMandate: authed.trading.resolveMandate.handler(({ context, input }) =>
+        new TradingMissions(deps.prisma).resolveMandate(context.actor.userId, input),
+      ),
+      controlMandate: authed.trading.controlMandate.handler(({ context, input }) =>
+        new TradingMissions(deps.prisma).controlMandate(context.actor.userId, input),
+      ),
+      accountGuardrails: authed.trading.accountGuardrails.handler(({ context, input }) =>
+        new TradingMissions(deps.prisma).accountGuardrails(
+          context.actor.userId,
+          input.accountId,
+          input.mode,
+        ),
+      ),
+      setAccountGuardrails: authed.trading.setAccountGuardrails.handler(({ context, input }) =>
+        new TradingMissions(deps.prisma).setAccountGuardrails(context.actor.userId, input),
+      ),
       watches: authed.trading.watches.handler(({ context, input }) =>
         new MarketWatches(deps.prisma).command({ ownerUserId: context.actor.userId }, input),
       ),

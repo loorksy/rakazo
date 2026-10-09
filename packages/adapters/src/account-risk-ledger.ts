@@ -3,6 +3,7 @@ import {
   AccountRiskGuardrailsSchema,
   FinancialEffectContextSchema,
   FinancialRiskFactsSchema,
+  TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
 import {
@@ -85,6 +86,21 @@ export class AccountRiskLedger {
         mandate.expiresAt.getTime() !== Date.parse(envelope.expiresAt)
       )
         throw new Error("Exact user-approved active mandate required");
+      const goal = await tx.tradingGoal.findUnique({ where: { id: mandate.goalId } });
+      if (
+        !goal ||
+        goal.ownerUserId !== actor.ownerUserId ||
+        goal.botId !== actor.botId ||
+        goal.accountId !== account.id ||
+        goal.mode !== mandate.mode
+      )
+        throw new Error("Verified goal ownership required");
+      const goalDefinition = TradingGoalInputSchema.parse(goal.definition);
+      if (
+        Date.parse(goalDefinition.startsAt) > this.now().getTime() ||
+        Date.parse(goalDefinition.endsAt) <= this.now().getTime()
+      )
+        throw new Error("Goal time window is not active");
       const effect = await tx.externalEffect.findUnique({ where: { id: effectId } });
       if (!effect) throw new Error("Financial effect missing");
       const context = FinancialEffectContextSchema.parse(effect.financialContext);
