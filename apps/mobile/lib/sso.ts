@@ -12,6 +12,7 @@ let inFlight = false;
 /** Better Auth Expo proxy transfers the state cookie into the native auth browser. */
 export async function continueWithSso(
   action: "sign-in" | "link" | "reauthenticate" = "sign-in",
+  setupKey?: string,
 ): Promise<boolean> {
   if (inFlight) return false;
   inFlight = true;
@@ -36,6 +37,7 @@ export async function continueWithSso(
           origin: "rakazo://",
           "x-skip-oauth-proxy": "true",
           ...headers,
+          ...(action === "sign-in" && setupKey ? { "x-rakazo-owner-bootstrap": setupKey } : {}),
         },
         body: JSON.stringify({
           provider: "oidc",

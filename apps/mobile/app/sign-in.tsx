@@ -153,7 +153,8 @@ export default function SignIn() {
     setPending(true);
     setError(null);
     try {
-      if (await continueWithSso()) router.replace("/");
+      if (await continueWithSso("sign-in", reset?.ownerBootstrapRequired ? setupKey : undefined))
+        router.replace("/");
     } catch (err) {
       setError(errorText(err, t("Could not continue")));
     } finally {
@@ -231,6 +232,24 @@ export default function SignIn() {
                       {t("Loading…")}
                     </Text>
                   ) : null}
+                  {mode !== "forgot" && reset?.ownerBootstrapRequired ? (
+                    <TextInput
+                      accessibilityLabel={t("Setup key")}
+                      placeholder={t("Setup key")}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoComplete="off"
+                      value={setupKey}
+                      onChangeText={setSetupKey}
+                      style={{
+                        marginTop: 12,
+                        padding: 16,
+                        borderRadius: 13,
+                        backgroundColor: tokens.muted,
+                        color: tokens.foreground,
+                      }}
+                    />
+                  ) : null}
                   {reset?.sso && !reset.passwordAuth && mode !== "forgot" ? (
                     <NativeActionButton
                       label={t("Continue with {name}", { name: reset.sso.name })}
@@ -296,24 +315,6 @@ export default function SignIn() {
                             backgroundColor: tokens.muted,
                             borderRadius: 13,
                             padding: 16,
-                            color: tokens.foreground,
-                          }}
-                        />
-                      ) : null}
-                      {mode === "up" && reset?.ownerBootstrapRequired ? (
-                        <TextInput
-                          accessibilityLabel={t("Setup key")}
-                          placeholder={t("Setup key")}
-                          secureTextEntry
-                          autoCapitalize="none"
-                          autoComplete="off"
-                          value={setupKey}
-                          onChangeText={setSetupKey}
-                          style={{
-                            marginTop: 12,
-                            padding: 16,
-                            borderRadius: 13,
-                            backgroundColor: tokens.muted,
                             color: tokens.foreground,
                           }}
                         />

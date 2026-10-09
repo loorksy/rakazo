@@ -19,6 +19,7 @@ export function accountSecurity(
   ssoName?: string,
   ssoIssuer?: string,
   passwordChangeEnabled = true,
+  accountDeletionEnabled = true,
 ): BetterAuthPlugin {
   return {
     id: "account-security",
@@ -45,7 +46,8 @@ export function accountSecurity(
             ssoLinked: accounts.some((account) => isCurrentOidcAccount(account, ssoIssuer)),
             hasPassword: Boolean(credential?.password),
             passwordChangeEnabled,
-            emailDeletion: Boolean(email),
+            emailDeletion: accountDeletionEnabled && Boolean(email),
+            accountDeletionEnabled,
             sso: ssoName ? { name: ssoName } : null,
           });
         },
@@ -54,6 +56,7 @@ export function accountSecurity(
         "/request-account-deletion",
         { method: "POST", use: [sessionMiddleware] },
         async (ctx) => {
+          if (!accountDeletionEnabled) throw new APIError("FORBIDDEN");
           const user = ctx.context.session.user;
           if (
             !email ||
@@ -85,6 +88,7 @@ export function accountSecurity(
         {
           matcher: (ctx) => ctx.path === "/delete-user" || ctx.path === "/delete-user/callback",
           handler: createAuthMiddleware(async (ctx) => {
+            if (!accountDeletionEnabled) throw new APIError("FORBIDDEN");
             const session = await sessionForAuthHook(ctx);
             if (!session) throw new APIError("UNAUTHORIZED");
             const credential = await ctx.context.internalAdapter.findCredentialAccount(

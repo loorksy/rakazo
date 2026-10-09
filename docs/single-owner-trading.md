@@ -41,3 +41,16 @@ and idempotent server provisioning. It never calls a broker.
 
 This boundary does not itself authorize financial actions. Trading policies,
 mandates, risk limits and effects remain separate requirements.
+
+Owner SSO bootstrap validates the setup key on the initial sign-in request and
+binds its digest to Better Auth's authenticated server-only OAuth state. The
+callback does not depend on custom redirect headers; client `additionalData`
+cannot supply authority. A proof admitted before another owner wins cannot create
+a second owner. The same masked setup field is available for password and SSO-only
+bootstrap on web/desktop and mobile. The raw proof is never placed in browser
+navigation or the session store.
+
+Product account-security capabilities disable ordinary owner deletion, including
+email deletion-code requests. Clients hide that unavailable action. Generic upstream
+mode retains its deletion workflow. Trusted operator recovery remains necessary
+when the sole owner's credential is lost.

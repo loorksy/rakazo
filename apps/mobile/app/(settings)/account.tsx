@@ -610,26 +610,28 @@ export default function Account() {
           ) : null}
         </View>
 
-        <SettingsGroup>
-          <SettingsRow
-            accessibilityRole="button"
-            destructive
-            dimmed={pending}
-            disabled={pending}
-            onPress={requestDeletion}
-            title={t("Delete account")}
-            trailing={
-              pending ? <ActivityIndicator color={mobileTokens().destructive} /> : undefined
-            }
-          />
-          {!deleteOpen && deleteError ? (
-            <Text accessibilityRole="alert" style={styles.error}>
-              {deleteError}
-            </Text>
-          ) : null}
-        </SettingsGroup>
+        {security?.accountDeletionEnabled !== false ? (
+          <SettingsGroup>
+            <SettingsRow
+              accessibilityRole="button"
+              destructive
+              dimmed={pending}
+              disabled={pending}
+              onPress={requestDeletion}
+              title={t("Delete account")}
+              trailing={
+                pending ? <ActivityIndicator color={mobileTokens().destructive} /> : undefined
+              }
+            />
+            {!deleteOpen && deleteError ? (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {deleteError}
+              </Text>
+            ) : null}
+          </SettingsGroup>
+        ) : null}
       </ScrollView>
-      {deleteOpen ? (
+      {deleteOpen && security?.accountDeletionEnabled !== false ? (
         <Modal transparent animationType="fade" onRequestClose={closeDeletePrompt}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}

@@ -23,6 +23,7 @@ export const accountSecuritySchema = z.object({
   freshOidcAuth: z.boolean(),
   ssoLinked: z.boolean(),
   emailDeletion: z.boolean(),
+  accountDeletionEnabled: z.boolean().optional(),
   sso: z.object({ name: z.string().min(1) }).nullable(),
 });
 export type AccountSecurity = z.infer<typeof accountSecuritySchema>;

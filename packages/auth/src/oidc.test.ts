@@ -1,4 +1,5 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { ownerBootstrapProofDigest } from "@rakazo/core/node/financial-action";
 import type * as Db from "@rakazo/db";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +12,10 @@ vi.mock("better-auth/adapters/prisma", () => ({ prismaAdapter: () => memoryAdapt
 vi.mock("@rakazo/db", async (original) => ({
   ...(await original<typeof Db>()),
   bootstrapUserSpace: vi.fn(),
+  provisionTradingOwner: vi.fn(async () => ({
+    spaceId: "fixture-space",
+    botId: "fixture-trading-agent",
+  })),
 }));
 
 const issuer = "https://identity.example.test";
@@ -25,6 +30,8 @@ let cookies: string;
 let sentCodes: string[];
 let corruptSignature = false;
 let omitIdToken = false;
+let setupProof: string | undefined;
+const ownerProof = "fixture-only-bootstrap-proof-long-enough";
 const codes = new Map<
   string,
   { challenge: string; nonce: string; claims: Record<string, unknown> }
@@ -53,7 +60,21 @@ function jwt(claims: Record<string, unknown>) {
 function setup(options: Partial<AuthEnv> = {}) {
   const prisma: Record<string, unknown> = {
     deploymentSettings: {
-      findUnique: vi.fn(async () => null),
+      findUnique: vi.fn(async () =>
+        options.ownerOnly
+          ? {
+              id: "default",
+              singleOwnerEnforced: true,
+              ownerBootstrapCompleted: rows("user").length > 0,
+              ownerUserId: rows("user")[0]?.id ?? null,
+              ownerBootstrapProofHash: rows("user").length
+                ? null
+                : ownerBootstrapProofDigest(ownerProof),
+              signupsEnabled: rows("user").length === 0,
+              signupAllowlist: [],
+            }
+          : null,
+      ),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     spaceMember: { findFirst: vi.fn(async () => ({ id: "existing-space" })) },
@@ -102,6 +123,7 @@ async function request(path: string, body?: unknown, bearer?: string) {
         "content-type": "application/json",
         ...(cookies ? { cookie: cookies } : {}),
         ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
+        ...(setupProof ? { "x-rakazo-owner-bootstrap": setupProof } : {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }),
@@ -179,6 +201,7 @@ beforeEach(() => {
   sentCodes = [];
   corruptSignature = false;
   omitIdToken = false;
+  setupProof = undefined;
   codes.clear();
   vi.stubGlobal(
     "fetch",
@@ -224,6 +247,47 @@ afterEach(() => {
 });
 
 describe("OIDC callbacks", () => {
+  it("binds owner setup authority to authenticated OAuth state, not the callback header", async () => {
+    setup({ ownerOnly: true, passwordAuth: false });
+    setupProof = ownerProof;
+    const callback = await start();
+    setupProof = undefined; // Real redirects cannot carry the original custom header.
+    expect(JSON.stringify(rows("verification"))).not.toContain(ownerProof);
+    const response = await request(callback);
+    expect(response.headers.get("location")).toBe(`${origin}/app`);
+    expect(rows("user")).toHaveLength(1);
+    expect(rows("session")).toHaveLength(1);
+  });
+  it("rejects owner bootstrap without proof even when additionalData claims authority", async () => {
+    setup({ ownerOnly: true, passwordAuth: false });
+    const response = await request("/sign-in/social", {
+      provider: "oidc",
+      callbackURL: `${origin}/app`,
+      disableRedirect: true,
+      additionalData: { ownerBootstrapDigest: ownerBootstrapProofDigest(ownerProof) },
+    });
+    expect(response.status).toBe(403);
+    expect(rows("user")).toHaveLength(0);
+  });
+  it("cannot reuse bootstrap OAuth authority after another owner wins admission", async () => {
+    setup({ ownerOnly: true, passwordAuth: false });
+    setupProof = ownerProof;
+    const callback = await start();
+    setupProof = undefined;
+    state.db.user!.push({
+      id: "different-owner",
+      name: "Owner",
+      email: "other@example.test",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const response = await request(callback);
+    expect(response.headers.get("location")).not.toBe(`${origin}/app`);
+    expect(rows("user")).toHaveLength(1);
+    expect(rows("session")).toHaveLength(0);
+  });
+
   it.each([true, false, undefined])(
     "preserves email_verified=%s through the real callback",
     async (verified) => {

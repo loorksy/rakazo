@@ -76,10 +76,12 @@ export function AccountAccess({
           <Trans>Link SSO</Trans>
         </Button>
       ) : null}
-      <Button variant="ghost" onClick={() => setOpen((value) => !value)}>
-        <Trans>Delete account</Trans>
-      </Button>
-      {open ? (
+      {security?.accountDeletionEnabled !== false ? (
+        <Button variant="ghost" onClick={() => setOpen((value) => !value)}>
+          <Trans>Delete account</Trans>
+        </Button>
+      ) : null}
+      {open && security?.accountDeletionEnabled !== false ? (
         <div className="space-y-3">
           <p className="text-sm">
             <Trans>This permanently deletes your account and data.</Trans>

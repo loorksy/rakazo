@@ -177,3 +177,27 @@ it("keeps SSO available for retry while an authorization request is pending", as
   await act(async () => button.click());
   expect(authClient.signIn.social).toHaveBeenCalledTimes(2);
 });
+
+it("supports masked bootstrap proof for SSO-only owner setup", async () => {
+  vi.mocked(fetchAuthCapabilities).mockResolvedValue({
+    ...capabilities,
+    ownerBootstrapRequired: true,
+    registrationOpen: true,
+  });
+  await render("in");
+  const setup = host.querySelector<HTMLInputElement>("#owner-setup-key");
+  expect(setup?.type).toBe("password");
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  await act(async () => {
+    setter.call(setup, "fixture-only-proof");
+    setup!.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const sso = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Continue with Example",
+  )!;
+  await act(async () => sso.click());
+  expect(authClient.signIn.social).toHaveBeenCalledWith(
+    expect.objectContaining({ provider: "oidc" }),
+    { headers: { "x-rakazo-owner-bootstrap": "fixture-only-proof" } },
+  );
+});

@@ -364,7 +364,13 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
     plugins: [
       bearer(),
       expo(),
-      accountSecurity(env.email, env.oidc?.name, env.oidc?.issuer, env.passwordAuth !== false),
+      accountSecurity(
+        env.email,
+        env.oidc?.name,
+        env.oidc?.issuer,
+        env.passwordAuth !== false,
+        !env.ownerOnly,
+      ),
       ...(discovery ? [discovery.plugin] : []),
       organization({
         allowUserToCreateOrganization: false,
@@ -374,6 +380,18 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (env.ownerOnly && ctx.path === "/sign-in/social" && ctx.body?.provider === "oidc") {
+          const settings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
+          if (!settings?.singleOwnerEnforced) throw new APIError("FORBIDDEN");
+          if (!settings.ownerBootstrapCompleted && !settings.ownerUserId) {
+            const proof = ctx.headers?.get("x-rakazo-owner-bootstrap") ?? "";
+            if (!verifyOwnerBootstrapProof(settings.ownerBootstrapProofHash, proof))
+              throw new APIError("FORBIDDEN", { message: "Owner setup key is invalid" });
+            // Better Auth authenticates this server-only state across the OAuth redirect.
+            // Store the digest, never the raw setup key or client-provided additionalData.
+            await addOAuthServerContext({ ownerBootstrapDigest: settings.ownerBootstrapProofHash });
+          }
+        }
         if (
           ctx.path === "/sign-in/social" &&
           ctx.body?.provider === "oidc" &&
@@ -564,11 +582,19 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
                 where: { id: "default" },
               });
               const proof = ctx?.headers?.get("x-rakazo-owner-bootstrap") ?? "";
+              const oauthDigest =
+                ctx && isOidcCallback(ctx)
+                  ? (await getOAuthState())?.serverContext?.ownerBootstrapDigest
+                  : undefined;
+              const hasProof =
+                verifyOwnerBootstrapProof(settings?.ownerBootstrapProofHash ?? null, proof) ||
+                (typeof oauthDigest === "string" &&
+                  oauthDigest === settings?.ownerBootstrapProofHash);
               if (
                 !settings?.singleOwnerEnforced ||
                 settings.ownerBootstrapCompleted ||
                 settings.ownerUserId ||
-                !verifyOwnerBootstrapProof(settings.ownerBootstrapProofHash, proof)
+                !hasProof
               )
                 throw new APIError("FORBIDDEN", {
                   message: "Owner bootstrap is closed or setup key is invalid",

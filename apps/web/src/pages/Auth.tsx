@@ -134,8 +134,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setError(null);
     try {
       const result = await runSsoFlow(
-        (disableRedirect, callbackURL) =>
-          authClient.signIn.social({
+        (disableRedirect, callbackURL) => {
+          const request = {
             disableRedirect,
             provider: "oidc",
             newUserCallbackURL: callbackURL("/onboarding"),
@@ -143,7 +143,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               searchParams.get("next") === "/integrations/setup" ? "/integrations/setup" : "/app",
             ),
             errorCallbackURL: callbackURL("/sign-in"),
-          }),
+          };
+          return reset?.ownerBootstrapRequired
+            ? authClient.signIn.social(request, {
+                headers: { "x-rakazo-owner-bootstrap": setupKey },
+              })
+            : authClient.signIn.social(request);
+        },
         ["/app", "/onboarding", "/integrations/setup", "/sign-in"],
       );
       if (result.error) setError(authErrorText(result.error, t`Could not continue`));
@@ -179,6 +185,22 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             <p role="status">
               <Trans>Loading…</Trans>
             </p>
+          ) : null}
+          {mode !== "forgot" && reset?.ownerBootstrapRequired ? (
+            <div className="mt-4 w-full">
+              <Label htmlFor="owner-setup-key">
+                <Trans>Setup key</Trans>
+              </Label>
+              <Input
+                id="owner-setup-key"
+                type="password"
+                autoComplete="off"
+                required
+                value={setupKey}
+                onChange={(event) => setSetupKey(event.target.value)}
+                className={fieldClass}
+              />
+            </div>
           ) : null}
           {reset?.sso && !reset.passwordAuth && mode !== "forgot" ? (
             <Button
@@ -266,22 +288,6 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                       </Link>
                     </div>
                   ) : null}
-                </div>
-              ) : null}
-              {mode === "up" && reset?.ownerBootstrapRequired ? (
-                <div className="mt-4 w-full">
-                  <Label htmlFor="owner-setup-key">
-                    <Trans>Setup key</Trans>
-                  </Label>
-                  <Input
-                    id="owner-setup-key"
-                    type="password"
-                    autoComplete="off"
-                    required
-                    value={setupKey}
-                    onChange={(event) => setSetupKey(event.target.value)}
-                    className={fieldClass}
-                  />
                 </div>
               ) : null}
               {error ? (

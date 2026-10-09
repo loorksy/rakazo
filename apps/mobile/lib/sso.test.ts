@@ -23,6 +23,7 @@ vi.mock("./session", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(fetchMobileJson).mockReset();
   vi.mocked(currentApiBase).mockReturnValue("https://rakazo.example.test");
   vi.mocked(currentSessionGeneration).mockReturnValue(1);
   vi.mocked(clearSpace).mockResolvedValue(true);
@@ -118,4 +119,14 @@ it("does not send a different server's token during authenticated linking", asyn
   await expect(continueWithSso("link")).rejects.toThrow();
   expect(fetchMobileJson).not.toHaveBeenCalled();
   expect(openAuthSessionAsync).not.toHaveBeenCalled();
+});
+
+it("sends a bootstrap proof only to the initial API request, never to browser navigation", async () => {
+  const proof = "fixture-only-bootstrap-proof-long-enough";
+  await expect(continueWithSso("sign-in", proof)).resolves.toBe(true);
+  expect(vi.mocked(fetchMobileJson).mock.calls[0]?.[1]?.headers).toMatchObject({
+    "x-rakazo-owner-bootstrap": proof,
+  });
+  expect(JSON.stringify(vi.mocked(openAuthSessionAsync).mock.calls)).not.toContain(proof);
+  expect(JSON.stringify(vi.mocked(replaceSessionTokenIfCurrent).mock.calls)).not.toContain(proof);
 });
