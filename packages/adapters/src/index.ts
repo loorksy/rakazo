@@ -70,6 +70,7 @@ export * from "./fake-browser.js";
 export * from "./fake-sandbox.js";
 export * from "./fake-web.js";
 export * from "./favicon.js";
+export { FinancialEffects } from "./financial-effects.js";
 export { reviewFinancialAction } from "./financial-review.js";
 export * from "./fish-audio-voice.js";
 export * from "./github-webhook-emulator.js";

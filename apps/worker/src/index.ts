@@ -22,6 +22,7 @@ import {
   databaseCapacityBackoffMs,
   ExpoPushProvider,
   enqueueMissionWakes,
+  FinancialEffects,
   GraphileJobPublisher,
   GraphileJobWorkerHost,
   InMemoryJobQueue,
@@ -271,7 +272,10 @@ async function main() {
     notifications,
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
-    reconcileTradingMissions: () => enqueueMissionWakes(prisma, jobs),
+    reconcileTradingMissions: async () => {
+      await new FinancialEffects(prisma).recoverInterrupted();
+      await enqueueMissionWakes(prisma, jobs);
+    },
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
   });
   reconciler.start();
