@@ -234,7 +234,7 @@ export const TradingConnectionViewSchema = z.strictObject({
 
 export const TradingConnectionInputSchema = z.strictObject({
   label: z.string().trim().min(1).max(80),
-  providerAccountId: Reference,
+  providerAccountId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
   region: z
     .string()
     .regex(/^[a-z][a-z0-9-]{0,31}$/)
@@ -282,3 +282,16 @@ export const BrokerReadCommandSchema = z.discriminatedUnion("operation", [
   }),
 ]);
 export type BrokerReadCommand = z.infer<typeof BrokerReadCommandSchema>;
+
+export const BrokerInstrumentDirectorySchema = z
+  .array(
+    z.strictObject({
+      id: Reference,
+      accountId: Reference,
+      brokerSymbol: BrokerSymbol,
+      displayName: z.string().max(256),
+      verifiedAt: Timestamp.nullable(),
+    }),
+  )
+  .max(10000);
+export type BrokerInstrumentDirectory = z.infer<typeof BrokerInstrumentDirectorySchema>;

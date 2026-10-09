@@ -5,6 +5,7 @@ import {
   PositiveTradingDecimalSchema,
   TradingAuthorityEnvelopeSchema,
   TradingCapabilitiesSchema,
+  TradingConnectionInputSchema,
 } from "./trading.js";
 
 const identity = {
@@ -140,3 +141,16 @@ describe("provider-neutral trading contracts", () => {
     ).toThrow();
   });
 });
+
+it.each(["../remote", "remote/other", "https://broker.invalid", "remote?token=value", "remote\n"])(
+  "rejects unsafe provider account identity %s",
+  (providerAccountId) => {
+    expect(() =>
+      TradingConnectionInputSchema.parse({
+        label: "Fixture",
+        providerAccountId,
+        token: "fixture-only-sentinel",
+      }),
+    ).toThrow();
+  },
+);
