@@ -77,8 +77,7 @@ export const ChartDrawingSchema = ChartDrawingInputSchema.extend({
   createdAt: Time,
   updatedAt: Time,
 });
-export const ChartIndicatorSchema = z.strictObject({
-  id: Ref,
+export const ChartIndicatorInputSchema = z.strictObject({
   definitionId: Ref,
   definitionVersion: z.number().int().positive(),
   parameters: z
@@ -86,8 +85,16 @@ export const ChartIndicatorSchema = z.strictObject({
     .refine((v) => Object.keys(v).length <= 16),
   pane: z.enum(["PRICE", "SEPARATE"]),
   visible: z.boolean(),
-  revision: z.number().int().positive(),
 });
+export const ChartIndicatorSchema = ChartIndicatorInputSchema.extend({
+  id: Ref,
+  revision: z.number().int().positive(),
+  creator: z.enum(["USER", "BOT"]),
+  creatorId: Ref,
+  createdAt: Time,
+  updatedAt: Time,
+});
+export type ChartIndicator = z.infer<typeof ChartIndicatorSchema>;
 export const CloudChartStateSchema = z.strictObject({
   version: z.literal(1),
   timeframe: BrokerTimeframeSchema,
@@ -150,6 +157,24 @@ export const ChartCommandSchema = z.discriminatedUnion("operation", [
   }),
   z.strictObject({ operation: z.literal("jump"), ...target, time: Time }),
   z.strictObject({ operation: z.literal("reset_view"), ...target }),
+  z.strictObject({
+    operation: z.literal("indicator_add"),
+    ...target,
+    indicator: ChartIndicatorInputSchema,
+  }),
+  z.strictObject({
+    operation: z.literal("indicator_update"),
+    chartId: Ref,
+    indicatorId: Ref,
+    expectedIndicatorRevision: z.number().int().positive(),
+    indicator: ChartIndicatorInputSchema,
+  }),
+  z.strictObject({
+    operation: z.literal("indicator_remove"),
+    chartId: Ref,
+    indicatorId: Ref,
+    expectedIndicatorRevision: z.number().int().positive(),
+  }),
   z.strictObject({
     operation: z.literal("drawing_create"),
     ...target,

@@ -40,6 +40,7 @@ const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set(["create_space"]);
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "trading_accounts",
   "chart_workspace",
+  "chart_indicators",
   "broker_read",
   "browser_snapshot",
   "cloud_agent_status",

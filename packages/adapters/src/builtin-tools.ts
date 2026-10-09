@@ -4,6 +4,7 @@ import {
   BrokerReadCommandSchema,
   botSecretDestinationSchema,
   ChartCommandSchema,
+  IndicatorRegistryCommandSchema,
   SecretAskPurpose,
   SecretHttpRequest,
 } from "@rakazo/contracts";
@@ -144,6 +145,12 @@ const scheduleCreateInputSchema = {
 };
 
 export const builtinAgentTools: ConnectorTool[] = [
+  {
+    name: "chart_indicators",
+    description:
+      "Discover safe built-in/custom indicators; create a bounded versioned JSON IR from a user's description, import a JSON artifact, or inspect calculated values. No uploaded code is executed. Existing charts stay pinned to the exact definition version. Use search for discovery and chart_workspace to add/remove/configure instances.",
+    inputSchema: z.toJSONSchema(IndicatorRegistryCommandSchema),
+  },
   {
     name: "chart_workspace",
     description:

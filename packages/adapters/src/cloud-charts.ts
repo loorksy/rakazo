@@ -11,10 +11,12 @@ import {
   CHART_DRAWING_CAPABILITIES,
   ChartPermissionError,
   changeChartState,
+  indicatorParameters,
   MAIN_TRADING_AGENT_SPAWN_KEY,
 } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
+import { loadChartIndicator } from "./chart-indicator-definitions.js";
 
 export interface ChartActor {
   ownerUserId: string;
@@ -60,24 +62,6 @@ export class CloudCharts {
       return;
     throw new ChartPermissionError();
   }
-  private async fence(tx: Prisma.TransactionClient, input: ChartActor) {
-    if (!input.botId) return;
-    const token = input.execution;
-    if (!token) throw new ChartPermissionError();
-    await tx.$queryRaw`SELECT id FROM runs WHERE id = ${token.runId} FOR UPDATE`;
-    const run = await tx.run.findFirst({
-      where: {
-        id: token.runId,
-        userId: input.ownerUserId,
-        botId: input.botId,
-        leaseOwner: token.holder,
-        leaseFence: token.generation,
-        leaseExpiresAt: { gt: new Date() },
-        status: { in: ["leased", "running"] },
-      },
-    });
-    if (!run) throw new ChartPermissionError();
-  }
   async command(input: ChartActor, raw: unknown): Promise<ChartResponse> {
     return ChartResponseSchema.parse(await this.perform(input, raw));
   }
@@ -108,6 +92,9 @@ export class CloudCharts {
           "drawing_create",
           "drawing_update",
           "drawing_delete",
+          "indicator_add",
+          "indicator_update",
+          "indicator_remove",
         ],
       };
     if (cmd.operation === "list") {
@@ -135,7 +122,7 @@ export class CloudCharts {
       return project(row);
     }
     const result = await this.prisma.$transaction(async (tx) => {
-      await this.fence(tx, input);
+      await fenceChartExecution(tx, input);
       if (cmd.operation === "create") {
         await tx.$queryRaw`SELECT id FROM deployment_settings WHERE id = 'default' FOR UPDATE`;
         if ((await tx.cloudChart.count({ where: { ownerUserId: input.ownerUserId } })) >= 100)
@@ -174,6 +161,15 @@ export class CloudCharts {
       });
       if (!row) throw new ChartPermissionError();
       this.permit(row, actor);
+      if ("indicator" in cmd) {
+        const record = await loadChartIndicator(
+          this.prisma,
+          input.ownerUserId,
+          cmd.indicator.definitionId,
+          cmd.indicator.definitionVersion,
+        );
+        cmd.indicator.parameters = indicatorParameters(record.definition, cmd.indicator.parameters);
+      }
       const state = changeChartState({
         state: CloudChartStateSchema.parse(row.state),
         revision: row.revision,
@@ -235,4 +231,23 @@ export class CloudCharts {
     if (!connection || !instrument) throw new ChartPermissionError();
     return instrument;
   }
+}
+
+export async function fenceChartExecution(tx: Prisma.TransactionClient, input: ChartActor) {
+  if (!input.botId) return;
+  const token = input.execution;
+  if (!token) throw new ChartPermissionError();
+  await tx.$queryRaw`SELECT id FROM runs WHERE id = ${token.runId} FOR UPDATE`;
+  const run = await tx.run.findFirst({
+    where: {
+      id: token.runId,
+      userId: input.ownerUserId,
+      botId: input.botId,
+      leaseOwner: token.holder,
+      leaseFence: token.generation,
+      leaseExpiresAt: { gt: new Date() },
+      status: { in: ["leased", "running"] },
+    },
+  });
+  if (!run) throw new ChartPermissionError();
 }

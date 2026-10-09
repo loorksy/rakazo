@@ -43,10 +43,12 @@ import {
   buildMcpCredentialBlob,
   buildModelConnectPlaintext,
   CHATGPT_OAUTH_PROVIDER,
+  ChartIndicators,
   CloudCharts,
   CodexCatalogCache,
   ComputerBusyError,
   cancelComputerRunWork,
+  chartEvidence,
   checkpointAndRecordComputerWorkspace,
   clearInactiveUserComputerControl,
   codexLiveCatalogsForSpace,
@@ -761,6 +763,20 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      chartEvidence: authed.trading.chartEvidence.handler(({ context, input }) =>
+        chartEvidence(
+          deps.prisma,
+          { ownerUserId: context.actor.userId },
+          input.chartId,
+          context.signal,
+        ),
+      ),
+      indicators: authed.trading.indicators.handler(({ context, input }) =>
+        new ChartIndicators(deps.prisma, deps.artifacts).command(
+          { ownerUserId: context.actor.userId },
+          input,
+        ),
+      ),
       charts: authed.trading.charts.handler(({ context, input }) =>
         new CloudCharts(deps.prisma, deps.realtime).command(
           { ownerUserId: context.actor.userId },

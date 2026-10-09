@@ -197,6 +197,7 @@ import {
   browserSnapshotFromTool,
 } from "./browser-tools.js";
 import { agentConnectionTools, builtinAgentTools, sharedMemorySaveError } from "./builtin-tools.js";
+import { ChartIndicators } from "./chart-indicators.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-factory.js";
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
@@ -5136,6 +5137,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
+          }
+          if (name === "chart_indicators") {
+            try {
+              return finish(
+                await new ChartIndicators(deps.prisma, deps.artifacts).command(
+                  {
+                    ownerUserId: run.userId,
+                    botId: run.botId,
+                    execution: { runId, holder: workerId, generation: fence },
+                  },
+                  args,
+                ),
+              );
+            } catch {
+              return finish({
+                error:
+                  "Indicator operation unavailable; use validated bounded JSON definitions and current versions",
+              });
+            }
           }
           if (name === "chart_workspace") {
             try {

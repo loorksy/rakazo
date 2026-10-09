@@ -1,7 +1,9 @@
-import { CloudChartSchema } from "@rakazo/contracts";
+import type { ArtifactStore } from "@rakazo/adapter-kit";
+import { CloudChartSchema, CustomIndicatorSchema } from "@rakazo/contracts";
 import { createDb } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { followChartEvents } from "./chart-events.js";
+import { ChartIndicators } from "./chart-indicators.js";
 import type { ChartActor } from "./cloud-charts.js";
 import { CloudCharts } from "./cloud-charts.js";
 import { InMemoryRealtimeFanout } from "./realtime.js";
@@ -17,7 +19,7 @@ suite("durable chart workspace (PostgreSQL)", () => {
   let otherInstrumentId: string;
   const reset = () =>
     db.prisma
-      .$executeRaw`TRUNCATE cloud_charts, trading_connections, organization, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE chart_indicator_definitions, cloud_charts, trading_connections, organization, deployment_settings CASCADE`;
   beforeAll(() => {
     if (!url || !new URL(url).pathname.endsWith("_test"))
       throw new Error("Dedicated _test database required");
@@ -330,5 +332,291 @@ suite("durable chart workspace (PostgreSQL)", () => {
     });
     await reopened.return(undefined);
     await realtime.close();
+  });
+  const definition = {
+    definitionVersion: 1,
+    name: "Fixture mean",
+    description: "Safe fixture analysis",
+    parameters: [{ name: "period", min: 1, max: 32, default: 3, integer: true }],
+    nodes: [
+      { id: "close", op: "input", field: "close" },
+      { id: "average", op: "rolling_mean", input: "close", window: { parameter: "period" } },
+    ],
+    outputs: [{ id: "average", node: "average", label: "Mean", type: "line", pane: "PRICE" }],
+  };
+  it("registers tested immutable versions and leaves historical chart instances pinned", async () => {
+    const registry = new ChartIndicators(db.prisma);
+    const first = CustomIndicatorSchema.parse(
+      await registry.command(principal, { operation: "create", definition }),
+    );
+    const chart = await create();
+    const withIndicator = CloudChartSchema.parse(
+      await new CloudCharts(db.prisma).command(principal, {
+        operation: "indicator_add",
+        chartId: chart.id,
+        expectedRevision: 1,
+        indicator: {
+          definitionId: first.id,
+          definitionVersion: 1,
+          parameters: {},
+          pane: "PRICE",
+          visible: true,
+        },
+      }),
+    );
+    const second = CustomIndicatorSchema.parse(
+      await registry.command(principal, {
+        operation: "create",
+        previousId: first.id,
+        expectedVersion: 1,
+        definition: {
+          ...definition,
+          parameters: [{ name: "period", min: 1, max: 32, default: 5, integer: true }],
+        },
+      }),
+    );
+    expect(second.version).toBe(2);
+    expect(second.id).toBe(first.id);
+    const restored = CloudChartSchema.parse(
+      await new CloudCharts(db.prisma).command(principal, { operation: "get", chartId: chart.id }),
+    );
+    expect(restored.state.indicators[0]).toMatchObject({
+      definitionVersion: 1,
+      parameters: { period: 3 },
+    });
+    expect(withIndicator.state.indicators).toEqual(restored.state.indicators);
+    await expect(
+      db.prisma.chartIndicatorDefinition.update({
+        where: { id_version: { id: first.id, version: 1 } },
+        data: { name: "changed" },
+      }),
+    ).rejects.toThrow("immutable");
+    expect(
+      CustomIndicatorSchema.parse(
+        await registry.command(principal, { operation: "get", id: first.id, version: 1 }),
+      ).definition.parameters[0]?.default,
+    ).toBe(3);
+  });
+  it("detects version conflicts even when stale requested content already exists", async () => {
+    const registry = new ChartIndicators(db.prisma);
+    const first = CustomIndicatorSchema.parse(
+      await registry.command(principal, { operation: "create", definition }),
+    );
+    await registry.command(principal, {
+      operation: "create",
+      previousId: first.id,
+      expectedVersion: 1,
+      definition: { ...definition, description: "Version 2" },
+    });
+    await expect(
+      registry.command(principal, {
+        operation: "create",
+        previousId: first.id,
+        expectedVersion: 1,
+        definition,
+      }),
+    ).rejects.toThrow("version conflict");
+  });
+  it("refuses forged validation or security status and never grants authority from a definition", async () => {
+    await expect(
+      new ChartIndicators(db.prisma).command(principal, {
+        operation: "create",
+        definition,
+        securityStatus: "SAFE_IR",
+      }),
+    ).rejects.toThrow();
+    expect(await db.prisma.chartIndicatorDefinition.count()).toBe(0);
+  });
+  it("validates parameters and object revision independently from another user's chart object", async () => {
+    const chart = await create();
+    const service = new CloudCharts(db.prisma);
+    await expect(
+      service.command(principal, {
+        operation: "indicator_add",
+        chartId: chart.id,
+        expectedRevision: 1,
+        indicator: {
+          definitionId: "builtin:SMA",
+          definitionVersion: 1,
+          parameters: { period: 0 },
+          pane: "PRICE",
+          visible: true,
+        },
+      }),
+    ).rejects.toThrow("bounds");
+    const updated = CloudChartSchema.parse(
+      await service.command(principal, {
+        operation: "indicator_add",
+        chartId: chart.id,
+        expectedRevision: 1,
+        indicator: {
+          definitionId: "builtin:SMA",
+          definitionVersion: 1,
+          parameters: { period: 3 },
+          pane: "PRICE",
+          visible: true,
+        },
+      }),
+    );
+    const instance = updated.state.indicators[0];
+    if (!instance) throw new Error("Fixture indicator");
+    const bot = await worker();
+    await expect(
+      service.command(bot, {
+        operation: "indicator_remove",
+        chartId: chart.id,
+        indicatorId: instance.id,
+        expectedIndicatorRevision: 1,
+      }),
+    ).rejects.toThrow("not editable");
+    await service.command(principal, {
+      operation: "indicator_update",
+      chartId: chart.id,
+      indicatorId: instance.id,
+      expectedIndicatorRevision: 1,
+      indicator: {
+        definitionId: "builtin:SMA",
+        definitionVersion: 1,
+        parameters: { period: 4 },
+        pane: "SEPARATE",
+        visible: false,
+      },
+    });
+    await expect(
+      service.command(principal, {
+        operation: "indicator_remove",
+        chartId: chart.id,
+        indicatorId: instance.id,
+        expectedIndicatorRevision: 1,
+      }),
+    ).rejects.toThrow("changed");
+  });
+  it("cannot register indicator definitions after execution ownership is lost", async () => {
+    const bot = await worker();
+    await db.prisma.run.update({
+      where: { id: bot.execution?.runId },
+      data: { leaseOwner: "worker-b", leaseFence: 2 },
+    });
+    await expect(
+      new ChartIndicators(db.prisma).command(bot, { operation: "create", definition }),
+    ).rejects.toThrow("not editable");
+    expect(await db.prisma.chartIndicatorDefinition.count()).toBe(0);
+  });
+  it("imports safe JSON through existing owner-scoped artifacts and deduplicates its final hash", async () => {
+    const bytes = new TextEncoder().encode(JSON.stringify(definition));
+    const store: ArtifactStore = {
+      describe: () => ({
+        id: "fixture",
+        contractVersion: "1",
+        adapterVersion: "1",
+        capabilities: { stream: false },
+      }),
+      put: async () => ({ id: "fixture", hash: "fixture" }),
+      get: async () => bytes,
+      remove: async () => {},
+    };
+    const artifact = await db.prisma.artifact.create({
+      data: {
+        spaceId: "fixture-space",
+        userId: owner,
+        name: "indicator.json",
+        mimeType: "application/json",
+        size: bytes.byteLength,
+        hash: "fixture",
+        storageKey: "fixture",
+      },
+    });
+    const registry = new ChartIndicators(db.prisma, store);
+    const first = CustomIndicatorSchema.parse(
+      await registry.command(principal, { operation: "import", artifactId: artifact.id }),
+    );
+    const second = CustomIndicatorSchema.parse(
+      await registry.command(principal, { operation: "import", artifactId: artifact.id }),
+    );
+    expect(second.id).toBe(first.id);
+    expect(first).toMatchObject({
+      source: "USER_IMPORTED",
+      originalFilename: "indicator.json",
+      createdBy: owner,
+      securityStatus: "SAFE_IR",
+    });
+    expect(await db.prisma.chartIndicatorDefinition.count()).toBe(1);
+  });
+  it.each(["indicator.py", "indicator.js", "indicator.pine"])(
+    "rejects unsupported uploaded format %s before reading source",
+    async (name) => {
+      let read = false;
+      const store: ArtifactStore = {
+        describe: () => ({
+          id: "fixture",
+          contractVersion: "1",
+          adapterVersion: "1",
+          capabilities: { stream: false },
+        }),
+        put: async () => ({ id: "fixture", hash: "fixture" }),
+        get: async () => {
+          read = true;
+          throw new Error("must not read");
+        },
+        remove: async () => {},
+      };
+      const artifact = await db.prisma.artifact.create({
+        data: {
+          spaceId: "fixture-space",
+          userId: owner,
+          name,
+          mimeType: "text/plain",
+          size: 100,
+          hash: "fixture",
+          storageKey: "fixture",
+        },
+      });
+      await expect(
+        new ChartIndicators(db.prisma, store).command(principal, {
+          operation: "import",
+          artifactId: artifact.id,
+        }),
+      ).rejects.toThrow("safe indicator JSON");
+      expect(read).toBe(false);
+    },
+  );
+  it("refuses foreign-owner and peer-private uploaded artifacts", async () => {
+    const bot = await worker();
+    const artifact = await db.prisma.artifact.create({
+      data: {
+        spaceId: "fixture-space",
+        userId: owner,
+        name: "indicator.json",
+        mimeType: "application/json",
+        size: 10,
+        hash: "fixture",
+        storageKey: "fixture",
+      },
+    });
+    const store: ArtifactStore = {
+      describe: () => ({
+        id: "fixture",
+        contractVersion: "1",
+        adapterVersion: "1",
+        capabilities: { stream: false },
+      }),
+      put: async () => ({ id: "fixture", hash: "fixture" }),
+      get: async () => {
+        throw new Error("must not read");
+      },
+      remove: async () => {},
+    };
+    await expect(
+      new ChartIndicators(db.prisma, store).command(bot, {
+        operation: "import",
+        artifactId: artifact.id,
+      }),
+    ).rejects.toThrow("safe indicator JSON");
+    await expect(
+      new ChartIndicators(db.prisma, store).command(
+        { ownerUserId: "other" },
+        { operation: "search" },
+      ),
+    ).rejects.toThrow("Owner session");
   });
 });

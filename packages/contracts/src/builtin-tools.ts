@@ -4,6 +4,7 @@ import * as z from "zod";
 export const BUILTIN_TOOL_NAMES = [
   "trading_accounts",
   "chart_workspace",
+  "chart_indicators",
   "broker_read",
   "computer_observe",
   "computer_act",

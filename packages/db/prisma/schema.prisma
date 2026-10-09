@@ -1512,3 +1512,21 @@ model CloudChart {
   @@index([accountId, instrumentId])
   @@map("cloud_charts")
 }
+
+model ChartIndicatorDefinition {
+  id String
+  version Int
+  ownerUserId String
+  name String
+  definition Json
+  definitionHash String
+  source String
+  createdBy String
+  originalFilename String?
+  createdAt DateTime @default(now())
+
+  @@id([id, version])
+  @@index([ownerUserId, createdAt])
+  @@index([ownerUserId, definitionHash])
+  @@map("chart_indicator_definitions")
+}

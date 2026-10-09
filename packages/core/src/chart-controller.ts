@@ -89,6 +89,38 @@ export function changeChartState(input: {
       break;
     case "set_instrument":
       break;
+    case "indicator_add":
+      state.indicators.push({
+        ...cmd.indicator,
+        id: input.newId,
+        revision: 1,
+        creator: input.actor.user ? "USER" : "BOT",
+        creatorId: input.actor.id,
+        createdAt: at,
+        updatedAt: at,
+      });
+      break;
+    case "indicator_update":
+    case "indicator_remove": {
+      const index = state.indicators.findIndex((row) => row.id === cmd.indicatorId),
+        previous = state.indicators[index];
+      if (!previous) throw new Error("Indicator not found");
+      if (previous.revision !== cmd.expectedIndicatorRevision) throw new ChartConflictError();
+      if (
+        !input.actor.user &&
+        (previous.creator !== "BOT" || previous.creatorId !== input.actor.id)
+      )
+        throw new ChartPermissionError();
+      if (cmd.operation === "indicator_remove") state.indicators.splice(index, 1);
+      else
+        state.indicators[index] = {
+          ...previous,
+          ...cmd.indicator,
+          revision: previous.revision + 1,
+          updatedAt: at,
+        };
+      break;
+    }
     case "drawing_create": {
       const capability = CHART_DRAWING_CAPABILITIES.find(([id]) => id === cmd.drawing.type);
       if (!capability || cmd.drawing.points.length !== capability[1])

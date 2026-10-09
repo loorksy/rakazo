@@ -8,6 +8,11 @@ import {
   ATTACHMENT_MAX_COUNT,
 } from "./attachments.js";
 import { BotSecretMetadata, BotSecretPutInput, StoredBotSecretName } from "./bot-secrets.js";
+import {
+  ChartEvidenceSchema,
+  IndicatorRegistryCommandSchema,
+  IndicatorRegistryResponseSchema,
+} from "./chart-indicator.js";
 import { ChartCommandSchema, ChartEventSchema, ChartResponseSchema } from "./cloud-chart.js";
 import {
   ActionApprovalRuleSchema,
@@ -165,6 +170,8 @@ const spaceName = z.string().trim().min(1).max(60);
 
 export const appContract = {
   trading: {
+    chartEvidence: oc.input(z.object({ chartId: Id })).output(ChartEvidenceSchema),
+    indicators: oc.input(IndicatorRegistryCommandSchema).output(IndicatorRegistryResponseSchema),
     charts: oc.input(ChartCommandSchema).output(ChartResponseSchema),
     chartEvents: oc.input(z.object({ chartId: Id })).output(eventIterator(ChartEventSchema)),
     connections: {
