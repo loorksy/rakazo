@@ -458,7 +458,7 @@ export class BrokerConnectionSupervisor {
       )
         throw new BrokerProviderError("INVALID_REQUEST");
       if (action.mode === "SIMULATION") {
-        if (slot.demands.size >= 256 && !slot.demands.has(instrument.id))
+        if (slot.financialDemands.size >= 256 && !slot.financialDemands.has(instrument.id))
           throw new BrokerProviderError("UNAVAILABLE");
         slot.financialDemands.add(instrument.id);
         slot.demands.set(instrument.id, {
@@ -654,7 +654,11 @@ export class BrokerConnectionSupervisor {
             );
           const quotes = [
             ...captured,
-            ...events.flatMap((event) => (event.type === "quote" ? [event.quote] : [])),
+            ...events.flatMap((event) =>
+              event.type === "quote" && slot.financialDemands.has(event.quote.instrumentId)
+                ? [event.quote]
+                : [],
+            ),
           ].sort((a, b) => Date.parse(a.sourceTime) - Date.parse(b.sourceTime));
           // Capture and latest can overlap; retain the first copy of each exact provider tick.
           const unique = new Map(
@@ -663,6 +667,8 @@ export class BrokerConnectionSupervisor {
               quote,
             ]),
           );
+          if (unique.size > 256)
+            await pauseSimulationObservation(tx, slot.token.accountId, this.now());
           await observeSimulationAccount(
             tx,
             slot.token.accountId,
@@ -670,8 +676,8 @@ export class BrokerConnectionSupervisor {
             this.now(),
           );
         }
-        // Unsatisfied stream observations stay in bounded memory. Only captured logical
-        // conditions enter PostgreSQL; batch limits prevent mass triggers starving leases.
+        // Visual ticks stay ephemeral. Financial outcomes and one latest active quote
+        // watermark are durable; bounded batches prevent streams starving leases.
         await tx.brokerSessionLease.update({
           where: { accountId: slot.token.accountId },
           data: {
@@ -763,16 +769,33 @@ export class BrokerConnectionSupervisor {
         take: 1024,
       })),
     ];
+    for (const [id, demand] of slot.demands)
+      if (demand.expires <= this.now().getTime() && !financialSymbols.has(id)) {
+        slot.demands.delete(id);
+        slot.financialDemands.delete(id);
+      }
+    // Choose financially owned symbols before bounding the database query. Otherwise
+    // hundreds of chart/watch demands can exclude a held position from observation.
+    const selectedIds = [
+      ...new Set([...subscriptions.map((entry) => entry.instrumentId), ...slot.demands.keys()]),
+    ]
+      .sort(
+        (first, second) =>
+          Number(slot.financialDemands.has(second)) - Number(slot.financialDemands.has(first)) ||
+          first.localeCompare(second),
+      )
+      .slice(0, 256);
     const instruments = await this.prisma.brokerInstrument.findMany({
       where: {
         accountId: slot.token.accountId,
         active: true,
-        id: { in: [...new Set(subscriptions.map((entry) => entry.instrumentId))] },
+        id: { in: selectedIds },
       },
       take: 256,
     });
     for (const instrument of instruments) {
       const expiry = Math.max(
+        slot.demands.get(instrument.id)?.expires ?? 0,
         ...subscriptions
           .filter((entry) => entry.instrumentId === instrument.id)
           .map((entry) => entry.expiresAt.getTime()),
@@ -788,18 +811,18 @@ export class BrokerConnectionSupervisor {
         slot.demands.delete(id);
         slot.financialDemands.delete(id);
       }
-    const key = [...slot.demands.keys()].sort().join("\n");
+    const selected = [...slot.demands]
+      .filter(([id]) => selectedIds.includes(id))
+      .sort(
+        ([first], [second]) =>
+          Number(slot.financialDemands.has(second)) - Number(slot.financialDemands.has(first)) ||
+          first.localeCompare(second),
+      )
+      .slice(0, 256)
+      .map(([instrumentId, entry]) => ({ instrumentId, symbol: entry.symbol }));
+    const key = JSON.stringify(selected);
     if (key === slot.observed) return;
-    const release = await slot.session.subscribe(
-      [...slot.demands]
-        .sort(
-          ([first], [second]) =>
-            Number(slot.financialDemands.has(second)) - Number(slot.financialDemands.has(first)),
-        )
-        .slice(0, 256)
-        .map(([instrumentId, entry]) => ({ instrumentId, symbol: entry.symbol })),
-      (event) => this.observe(slot, event),
-    );
+    const release = await slot.session.subscribe(selected, (event) => this.observe(slot, event));
     await slot.release?.();
     slot.release = release;
     slot.observed = key;

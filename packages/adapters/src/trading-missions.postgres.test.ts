@@ -730,6 +730,136 @@ suite("owner-only durable trading goals/plans/mandates", () => {
         await stream.close();
       }
     });
+    async function chartDemands(count: number) {
+      const instruments = Array.from({ length: count }, (_, index) => ({
+        id: `chart-${index.toString().padStart(3, "0")}`,
+        accountId: "account",
+        brokerSymbol: `CHART${index}`,
+        displayName: `Fixture ${index}`,
+      }));
+      await db.prisma.brokerInstrument.createMany({ data: instruments });
+      await db.prisma.brokerMarketSubscription.createMany({
+        data: instruments.map((instrument) => ({
+          accountId: "account",
+          ownerUserId: owner,
+          instrumentId: instrument.id,
+          expiresAt: new Date(now.getTime() + 60000),
+        })),
+      });
+      return instruments;
+    }
+    it("keeps financial stop ticks when unrelated chart quotes fill the visual batch", async () => {
+      await acceptedExposure();
+      const instruments = await chartDemands(255);
+      const stream = await streamFixture();
+      try {
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        expect(vi.mocked(stream.session.subscribe).mock.calls.at(-1)?.[0]).toHaveLength(256);
+        stream.advance(new Date(now.getTime() + 3000));
+        for (const [index, instrument] of instruments.entries())
+          stream.emit({
+            type: "quote",
+            quote: {
+              ...marketQuote("100", "100.1", new Date(now.getTime() + index + 1)),
+              instrumentId: instrument.id,
+              brokerSymbol: instrument.brokerSymbol,
+            },
+          });
+        for (const [index, bid] of ["2700", "2690", "2700"].entries())
+          stream.emit({
+            type: "quote",
+            quote: marketQuote(bid, `${bid}.1`, new Date(now.getTime() + (index + 1) * 1000)),
+          });
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        expect(
+          await db.prisma.simulationMarketReceipt.count({ where: { type: "STOP_LOSS" } }),
+        ).toBe(1);
+        expect(
+          await db.prisma.financialJournal.count({
+            where: { event: "SIMULATION_OBSERVER_BACKPRESSURE" },
+          }),
+        ).toBe(0);
+      } finally {
+        await stream.close();
+      }
+    });
+    it("promotes a financial symbol ahead of an unchanged oversized chart demand set", async () => {
+      await chartDemands(300);
+      await db.prisma.brokerMarketSubscription.create({
+        data: {
+          accountId: "account",
+          ownerUserId: owner,
+          instrumentId: "gold",
+          expiresAt: new Date(now.getTime() + 60000),
+        },
+      });
+      const stream = await streamFixture();
+      try {
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        expect(
+          vi
+            .mocked(stream.session.subscribe)
+            .mock.calls.at(-1)?.[0]
+            .some((item) => item.instrumentId === "gold"),
+        ).toBe(false);
+        const beforePromotion = vi.mocked(stream.session.subscribe).mock.calls.length;
+        await acceptedExposure();
+        stream.advance(new Date(now.getTime() + 1000));
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        const selected = vi.mocked(stream.session.subscribe).mock.calls.at(-1)?.[0];
+        expect(selected).toHaveLength(256);
+        expect(selected?.[0]).toEqual({ instrumentId: "gold", symbol: "GOLD.a" });
+        expect(stream.session.subscribe).toHaveBeenCalledTimes(beforePromotion + 1);
+      } finally {
+        await stream.close();
+      }
+    });
+    it.each([
+      { name: "target", price: "3001.1", scope: managementScope, status: "TARGET_REACHED" },
+      {
+        name: "aggregate loss budget",
+        price: "2696",
+        scope: { ...managementScope, maxMissionLoss: "10" },
+        status: "RISK_STOPPED",
+      },
+    ])(
+      "retains a transient $name crossing without an individual stop or target exit",
+      async ({ price, scope, status }) => {
+        const rows = await acceptedExposure({ ...action, takeProfit: null }, scope);
+        const stream = await streamFixture();
+        try {
+          await stream.supervisor.tick();
+          await stream.supervisor.drain();
+          stream.advance(new Date(now.getTime() + 3000));
+          stream.emit({
+            type: "quote",
+            quote: marketQuote(price, price, new Date(now.getTime() + 1000)),
+          });
+          stream.emit({
+            type: "quote",
+            quote: marketQuote("2700", "2700.1", new Date(now.getTime() + 2000)),
+          });
+          await stream.supervisor.tick();
+          await stream.supervisor.drain();
+          expect(
+            (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+              .status,
+          ).toBe(status);
+          expect(await db.prisma.simulationMarketReceipt.count()).toBe(0);
+          expect(
+            await db.prisma.tradingMissionWake.count({
+              where: { mandateId: rows.active.id, kind: "ACCOUNT_EVENT" },
+            }),
+          ).toBe(1);
+        } finally {
+          await stream.close();
+        }
+      },
+    );
     it("fails safely and journals one attention wake when financial tick buffering overflows", async () => {
       const rows = await acceptedExposure();
       const stream = await streamFixture();

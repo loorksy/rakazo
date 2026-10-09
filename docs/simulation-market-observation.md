@@ -9,6 +9,8 @@ retains sequential financial quotes before visual quote coalescing; the protecte
 account book determines which ticks fill or close exposure. Simulation positions and
 orders keep subscriptions active without an open client. Financial symbols receive
 priority within the account's 256-symbol subscription limit.
+The symbol bound is applied after financial priority selection. Unrelated visual
+quotes cannot displace captured financial ticks from an observation batch.
 
 BUY entries use ask and SELL entries use bid; exits use the opposite spread side.
 LIMIT and STOP triggers are direction-specific. Stops and targets execute at the actual
@@ -46,6 +48,9 @@ and queues the next deadline. No new timer service and no expiry-time LLM are in
 Portfolio valuation requires fresh prices for every open instrument. Mission realized
 and unrealized P&L remain distinct from real/manual broker activity. Target attainment,
 hard mission/daily loss or potential open-risk breach stop new risk deterministically.
+Limits are evaluated for every accepted financial tick against the running portfolio,
+so a transient crossing followed by a retracement still stops the mission. Only the
+final quote cache and final P&L are written; terminal transitions remain durable.
 Account reservation/exposure breaches freeze shared account capacity. These transitions
 and order/fill/exit events create stable ACCOUNT_EVENT wakes through the existing
 mission wake/Task/Run path. Normal quotes never create model turns. Terminal mission

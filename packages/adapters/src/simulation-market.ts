@@ -27,6 +27,7 @@ import {
 import { financialActionFingerprint } from "@rakazo/core/node/financial-action";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
+import { simulationMissionState } from "./simulation-mission-state.js";
 
 export function nextSimulationExpiry(state: SimulationBookState): Date | null {
   return state.orders.length
@@ -243,6 +244,16 @@ export async function observeSimulationAccount(
   if (existing.length > 1000 || existing.some((row) => row.ownerUserId !== account.ownerUserId))
     throw new Error("Simulation quote cache scope/capacity mismatch");
   const watermarks = new Map(existing.map((row) => [row.instrumentId, row.sourceTime.getTime()]));
+  const portfolioQuotes = new Map(
+    existing.map((row) => [row.instrumentId, BrokerQuoteSchema.parse(row.quote)]),
+  );
+  const performance = await createSimulationPerformanceObserver(
+    tx,
+    accountId,
+    account.ownerUserId,
+    now,
+    events.length,
+  );
   const latest = new Map<string, BrokerQuote>();
   for (const raw of quotes) {
     const quote = BrokerQuoteSchema.parse(raw);
@@ -262,6 +273,17 @@ export async function observeSimulationAccount(
     await observe(quote);
     watermarks.set(quote.instrumentId, Date.parse(quote.sourceTime));
     latest.set(quote.instrumentId, quote);
+    portfolioQuotes.set(quote.instrumentId, quote);
+    // A later quote cannot erase an earlier target or hard limit crossing. Quotes
+    // remain transient; only meaningful transitions write an audit receipt here.
+    await performance(
+      state,
+      book.revision + (events.length ? 1 : 0),
+      portfolioQuotes,
+      events.length,
+      false,
+      quote.sourceTime,
+    );
   }
   // Persist one latest quote per instrument per flush, not every high-frequency tick.
   for (const quote of latest.values()) {
@@ -289,163 +311,203 @@ export async function observeSimulationAccount(
     where: { accountId, instrumentId: { notIn: remaining } },
   });
   // Pure price telemetry does not enqueue an agent turn. Only logical outcomes/limits do.
-  await observeSimulationPerformance(
-    tx,
-    accountId,
-    account.ownerUserId,
+  await performance(
     state,
     book.revision + (events.length ? 1 : 0),
-    now,
+    portfolioQuotes,
+    events.length,
+    true,
   );
 }
 
-async function observeSimulationPerformance(
+async function createSimulationPerformanceObserver(
   tx: Prisma.TransactionClient,
   accountId: string,
   owner: string,
-  state: SimulationBookState,
-  bookRevision: number,
   now: Date,
+  observedEvents: number,
 ) {
-  const cursors = await tx.simulationMarketCursor.findMany({
-    where: { accountId, ownerUserId: owner },
-    take: 1001,
-  });
-  if (cursors.length > 1000) throw new Error("Simulation quote cache capacity exceeded");
-  let value: ReturnType<typeof valueSimulationBook> | null = null;
-  try {
-    value = valueSimulationBook(
-      state,
-      cursors.map((row) => BrokerQuoteSchema.parse(row.quote)),
-      now,
-    );
-  } catch {
-    /* Missing/stale portfolio quotes cannot certify risk or target progress. */
-  }
   const mandates = await tx.tradingMandate.findMany({
     where: { accountId, ownerUserId: owner, mode: "SIMULATION", approvedAt: { not: null } },
     take: 1001,
   });
   if (mandates.length > 1000) throw new Error("Simulation mandate capacity exceeded");
-  const reservations = await tx.tradingRiskReservation.findMany({
+  const goals = await tx.tradingGoal.findMany({
     where: {
+      id: { in: mandates.map((row) => row.goalId) },
       accountId,
+      ownerUserId: owner,
       mode: "SIMULATION",
-      status: { in: ["RESERVED", "COMMITTED", "UNCERTAIN"] },
     },
-    take: 10001,
+    take: 1001,
   });
+  const targets = new Map(
+    goals.map((goal) => [goal.id, TradingGoalInputSchema.parse(goal.definition).targetProfit]),
+  );
+  const entries = mandates.map((record) => {
+    if (!targets.has(record.goalId)) throw new Error("Simulation goal owner mismatch");
+    return {
+      record,
+      envelope: TradingMandateEnvelopeSchema.parse(record.envelope),
+      targetProfit: targets.get(record.goalId) ?? null,
+    };
+  });
+  const readReservations = () =>
+    tx.tradingRiskReservation.findMany({
+      where: {
+        accountId,
+        mode: "SIMULATION",
+        status: { in: ["RESERVED", "COMMITTED", "UNCERTAIN"] },
+      },
+      take: 10001,
+    });
+  let reservations = await readReservations();
   if (reservations.length > 10000) throw new Error("Simulation reservation capacity exceeded");
+  const indexReservations = () => {
+    const own = new Map<string, { risk: bigint; largest: bigint }>();
+    let risk = 0n,
+      exposure = 0n,
+      pendingExposure = 0n;
+    for (const row of reservations) {
+      const amount = u(row.risk.toFixed()),
+        notional = u(row.exposure.toFixed());
+      const previous = own.get(row.mandateId) ?? { risk: 0n, largest: 0n };
+      own.set(row.mandateId, {
+        risk: previous.risk + amount,
+        largest: amount > previous.largest ? amount : previous.largest,
+      });
+      risk += amount;
+      exposure += notional;
+      if (row.kind === "PENDING") pendingExposure += notional;
+    }
+    return { own, risk, exposure, pendingExposure };
+  };
+  let capacity = indexReservations();
   const guard = await tx.accountRiskGuardrail.findUnique({
     where: { accountId_mode: { accountId, mode: "SIMULATION" } },
   });
   let accountFrozen = guard?.frozen ?? false;
-  if (guard) {
-    const limits = AccountRiskGuardrailsSchema.parse(guard.limits);
-    const sum = (key: "risk" | "exposure", pending = false) =>
-      reservations
-        .filter((row) => !pending || row.kind === "PENDING")
-        .reduce((total, row) => total + u(row[key].toFixed()), 0n);
-    if (
-      !guard.frozen &&
-      (sum("risk") > u(limits.maxReservedRisk) ||
-        sum("exposure") > u(limits.maxExposure) ||
-        sum("exposure", true) > u(limits.maxPendingExposure))
-    ) {
-      accountFrozen = true;
-      await tx.accountRiskGuardrail.update({
-        where: { id: guard.id },
-        data: {
-          frozen: true,
-          revision: { increment: 1 },
-          limits: { ...limits, frozen: true, revision: guard.revision + 1 },
-        },
-      });
-      await tx.financialJournal.create({
-        data: {
-          ownerUserId: owner,
-          accountId,
-          mode: "SIMULATION",
-          event: "SIMULATION_ACCOUNT_RISK_BREACH",
-          entry: { version: 1, bookRevision },
-        },
-      });
+  let previousEvents = observedEvents;
+  return async (
+    state: SimulationBookState,
+    bookRevision: number,
+    quotes: Map<string, BrokerQuote>,
+    eventCount: number,
+    final: boolean,
+    sourceTime?: string,
+  ) => {
+    // The account is locked throughout this batch. Reservations can change only
+    // when this observer commits an actual fill, close or expiration.
+    if (previousEvents !== eventCount) {
+      reservations = await readReservations();
+      if (reservations.length > 10000) throw new Error("Simulation reservation capacity exceeded");
+      capacity = indexReservations();
     }
-  }
-  for (const mandate of mandates) {
-    const envelope = TradingMandateEnvelopeSchema.parse(mandate.envelope);
-    const performance = state.performance.find((row) => row.mandateId === mandate.id);
-    const unrealized = value?.unrealized.get(mandate.id) ?? 0n;
-    const pnl = u(performance?.realized ?? "0") + unrealized;
-    const daily =
-      u(performance?.day === now.toISOString().slice(0, 10) ? performance.dailyRealized : "0") +
-      unrealized;
-    const own = reservations.filter((row) => row.mandateId === mandate.id);
-    const openRisk = own.reduce((total, row) => total + u(row.risk.toFixed()), 0n);
-    let status = mandate.status;
-    if (status === "ACTIVE") {
-      if (mandate.expiresAt <= now) status = "EXPIRED";
-      else if (accountFrozen) status = "PAUSED";
-      else if (!value && state.positions.some((row) => row.mandateId === mandate.id))
-        status = "NEEDS_ATTENTION";
-      else if (
-        value &&
-        (pnl <= -u(envelope.maxMissionLoss) ||
-          (pnl < 0n ? -pnl : 0n) + openRisk > u(envelope.maxMissionLoss) ||
-          (envelope.maxDailyLoss !== null &&
-            (daily <= -u(envelope.maxDailyLoss) ||
-              (daily < 0n ? -daily : 0n) + openRisk > u(envelope.maxDailyLoss))) ||
-          openRisk > u(envelope.maxOpenRisk) ||
-          own.some((row) => u(row.risk.toFixed()) > u(envelope.maxRiskPerTrade)))
-      )
-        status = "RISK_STOPPED";
-      else if (value) {
-        const goal = TradingGoalInputSchema.parse(
-          (await tx.tradingGoal.findUniqueOrThrow({ where: { id: mandate.goalId } })).definition,
-        );
-        if (goal.targetProfit !== null && pnl >= u(goal.targetProfit)) status = "TARGET_REACHED";
+    previousEvents = eventCount;
+    let value: ReturnType<typeof valueSimulationBook> | null = null;
+    try {
+      value = valueSimulationBook(state, [...quotes.values()], now);
+    } catch {
+      /* Missing/stale portfolio quotes cannot certify risk or target progress. */
+    }
+    if (guard) {
+      const limits = AccountRiskGuardrailsSchema.parse(guard.limits);
+      if (
+        !accountFrozen &&
+        (capacity.risk > u(limits.maxReservedRisk) ||
+          capacity.exposure > u(limits.maxExposure) ||
+          capacity.pendingExposure > u(limits.maxPendingExposure))
+      ) {
+        accountFrozen = true;
+        await tx.accountRiskGuardrail.update({
+          where: { id: guard.id },
+          data: {
+            frozen: true,
+            revision: { increment: 1 },
+            limits: { ...limits, frozen: true, revision: guard.revision + 1 },
+          },
+        });
+        await tx.financialJournal.create({
+          data: {
+            ownerUserId: owner,
+            accountId,
+            mode: "SIMULATION",
+            event: "SIMULATION_ACCOUNT_RISK_BREACH",
+            entry: { version: 1, bookRevision },
+          },
+        });
       }
     }
-    const changed = status !== mandate.status;
-    await tx.tradingMandate.update({
-      where: { id: mandate.id },
-      data: {
-        ...(value
-          ? {
-              missionPnl: d(pnl),
-              dailyPnl: d(daily),
-              observedAt: now,
-              observedState: { version: 1, source: "simulation-market-v1", bookRevision },
-            }
-          : {}),
-        ...(changed ? { status, revision: { increment: 1 } } : {}),
-      },
-    });
-    if (changed) {
-      const key = `simulation:mission:${mandate.id}:${mandate.revision + 1}:${status}`;
-      await tx.financialJournal.create({
+    const performances = new Map(state.performance.map((row) => [row.mandateId, row]));
+    const heldPositions = new Set(state.positions.map((row) => row.mandateId));
+    for (const entry of entries) {
+      const { record: mandate, envelope, targetProfit } = entry;
+      const performance = performances.get(mandate.id);
+      const unrealized = value?.unrealized.get(mandate.id) ?? 0n;
+      const pnl = u(performance?.realized ?? "0") + unrealized;
+      const daily =
+        u(performance?.day === now.toISOString().slice(0, 10) ? performance.dailyRealized : "0") +
+        unrealized;
+      const own = capacity.own.get(mandate.id) ?? { risk: 0n, largest: 0n };
+      const openRisk = own.risk;
+      const status = simulationMissionState({
+        status: mandate.status,
+        expiresAt: mandate.expiresAt,
+        now,
+        accountFrozen,
+        hasPositions: heldPositions.has(mandate.id),
+        valuationFresh: value !== null,
+        final,
+        pnl,
+        daily,
+        openRisk,
+        largestRisk: own.largest,
+        targetProfit,
+        limits: envelope,
+      });
+      const changed = status !== mandate.status;
+      if (!changed && !final) continue;
+      entry.record = await tx.tradingMandate.update({
+        where: { id: mandate.id },
         data: {
-          ownerUserId: owner,
-          accountId,
-          mode: "SIMULATION",
-          goalId: mandate.goalId,
-          mandateId: mandate.id,
-          event: `MISSION_${status}`,
-          entry: {
-            version: 1,
-            bookRevision,
-            missionPnl: value ? d(pnl) : null,
-            openRisk: d(openRisk),
-          },
+          ...(value && final
+            ? {
+                missionPnl: d(pnl),
+                dailyPnl: d(daily),
+                observedAt: now,
+                observedState: { version: 1, source: "simulation-market-v1", bookRevision },
+              }
+            : {}),
+          ...(changed ? { status, revision: { increment: 1 } } : {}),
         },
       });
-      await tx.tradingMissionWake.upsert({
-        where: { wakeKey: key },
-        create: { mandateId: mandate.id, wakeKey: key, kind: "ACCOUNT_EVENT", dueAt: now },
-        update: {},
-      });
+      if (changed) {
+        const key = `simulation:mission:${mandate.id}:${mandate.revision + 1}:${status}`;
+        await tx.financialJournal.create({
+          data: {
+            ownerUserId: owner,
+            accountId,
+            mode: "SIMULATION",
+            goalId: mandate.goalId,
+            mandateId: mandate.id,
+            event: `MISSION_${status}`,
+            entry: {
+              version: 1,
+              bookRevision,
+              missionPnl: value ? d(pnl) : null,
+              openRisk: d(openRisk),
+              ...(sourceTime ? { sourceTime } : {}),
+            },
+          },
+        });
+        await tx.tradingMissionWake.upsert({
+          where: { wakeKey: key },
+          create: { mandateId: mandate.id, wakeKey: key, kind: "ACCOUNT_EVENT", dueAt: now },
+          update: {},
+        });
+      }
     }
-  }
+  };
 }
 
 export async function enqueueSimulationExpiries(
