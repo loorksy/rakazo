@@ -118,3 +118,15 @@ LIVE refusal, mode separation, immutable plans/mandates and exact broker mapping
 Seven package type checks, scoped Biome and whitespace checks pass. All 106 migrations
 apply to a fresh fixture database. LIVE remains unavailable until the execution and
 readiness work is completed. See `financial-risk-accounting.md` for precise semantics.
+
+## Broker preflight checkpoint
+
+Trusted MetaApi read preflight now obtains broker margin and exact symbol/quote,
+account and exposure evidence through the existing fenced Worker session. Unsafe SDK
+numeric conversion is rejected. Research peers cannot read financial account state.
+Read preflight does not place a trade or authorize exposure.
+
+MetaApi/risk tests pass (53), central scope/executor tests pass (83), and the existing
+broker PostgreSQL lifecycle/process-death suite passes (15). Five changed-package type
+checks, scoped Biome and whitespace checks pass. Mission command/UI lifecycle,
+simulation execution and controlled LIVE execution remain unfinished.

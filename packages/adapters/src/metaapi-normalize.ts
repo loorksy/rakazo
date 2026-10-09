@@ -405,3 +405,15 @@ export function normalizeCandles(
   }
   return [...byTime.values()].sort((a, b) => a.openTime.localeCompare(b.openTime));
 }
+
+/** Trusted SDK wire boundary. A numeric round-trip must preserve the exact decimal text. */
+export function normalizeBrokerDecimal(input: unknown): string {
+  return parse(numeric, input);
+}
+export function brokerSdkNumber(input: string): number {
+  const canonical = TradingDecimalSchema.parse(input);
+  const number = Number(canonical);
+  if (!Number.isFinite(number) || normalizeBrokerDecimal(number) !== canonical)
+    throw new BrokerProviderError("INVALID_REQUEST");
+  return number;
+}

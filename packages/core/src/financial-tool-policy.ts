@@ -20,7 +20,7 @@ export type FinancialToolDecision =
   | { decision: "ALLOW" }
   | {
       decision: "DENY";
-      code: "STRUCTURED_EXECUTION_REQUIRED" | "UNVERIFIED_CONNECTOR";
+      code: "STRUCTURED_EXECUTION_REQUIRED" | "UNVERIFIED_CONNECTOR" | "ACCOUNT_SCOPE_REQUIRED";
       reason: string;
     };
 
@@ -34,8 +34,21 @@ export function financialToolPolicy(input: {
   tradingProduct: boolean;
   toolName: string;
   viaConnector: boolean;
+  operation?: string;
+  accountReadsAllowed?: boolean;
 }): FinancialToolDecision {
   if (!input.tradingProduct) return { decision: "ALLOW" };
+  if (
+    input.toolName === "broker_read" &&
+    ["account", "positions", "orders", "preflight"].includes(input.operation ?? "") &&
+    input.accountReadsAllowed !== true
+  )
+    return {
+      decision: "DENY",
+      code: "ACCOUNT_SCOPE_REQUIRED",
+      reason:
+        "Account state is restricted to the Main Trading Agent. Research peers may inspect broker market data.",
+    };
   if (input.viaConnector)
     return {
       decision: "DENY",

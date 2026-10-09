@@ -275,6 +275,11 @@ export const BrokerReadCommandSchema = z.discriminatedUnion("operation", [
   z.strictObject({ ...instrumentRead, operation: z.literal("quote") }),
   z.strictObject({
     ...instrumentRead,
+    operation: z.literal("preflight"),
+    action: FinancialActionSchema,
+  }),
+  z.strictObject({
+    ...instrumentRead,
     operation: z.literal("candles"),
     timeframe: Reference,
     before: Timestamp.optional(),

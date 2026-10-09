@@ -410,6 +410,32 @@ export class BrokerConnectionSupervisor {
       where: { id: command.instrumentId, accountId: command.accountId, active: true },
     });
     if (!instrument) throw new BrokerProviderError("INVALID_REQUEST");
+    if (command.operation === "preflight") {
+      const action = command.action;
+      if (
+        action.accountId !== command.accountId ||
+        action.instrumentId !== instrument.id ||
+        action.brokerSymbol !== instrument.brokerSymbol ||
+        action.provider !== "metaapi" ||
+        !session.preflight
+      )
+        throw new BrokerProviderError("INVALID_REQUEST");
+      const facts = await session.preflight(action);
+      await withBrokerSessionFence(
+        this.prisma,
+        slot.token,
+        (tx) =>
+          tx.brokerInstrument.update({
+            where: { id: instrument.id },
+            data: {
+              verifiedAt: new Date(facts.specificationObservedAt),
+              revision: { increment: 1 },
+            },
+          }),
+        this.now(),
+      );
+      return z.json().parse(facts);
+    }
     if (command.operation === "specification") {
       const specification = await session.specification(instrument.brokerSymbol);
       await withBrokerSessionFence(

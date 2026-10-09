@@ -1,12 +1,19 @@
 /// <reference path="./metaapi-sdk.d.ts" />
 import type { BrokerEvent, BrokerProvider, BrokerReadSession } from "@rakazo/adapter-kit";
-import { TradingCapabilitiesSchema } from "@rakazo/contracts";
+import type { FinancialAction } from "@rakazo/contracts";
+import {
+  FinancialActionSchema,
+  FinancialRiskFactsSchema,
+  TradingCapabilitiesSchema,
+} from "@rakazo/contracts";
 import MetaApi, { SynchronizationListener } from "metaapi.cloud-sdk/esm-node";
 import { z } from "zod";
 import {
   BrokerProviderError,
+  brokerSdkNumber,
   METAAPI_TIMEFRAMES,
   normalizeAccount,
+  normalizeBrokerDecimal,
   normalizeCandles,
   normalizeOrders,
   normalizePositions,
@@ -25,6 +32,12 @@ export interface MetaApiRpcPort {
   getSymbols(): Promise<unknown>;
   getSymbolSpecification(symbol: string): Promise<unknown>;
   getSymbolPrice(symbol: string, keepSubscription: boolean): Promise<unknown>;
+  calculateMargin?(order: {
+    symbol: string;
+    type: "ORDER_TYPE_BUY" | "ORDER_TYPE_SELL";
+    volume: number;
+    openPrice: number;
+  }): Promise<unknown>;
   close(): Promise<unknown>;
 }
 export interface MetaApiStreamPort {
@@ -294,6 +307,106 @@ class MetaApiReadSession implements BrokerReadSession {
         this.now().toISOString(),
       ),
     );
+  }
+  preflight(rawAction: FinancialAction) {
+    return this.read(async () => {
+      const action = FinancialActionSchema.parse(rawAction);
+      if (action.accountId !== this.accountId || action.provider !== "metaapi")
+        throw new BrokerProviderError("INVALID_REQUEST");
+      const [information, positions, orders, rawSpec, rawPrice] = await Promise.all([
+        this.account(),
+        this.positions(),
+        this.orders(),
+        this.rpc.getSymbolSpecification(action.brokerSymbol),
+        this.rpc.getSymbolPrice(action.brokerSymbol, false),
+      ]);
+      const observedAt = this.now().toISOString();
+      const specification = normalizeSpecification(
+        rawSpec,
+        this.accountId,
+        action.brokerSymbol,
+        observedAt,
+      );
+      const quote = normalizeQuote(
+        rawPrice,
+        this.accountId,
+        action.brokerSymbol,
+        action.instrumentId,
+        observedAt,
+      );
+      const rawTick = z
+        .object({ lossTickValue: z.unknown().optional() })
+        .parse(rawPrice).lossTickValue;
+      const rawContract = z
+        .object({ contractSize: z.unknown().optional() })
+        .parse(rawSpec).contractSize;
+      let proposedMargin: string | null = null;
+      if (action.operation === "OPEN" || action.operation === "MODIFY_ORDER") {
+        if (this.rpc.calculateMargin) {
+          const order =
+            action.operation === "MODIFY_ORDER"
+              ? orders.find(
+                  (item) => item.id === action.orderId && item.symbol === action.brokerSymbol,
+                )
+              : undefined;
+          const side = action.operation === "OPEN" ? action.side : order?.side;
+          if (!side) throw new BrokerProviderError("INVALID_REQUEST");
+          const entry = action.price ?? (side === "BUY" ? quote.ask : quote.bid);
+          const calculated = z.object({ margin: z.unknown() }).parse(
+            await this.rpc.calculateMargin({
+              symbol: action.brokerSymbol,
+              type: side === "BUY" ? "ORDER_TYPE_BUY" : "ORDER_TYPE_SELL",
+              volume: brokerSdkNumber(action.volume),
+              openPrice: brokerSdkNumber(entry),
+            }),
+          );
+          proposedMargin = normalizeBrokerDecimal(calculated.margin);
+        }
+      } else proposedMargin = "0";
+      const side = action.operation === "OPEN" ? action.side : null;
+      const symbolTradingAllowed =
+        specification.tradeMode === "SYMBOL_TRADE_MODE_FULL" ||
+        (action.operation !== "OPEN" &&
+          specification.tradeMode === "SYMBOL_TRADE_MODE_CLOSEONLY") ||
+        (side === "BUY" && specification.tradeMode === "SYMBOL_TRADE_MODE_LONGONLY") ||
+        (side === "SELL" && specification.tradeMode === "SYMBOL_TRADE_MODE_SHORTONLY");
+      return FinancialRiskFactsSchema.parse({
+        version: 1,
+        accountId: this.accountId,
+        instrumentId: action.instrumentId,
+        brokerSymbol: action.brokerSymbol,
+        currency: information.currency,
+        connected: this.accountPort.connectionStatus === "CONNECTED",
+        tradingAllowed: information.tradingAllowed,
+        accountMode: information.accountMode,
+        observedAt: information.observedAt,
+        equity: information.equity,
+        freeMargin: information.freeMargin,
+        margin: information.margin,
+        quote,
+        tickSize: specification.tickSize,
+        lossTickValue: rawTick === undefined ? null : normalizeBrokerDecimal(rawTick),
+        contractSize: rawContract === undefined ? null : normalizeBrokerDecimal(rawContract),
+        profitCurrency: specification.quoteCurrency,
+        minVolume: specification.minVolume,
+        maxVolume: specification.maxVolume,
+        volumeStep: specification.volumeStep,
+        digits: specification.digits,
+        stopsLevel: specification.stopsLevel,
+        symbolTradingAllowed,
+        specificationObservedAt: specification.verifiedAt,
+        orderTypes: specification.orderTypes,
+        partialClose: information.accountMode === "HEDGING",
+        proposedMargin,
+        openPositions: positions.map(({ id, symbol, side, volume }) => ({
+          id,
+          symbol,
+          side,
+          volume,
+        })),
+        pendingOrders: orders.map(({ id, symbol, side, volume }) => ({ id, symbol, side, volume })),
+      });
+    });
   }
   candles(input: Parameters<BrokerReadSession["candles"]>[0]) {
     return this.read(async () => {

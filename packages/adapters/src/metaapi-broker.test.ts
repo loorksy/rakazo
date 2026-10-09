@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MetaApiBrokerProvider } from "./metaapi-broker.js";
 import {
   BrokerProviderError,
+  brokerSdkNumber,
   normalizeAccount,
   normalizeCandles,
   normalizeOrders,
@@ -26,6 +27,7 @@ const accountInfo = {
 };
 const quote = {
   symbol: "GOLD.a",
+  lossTickValue: 1,
   bid: 2674.3,
   ask: 2674.5,
   time: new Date(at),
@@ -43,6 +45,7 @@ const candle = {
 };
 const spec = {
   symbol: "GOLD.a",
+  contractSize: 100,
   tickSize: 0.01,
   minVolume: 0.01,
   maxVolume: 200,
@@ -65,6 +68,7 @@ function fixture() {
     getSymbols: vi.fn(async () => ["GOLD.a", "EURUSDm", "GOLD.a"]),
     getSymbolSpecification: vi.fn(async () => spec),
     getSymbolPrice: vi.fn(async () => quote),
+    calculateMargin: vi.fn(async () => ({ margin: 32.1, token: "sentinel-must-never-leak" })),
     close: vi.fn(async () => {}),
   };
   const stream = {
@@ -338,5 +342,71 @@ describe("provider numeric normalization", () => {
     expect(
       normalizeAccount({ ...accountInfo, balance: "9007199254740992", equity: "-1e-8" }, "a", at),
     ).toMatchObject({ balance: "9007199254740992", equity: "-0.00000001" });
+  });
+});
+
+describe("trusted broker risk preflight", () => {
+  const action = {
+    version: 1 as const,
+    mode: "SIMULATION" as const,
+    provider: "metaapi",
+    accountId: "local-account",
+    instrumentId: "gold",
+    brokerSymbol: "GOLD.a",
+    operation: "OPEN" as const,
+    side: "BUY" as const,
+    orderType: "MARKET" as const,
+    volume: "0.02",
+    price: null,
+    stopLimitPrice: null,
+    expiresAt: null,
+    fillingMode: null,
+    stopLoss: "2670",
+    takeProfit: "2680",
+  };
+  it("obtains independent margin and account-currency tick evidence without sending a trade", async () => {
+    const f = fixture();
+    const session = await f.connect();
+    if (!session.preflight) throw new Error("MetaApi preflight missing");
+    const facts = await session.preflight(action);
+    expect(f.rpc.calculateMargin).toHaveBeenCalledWith({
+      symbol: "GOLD.a",
+      type: "ORDER_TYPE_BUY",
+      volume: 0.02,
+      openPrice: 2674.5,
+    });
+    expect(facts).toMatchObject({
+      proposedMargin: "32.1",
+      lossTickValue: "1",
+      contractSize: "100",
+      currency: "USD",
+      openPositions: [],
+      pendingOrders: [],
+      accountMode: "HEDGING",
+      connected: true,
+    });
+    expect(JSON.stringify(facts)).not.toContain("sentinel-must-never-leak");
+    expect(Object.keys(f.rpc)).not.toContain("trade");
+    await session.close();
+  });
+  it("refuses account mismatch before provider reads and redacts SDK margin errors", async () => {
+    const f = fixture();
+    const session = await f.connect();
+    if (!session.preflight) throw new Error("MetaApi preflight missing");
+    await expect(session.preflight({ ...action, accountId: "foreign" })).rejects.toThrow(
+      "INVALID_REQUEST",
+    );
+    expect(f.rpc.calculateMargin).not.toHaveBeenCalled();
+    f.rpc.calculateMargin.mockRejectedValueOnce(
+      new Error("Authorization: sentinel-must-never-leak"),
+    );
+    await expect(session.preflight(action)).rejects.toThrow("UNAVAILABLE");
+    await session.close();
+  });
+  it("allows only financial numeric values whose SDK wire round trip preserves decimal text", () => {
+    expect(brokerSdkNumber("0.00000001")).toBe(1e-8);
+    expect(brokerSdkNumber("0.02")).toBe(0.02);
+    expect(() => brokerSdkNumber("9007199254740993")).toThrow();
+    expect(() => brokerSdkNumber("123456789012345678.123456789012")).toThrow();
   });
 });

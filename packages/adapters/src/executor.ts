@@ -79,6 +79,7 @@ import {
   isMessagingChannelRun,
   isOneShotRoutineCrons,
   isTerminal,
+  MAIN_TRADING_AGENT_SPAWN_KEY,
   messagingChannelId,
   messagingChannelPrivacyBlock,
   messagingDmSurfaceNote,
@@ -4207,6 +4208,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             tradingProduct: settings?.singleOwnerEnforced === true,
             toolName: name,
             viaConnector,
+            operation: typeof args.operation === "string" ? args.operation : undefined,
+            accountReadsAllowed:
+              bot.spawnKey === MAIN_TRADING_AGENT_SPAWN_KEY &&
+              bot.spaceId === settings?.ownerSpaceId,
           });
           if (financialBoundary.decision === "DENY") return { error: financialBoundary.reason };
 

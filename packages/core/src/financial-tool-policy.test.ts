@@ -51,6 +51,29 @@ describe("hard financial tool boundary", () => {
       financialToolPolicy({ tradingProduct: true, toolName, viaConnector: false }).decision,
     ).toBe("ALLOW");
   });
+  it.each(["account", "positions", "orders", "preflight"])(
+    "does not delegate %s authority to research peers",
+    (operation) => {
+      expect(
+        financialToolPolicy({
+          tradingProduct: true,
+          toolName: "broker_read",
+          viaConnector: false,
+          operation,
+          accountReadsAllowed: false,
+        }).decision,
+      ).toBe("DENY");
+      expect(
+        financialToolPolicy({
+          tradingProduct: true,
+          toolName: "broker_read",
+          viaConnector: false,
+          operation,
+          accountReadsAllowed: true,
+        }).decision,
+      ).toBe("ALLOW");
+    },
+  );
   it("preserves upstream product behavior outside the enforced trading deployment", () => {
     expect(
       financialToolPolicy({ tradingProduct: false, toolName: "shell", viaConnector: false })

@@ -1,4 +1,10 @@
-import type { BrokerCandle, BrokerQuote, TradingCapabilities } from "@rakazo/contracts";
+import type {
+  BrokerCandle,
+  BrokerQuote,
+  FinancialAction,
+  FinancialRiskFacts,
+  TradingCapabilities,
+} from "@rakazo/contracts";
 
 export interface BrokerAccountState {
   accountId: string;
@@ -89,6 +95,8 @@ export interface BrokerReadSession {
     before?: string;
     limit: number;
   }): Promise<BrokerCandle[]>;
+  /** Fresh read-only broker preflight; optional providers fail closed when unavailable. */
+  preflight?(action: FinancialAction): Promise<FinancialRiskFacts>;
   capabilities(): Promise<TradingCapabilities>;
   subscribe(
     symbols: Array<{ symbol: string; instrumentId: string }>,
