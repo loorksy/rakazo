@@ -21,6 +21,7 @@ import { getLogger } from "@rakazo/logging";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
+import { validateFinancialApproval } from "./financial-approval.js";
 import {
   assertRunCanWriteHistory,
   assertRunIsCancelled,
@@ -623,7 +624,8 @@ async function commitAnswerRunInput(
     ? LoginSecretValue.safeParse({ username: input.username!.trim(), password: input.answer })
     : undefined;
   if (login && !login.success) return null;
-  let approvalEffect: { id: string; kind: string } | null = null;
+  let approvalEffect: Prisma.ExternalEffectGetPayload<Record<never, never>> | null = null;
+  let financialApproval: Awaited<ReturnType<typeof validateFinancialApproval>> = null;
   let approvalUserId: string | null = null;
 
   if (approvalAsk) {
@@ -637,6 +639,21 @@ async function commitAnswerRunInput(
       },
     });
     if (!approvalEffect) return null;
+    if (approvalEffect.financialContext !== null && approvalEffect.financialContext !== undefined) {
+      if (run.userId !== input.answeredByUserId) return null;
+      financialApproval = await validateFinancialApproval(
+        tx,
+        approvalEffect,
+        {
+          userId: input.answeredByUserId,
+          botId: run.botId,
+          spaceId: input.spaceId,
+          answer: input.answer,
+        },
+        new Date(),
+      );
+      if (!financialApproval) return null;
+    }
     if (input.answer === "always") {
       if (run.userId !== input.answeredByUserId) return null;
       approvalUserId = input.answeredByUserId;
@@ -663,8 +680,35 @@ async function commitAnswerRunInput(
     const allowed = input.answer === "allow" || input.answer === "always";
     await tx.externalEffect.update({
       where: { id: approvalEffect!.id },
-      data: { status: allowed ? "approved" : "denied" },
+      data: {
+        status: allowed ? "approved" : "denied",
+        ...(financialApproval && allowed
+          ? {
+              financialApprovedByUserId: input.answeredByUserId,
+              financialApprovedAt: new Date(),
+            }
+          : {}),
+      },
     });
+    if (financialApproval)
+      await tx.financialJournal.create({
+        data: {
+          ownerUserId: financialApproval.ownerUserId,
+          accountId: financialApproval.accountId,
+          mode: financialApproval.mode,
+          effectId: approvalEffect!.id,
+          mandateId: financialApproval.authorizationId,
+          ...(financialApproval.version === 2
+            ? { goalId: financialApproval.goalId, planVersion: financialApproval.planVersion }
+            : {}),
+          event: allowed ? "APPROVED" : "DENIED",
+          entry: {
+            version: 1,
+            actionFingerprint: financialApproval.actionFingerprint,
+            resolvedByUserId: input.answeredByUserId,
+          },
+        },
+      });
     if (input.answer === "always") {
       await tx.actionApprovalRule.upsert({
         where: {

@@ -1,8 +1,39 @@
 import type { MessageBlock } from "@rakazo/contracts";
+import { FinancialActionSchema } from "@rakazo/contracts";
 import { redactSecrets } from "@rakazo/core";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
+
+/** A financial escalation grants this exact action once, never an always-allow tool rule. */
+export function buildFinancialApprovalAskBlock(
+  effectId: string,
+  rawAction: unknown,
+  secrets: string[],
+  reviewReason?: string,
+): MessageBlock {
+  const action = FinancialActionSchema.parse(rawAction);
+  const detail = [
+    reviewReason ? truncate(reviewReason, MAX_APPROVAL_SUMMARY_LENGTH) : undefined,
+    JSON.stringify(action, null, 2),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return {
+    kind: "ask",
+    approvalEffectId: effectId,
+    text: redactSecrets(
+      `Review ${action.mode.toLowerCase()} ${action.operation.toLowerCase().replaceAll("_", " ")} · ${action.brokerSymbol}`,
+      secrets,
+    ),
+    detail: redactSecrets(detail, secrets),
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Approve once" },
+      { id: "deny", label: "Deny" },
+    ],
+  };
+}
 
 export function buildApprovalAskBlock(
   effectId: string,

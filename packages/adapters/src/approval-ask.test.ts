@@ -1,7 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { buildApprovalAskBlock } from "./approval-ask.js";
+import { buildApprovalAskBlock, buildFinancialApprovalAskBlock } from "./approval-ask.js";
 
 describe("buildApprovalAskBlock", () => {
+  it("shows exact material financial terms and mode without offering blanket approval", () => {
+    const action = {
+      version: 1,
+      mode: "SIMULATION",
+      provider: "metaapi",
+      accountId: "fixture-account",
+      instrumentId: "gold",
+      brokerSymbol: "GOLD.a",
+      operation: "OPEN",
+      side: "BUY",
+      orderType: "LIMIT",
+      volume: "0.01",
+      price: "2000",
+      stopLimitPrice: null,
+      expiresAt: "2026-10-10T10:00:00Z",
+      fillingMode: null,
+      stopLoss: "1995",
+      takeProfit: "2010",
+    };
+    const block = buildFinancialApprovalAskBlock("effect", action, ["sentinel"], "Review sentinel");
+    expect(block).toMatchObject({
+      kind: "ask",
+      approvalEffectId: "effect",
+      actions: [
+        { id: "allow", label: "Approve once" },
+        { id: "deny", label: "Deny" },
+      ],
+    });
+    if (block.kind !== "ask") throw new Error("Expected financial ask");
+    expect(block.text).toContain("simulation");
+    expect(block.detail).toContain('"volume": "0.01"');
+    expect(block.detail).toContain('"stopLoss": "1995"');
+    expect(block.detail).toContain('"expiresAt": "2026-10-10T10:00:00Z"');
+    expect(JSON.stringify(block)).not.toContain("sentinel");
+  });
   it("binds the approval to its effect and redacts secrets", () => {
     const block = buildApprovalAskBlock(
       "effect-1",

@@ -36,3 +36,19 @@ This checkpoint provides lifecycle/admission safety, not a mutation adapter. LIV
 disabled pending the readiness gate. Simulation execution, owner escalation resolution,
 provider reconciliation and broker mutation dispatch are separate integration work; this
 module does not imply that any of those paths is enabled.
+
+## Owner escalation
+
+The existing chat `ask`/`answerRunInput` transaction resolves a financial escalation by
+effect ID. Financial validation checks the private owner/Main principal, originating
+conversation, exact immutable proposal/action/mandate fingerprints and unexpired effect.
+Only Approve once and Deny are supported; even an old card offering Always allow cannot
+create a financial tool rule. Approval stores the owner and timestamp and an immutable
+journal entry in the same transaction that queues the original Run. The model has no
+approval operation. A new execution generation must adopt the unstarted effect and recheck
+fresh facts/risk before STARTED; a human answer does not bypass emergency freeze or limits.
+
+`buildFinancialApprovalAskBlock` uses the final validated action to display all material
+parameters and explicit simulation/live mode without embedding credentials. The backend
+validates authorization independently of rendered card text. Database tests exercise
+owner approval, denial, wrong principal/conversation, blanket approval, expiry and reuse.

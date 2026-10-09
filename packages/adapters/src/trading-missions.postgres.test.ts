@@ -12,7 +12,7 @@ import {
   TradingMandateViewSchema,
   TradingPlanViewSchema,
 } from "@rakazo/contracts";
-import { createDb } from "@rakazo/db";
+import { answerRunInput, createDb } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChartActor } from "./cloud-charts.js";
 import { FinancialEffects } from "./financial-effects.js";
@@ -362,6 +362,144 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       };
       return { ...rows, previewed, effects, effect, reviewContext };
     }
+    async function financialAsk() {
+      const rows = await financialPrepared();
+      await rows.effects.review(
+        actor,
+        rows.effect.id,
+        new ScriptedAutoReviewProvider({ decision: "ask", model: "fixture" }),
+        rows.reviewContext,
+      );
+      await db.prisma.run.update({
+        where: { id: "claimed" },
+        data: { status: "waiting_input", leaseOwner: null, leaseExpiresAt: null },
+      });
+      const message = await db.prisma.message.create({
+        data: {
+          seq: 0,
+          threadId: "thread",
+          runId: "claimed",
+          botId: "main",
+          role: "bot",
+          blocks: [
+            {
+              kind: "ask",
+              approvalEffectId: rows.effect.id,
+              text: "Review exact financial action",
+              status: "pending",
+              actions: [
+                { id: "allow", label: "Approve" },
+                { id: "deny", label: "Deny" },
+                // Even an old/spoofed card cannot authorize a persistent financial allow rule.
+                { id: "always", label: "Always allow" },
+              ],
+            },
+          ],
+        },
+      });
+      return {
+        ...rows,
+        answer: {
+          spaceId: "space",
+          threadId: "thread",
+          runId: "claimed",
+          messageId: message.id,
+          answeredByUserId: owner,
+          answer: "allow",
+        },
+      };
+    }
+    it("binds owner approval to the exact financial effect, rejects reuse and resumes under a new fence", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(now);
+      try {
+        const rows = await financialAsk();
+        expect(await answerRunInput(db.prisma, rows.answer)).toBe(true);
+        const receipt = await db.prisma.externalEffect.findUniqueOrThrow({
+          where: { id: rows.effect.id },
+        });
+        expect(receipt).toMatchObject({
+          status: "approved",
+          financialApprovedByUserId: owner,
+          financialApprovedAt: now,
+          reviewDecision: "ask",
+        });
+        expect(await answerRunInput(db.prisma, rows.answer)).toBe(false);
+        expect(await db.prisma.actionApprovalRule.count()).toBe(0);
+        expect(
+          await db.prisma.financialJournal.count({
+            where: { effectId: rows.effect.id, event: "APPROVED" },
+          }),
+        ).toBe(1);
+        await db.prisma.run.update({
+          where: { id: "claimed" },
+          data: {
+            status: "running",
+            leaseOwner: "worker-b",
+            leaseFence: 2,
+            leaseExpiresAt: new Date(now.getTime() + 60000),
+          },
+        });
+        const current = {
+          ...actor,
+          execution: { runId: "claimed", holder: "worker-b", generation: 2 },
+        };
+        await rows.effects.prepare(
+          current,
+          rows.proposal.id,
+          rows.previewed.preview?.id ?? "missing",
+        );
+        expect((await rows.effects.begin(current, rows.effect.id, facts)).status).toBe("executing");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+    it("rejects wrong-principal, wrong-conversation, blanket and expired financial approvals", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(now);
+      try {
+        const rows = await financialAsk();
+        for (const answer of [
+          { ...rows.answer, answeredByUserId: "peer" },
+          { ...rows.answer, threadId: "other" },
+          { ...rows.answer, spaceId: "other" },
+          { ...rows.answer, answer: "always" },
+        ])
+          expect(await answerRunInput(db.prisma, answer)).toBe(false);
+        expect((await db.prisma.run.findUniqueOrThrow({ where: { id: "claimed" } })).status).toBe(
+          "waiting_input",
+        );
+        vi.setSystemTime(new Date(now.getTime() + 600001));
+        expect(await answerRunInput(db.prisma, rows.answer)).toBe(false);
+        expect(
+          (await db.prisma.externalEffect.findUniqueOrThrow({ where: { id: rows.effect.id } }))
+            .status,
+        ).toBe("intended");
+        expect(await db.prisma.actionApprovalRule.count()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+    it("owner denial persists a terminal receipt without authorizing execution", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(now);
+      try {
+        const rows = await financialAsk();
+        expect(await answerRunInput(db.prisma, { ...rows.answer, answer: "deny" })).toBe(true);
+        expect(
+          (await db.prisma.externalEffect.findUniqueOrThrow({ where: { id: rows.effect.id } }))
+            .status,
+        ).toBe("denied");
+        expect(await db.prisma.tradingRiskReservation.count()).toBe(0);
+        expect(
+          await db.prisma.financialJournal.count({
+            where: { effectId: rows.effect.id, event: "DENIED" },
+          }),
+        ).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
     it("uses one stable underscored client/effect identity and requires independent review before STARTED", async () => {
       const { effects, effect, proposal, previewed } = await financialPrepared();
       expect(effect.financialContext).toMatchObject({
