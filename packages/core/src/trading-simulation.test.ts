@@ -1,6 +1,11 @@
 import type { FinancialAction, FinancialRiskFacts, SimulationBookState } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { applySimulationAction, simulationPnl, valueSimulationBook } from "./trading-simulation.js";
+import {
+  applySimulationAction,
+  observeSimulationMarket,
+  simulationPnl,
+  valueSimulationBook,
+} from "./trading-simulation.js";
 
 const now = new Date("2026-10-09T10:00:00Z");
 const action: FinancialAction = {
@@ -282,5 +287,123 @@ describe("deterministic simulation provider calculations", () => {
         "0.5",
       ),
     ).toBe("-0.000000000001");
+  });
+});
+
+describe("trusted simulation market observation", () => {
+  const observe = (state: SimulationBookState, bid: string, ask: string, time = now) =>
+    observeSimulationMarket({
+      state,
+      now: time,
+      quote: {
+        ...facts.quote,
+        bid,
+        ask,
+        sourceTime: time.toISOString(),
+        receivedAt: time.toISOString(),
+      },
+    });
+  it.each([
+    ["BUY", "LIMIT", "2699", "2698.9", "2699"],
+    ["SELL", "LIMIT", "2701", "2701", "2701.1"],
+    ["BUY", "STOP", "2701", "2700.9", "2701"],
+    ["SELL", "STOP", "2699", "2699", "2699.1"],
+  ] as const)(
+    "fills %s %s on the correct spread side and only once",
+    (side, orderType, price, bid, ask) => {
+      const order = apply(empty, {
+        ...action,
+        side,
+        orderType,
+        price,
+        stopLoss: side === "BUY" ? "2690" : "2710",
+        takeProfit: side === "BUY" ? "2720" : "2680",
+        expiresAt: "2026-10-09T12:00:00Z",
+      }).state;
+      const filled = observe(order, bid, ask);
+      expect(filled.events).toMatchObject([
+        { type: "ORDER_FILLED", targetId: "sim_open", originEffectId: "open" },
+      ]);
+      expect(filled.state.positions[0]).toMatchObject({
+        entry: side === "BUY" ? ask : bid,
+        mandateId: "mission",
+      });
+      expect(filled.state.orders).toEqual([]);
+      expect(observe(filled.state, bid, ask).events).toEqual([]);
+      expect(order.positions).toEqual([]);
+    },
+  );
+  it("does not fill on the opposite side of the spread or another symbol", () => {
+    const order = apply(empty, {
+      ...action,
+      orderType: "LIMIT",
+      price: "2699",
+      expiresAt: "2026-10-09T12:00:00Z",
+    }).state;
+    expect(observe(order, "2698.9", "2699.1").events).toEqual([]);
+    expect(
+      observeSimulationMarket({
+        state: order,
+        now,
+        quote: { ...facts.quote, instrumentId: "other", bid: "2698", ask: "2698.1" },
+      }).events,
+    ).toEqual([]);
+  });
+  it("expires without any price or model and expiry wins over a possible fill", () => {
+    const state = apply(empty, {
+      ...action,
+      orderType: "LIMIT",
+      price: "2699",
+      expiresAt: "2026-10-09T12:00:00Z",
+    }).state;
+    const expired = observeSimulationMarket({ state, now: new Date("2026-10-09T12:00:00Z") });
+    expect(expired.events).toMatchObject([{ type: "ORDER_EXPIRED", price: null, pnl: null }]);
+    expect(expired.state.orders).toEqual([]);
+    expect(observe(state, "2698", "2698.1", new Date("2026-10-09T12:00:00Z")).events).toMatchObject(
+      [{ type: "ORDER_EXPIRED" }],
+    );
+  });
+  it.each([
+    ["BUY", "2693", "2693.1", "STOP_LOSS", "-14.2"],
+    ["BUY", "2712", "2712.1", "TAKE_PROFIT", "23.8"],
+    ["SELL", "2706.9", "2707", "STOP_LOSS", "-14"],
+    ["SELL", "2687.9", "2688", "TAKE_PROFIT", "24"],
+  ] as const)("closes %s at actual gap/spread quote for %s/%s", (side, bid, ask, type, pnl) => {
+    const state = apply(empty, {
+      ...action,
+      side,
+      stopLoss: side === "BUY" ? "2695" : "2705",
+      takeProfit: side === "BUY" ? "2710" : "2690",
+    }).state;
+    const result = observe(state, bid, ask);
+    expect(result.events).toMatchObject([{ type, pnl, price: side === "BUY" ? bid : ask }]);
+    expect(result.state.positions).toEqual([]);
+    expect(result.state.performance[0]?.realized).toBe(pnl);
+    expect(observe(result.state, bid, ask).events).toEqual([]);
+  });
+  it("can stop a newly filled order in the same gapping observation", () => {
+    const state = apply(empty, {
+      ...action,
+      orderType: "LIMIT",
+      price: "2699",
+      expiresAt: "2026-10-09T12:00:00Z",
+    }).state;
+    const result = observe(state, "2690", "2690.1");
+    expect(result.events.map((event) => event.type)).toEqual(["ORDER_FILLED", "STOP_LOSS"]);
+    expect(result.state.positions).toEqual([]);
+    expect(result.state.balance).toBe("9999.8");
+  });
+  it("rejects stale/foreign observations and ignores ticks before an object was modified", () => {
+    const state = apply().state;
+    expect(() =>
+      observeSimulationMarket({ state, now, quote: { ...facts.quote, accountId: "foreign" } }),
+    ).toThrow("IDENTITY_MISMATCH");
+    expect(() =>
+      observeSimulationMarket({ state, now: new Date(now.getTime() + 16000), quote: facts.quote }),
+    ).toThrow("STALE_QUOTE");
+    const first = state.positions[0];
+    if (!first) throw new Error("Fixture position required");
+    first.updatedAt = new Date(now.getTime() + 1000).toISOString();
+    expect(observe(state, "2680", "2680.1").events).toEqual([]);
   });
 });

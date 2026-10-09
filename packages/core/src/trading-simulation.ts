@@ -4,6 +4,7 @@ import type {
   FinancialEffectOutcome,
   FinancialRiskFacts,
   SimulationBookState,
+  SimulationMarketEvent,
   SimulationPosition,
 } from "@rakazo/contracts";
 import {
@@ -249,4 +250,94 @@ export function valueSimulationBook(raw: SimulationBookState, quotes: BrokerQuot
   }
   const equity = u(state.balance) + pnl;
   return { equity: d(equity), margin: d(margin), freeMargin: d(equity - margin), unrealized };
+}
+
+/** One trusted tick. Prices include spread and gaps; stops are not guaranteed execution prices. */
+export function observeSimulationMarket(input: {
+  state: SimulationBookState;
+  quote?: BrokerQuote;
+  now: Date;
+}): { state: SimulationBookState; events: SimulationMarketEvent[] } {
+  const state = SimulationBookStateSchema.parse(input.state);
+  const { now } = input;
+  requireSimulation(Number.isFinite(now.getTime()), "SIMULATION_INVALID_TIME");
+  const quote = input.quote ? BrokerQuoteSchema.parse(input.quote) : undefined;
+  if (quote) {
+    requireSimulation(quote.accountId === state.accountId, "SIMULATION_IDENTITY_MISMATCH");
+    freshQuote(quote, now);
+  }
+  const events: SimulationMarketEvent[] = [];
+  const time = now.toISOString();
+  const event = (
+    target: SimulationPosition,
+    type: SimulationMarketEvent["type"],
+    price: string | null,
+    pnl: string | null,
+  ) => {
+    events.push({
+      version: 1,
+      type,
+      targetId: target.id,
+      originEffectId: target.originEffectId,
+      mandateId: target.mandateId,
+      goalId: target.goalId,
+      planVersion: target.planVersion,
+      instrumentId: target.instrumentId,
+      brokerSymbol: target.brokerSymbol,
+      price,
+      pnl,
+      sourceTime: type === "ORDER_EXPIRED" ? time : (quote?.sourceTime ?? time),
+    });
+  };
+  const matches = (target: SimulationPosition) =>
+    quote &&
+    target.instrumentId === quote.instrumentId &&
+    target.brokerSymbol === quote.brokerSymbol &&
+    // An observation from before an edit cannot fill or close the edited object.
+    Date.parse(quote.sourceTime) >= Date.parse(target.updatedAt);
+  for (const order of [...state.orders]) {
+    if (Date.parse(order.expiresAt) <= now.getTime()) {
+      state.orders = state.orders.filter((row) => row.id !== order.id);
+      event(order, "ORDER_EXPIRED", null, null);
+      continue;
+    }
+    if (!quote || !matches(order)) continue;
+    const price = order.side === "BUY" ? quote.ask : quote.bid;
+    const below = u(price) <= u(order.entry);
+    const above = u(price) >= u(order.entry);
+    const fill =
+      order.orderType === "LIMIT"
+        ? order.side === "BUY"
+          ? below
+          : above
+        : order.side === "BUY"
+          ? above
+          : below;
+    if (!fill) continue;
+    const { orderType: _type, expiresAt: _expiry, ...position } = order;
+    state.orders = state.orders.filter((row) => row.id !== order.id);
+    state.positions.push({ ...position, entry: price, updatedAt: quote.sourceTime });
+    event(order, "ORDER_FILLED", price, null);
+  }
+  if (quote)
+    for (const position of [...state.positions]) {
+      if (!matches(position)) continue;
+      const price = position.side === "BUY" ? quote.bid : quote.ask;
+      const stop =
+        position.stopLoss !== null &&
+        (position.side === "BUY"
+          ? u(price) <= u(position.stopLoss)
+          : u(price) >= u(position.stopLoss));
+      const profit =
+        position.takeProfit !== null &&
+        (position.side === "BUY"
+          ? u(price) >= u(position.takeProfit)
+          : u(price) <= u(position.takeProfit));
+      if (!stop && !profit) continue;
+      const pnl = simulationPnl(position, price);
+      realize(state, position, pnl, now);
+      state.positions = state.positions.filter((row) => row.id !== position.id);
+      event(position, stop ? "STOP_LOSS" : "TAKE_PROFIT", price, pnl);
+    }
+  return { state: SimulationBookStateSchema.parse(state), events };
 }

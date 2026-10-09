@@ -59,3 +59,20 @@ export const SimulationBookStateSchema = z
       context.addIssue({ code: "custom", message: "Simulation identities must be unique" });
   });
 export type SimulationBookState = z.infer<typeof SimulationBookStateSchema>;
+
+/** Provider observations, not new model instructions or broker mutations. */
+export const SimulationMarketEventSchema = z.strictObject({
+  version: z.literal(1),
+  type: z.enum(["ORDER_FILLED", "ORDER_EXPIRED", "STOP_LOSS", "TAKE_PROFIT"]),
+  targetId: Id,
+  originEffectId: Id,
+  mandateId: Id,
+  goalId: Id,
+  planVersion: z.number().int().positive(),
+  instrumentId: Id,
+  brokerSymbol: Id,
+  price: PositiveTradingDecimalSchema.nullable(),
+  pnl: SignedTradingDecimalSchema.nullable(),
+  sourceTime: Time,
+});
+export type SimulationMarketEvent = z.infer<typeof SimulationMarketEventSchema>;
