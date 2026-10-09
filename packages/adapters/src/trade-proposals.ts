@@ -10,6 +10,7 @@ import {
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
 import {
+  accountRiskCapacity,
   assessFinancialAction,
   financialDecimal,
   financialUnits,
@@ -312,15 +313,23 @@ export class TradeProposals {
         Date.parse(goal.endsAt) <= this.now().getTime()
       )
         risk = { decision: "DENY", code: "GOAL_WINDOW_INACTIVE" };
-      if (
-        risk.decision === "ALLOW" &&
-        limits &&
-        (sum(reservations, "risk") + financialUnits(risk.incrementalRisk) >
-          financialUnits(limits.maxReservedRisk) ||
-          sum(reservations, "exposure") + financialUnits(risk.notional) >
-            financialUnits(limits.maxExposure))
-      )
-        risk = { decision: "DENY", code: "ACCOUNT_CAPACITY_EXCEEDED" };
+      if (risk.decision === "ALLOW" && limits) {
+        const code = accountRiskCapacity({
+          action,
+          mandateId: mandate.id,
+          envelope,
+          limits,
+          facts,
+          assessment: risk,
+          reservations: reservations.map((r) => ({
+            ...r,
+            risk: r.risk.toFixed(),
+            exposure: r.exposure.toFixed(),
+            margin: r.margin.toFixed(),
+          })),
+        });
+        if (code) risk = { decision: "DENY", code };
+      }
       const preview = await tx.tradePreview.create({
         data: {
           proposalId: row.id,

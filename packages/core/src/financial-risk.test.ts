@@ -1,4 +1,5 @@
 import type {
+  AccountRiskGuardrails,
   FinancialAction,
   FinancialRiskFacts,
   FinancialRiskState,
@@ -6,6 +7,8 @@ import type {
   TradingMandateEnvelope,
 } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
+import type { RiskCapacityReservation } from "./account-risk-capacity.js";
+import { accountRiskCapacity } from "./account-risk-capacity.js";
 import { financialCeil, financialDecimal, financialUnits } from "./financial-decimal.js";
 import { assessFinancialAction } from "./financial-risk.js";
 import { tradingMandateFingerprint } from "./node/financial-action.js";
@@ -120,6 +123,131 @@ const state: FinancialRiskState = {
 };
 const assess = (patch: Partial<Parameters<typeof assessFinancialAction>[0]> = {}) =>
   assessFinancialAction({ action, envelope, facts, state, now, ...patch });
+
+describe("shared deterministic account reservation capacity", () => {
+  const limits: AccountRiskGuardrails = {
+    version: 1,
+    accountId: "account",
+    mode: "SIMULATION",
+    maxReservedRisk: "100",
+    maxExposure: "100000",
+    maxPendingExposure: "100000",
+    maxActiveMandates: 5,
+    maxDrawdown: null,
+    maxMarginUsagePercent: "50",
+    autonomousEnabled: true,
+    frozen: false,
+    revision: 1,
+  };
+  const reservation: RiskCapacityReservation = {
+    mandateId: "mission",
+    risk: "1",
+    exposure: "100",
+    margin: "20",
+    kind: "POSITION",
+    status: "RESERVED",
+  };
+  const capacity = (patch: Partial<Parameters<typeof accountRiskCapacity>[0]> = {}) =>
+    accountRiskCapacity({
+      mandateId: "mission",
+      action,
+      envelope,
+      limits,
+      facts,
+      assessment: assess(),
+      reservations: [],
+      ...patch,
+    });
+  it("allows only remaining protected account capacity", () => {
+    expect(capacity()).toBeNull();
+    expect(capacity({ reservations: [{ ...reservation, mandateId: "another", risk: "99" }] })).toBe(
+      "ACCOUNT_RESERVED_RISK_LIMIT",
+    );
+  });
+  it("treats allocated capital as a hard aggregate mission margin budget", () => {
+    expect(
+      capacity({
+        envelope: { ...envelope, allocatedCapital: "49.999999999999" },
+        reservations: [reservation],
+      }),
+    ).toBe("MISSION_ALLOCATED_CAPITAL_LIMIT");
+    expect(
+      capacity({ envelope: { ...envelope, allocatedCapital: "50" }, reservations: [reservation] }),
+    ).toBeNull();
+  });
+  it("does not spend another mission's margin allocation", () => {
+    expect(
+      capacity({
+        envelope: { ...envelope, allocatedCapital: "30" },
+        reservations: [{ ...reservation, mandateId: "another" }],
+      }),
+    ).toBeNull();
+  });
+  it.each(["RESERVED", "COMMITTED", "UNCERTAIN"])(
+    "counts %s pending margin even when the broker reports no used margin for it",
+    (status) => {
+      expect(
+        capacity({
+          reservations: [
+            { ...reservation, mandateId: "another", kind: "PENDING", status, margin: "4500" },
+          ],
+        }),
+      ).toBe("ACCOUNT_RESERVED_MARGIN_LIMIT");
+    },
+  );
+  it("uses the stricter mandate percentage for pending reservations", () => {
+    expect(
+      capacity({
+        envelope: { ...envelope, maxMarginUsagePercent: "6" },
+        reservations: [{ ...reservation, margin: "80" }],
+      }),
+    ).toBe("ACCOUNT_RESERVED_MARGIN_LIMIT");
+  });
+  it("counts proposed pending exposure rather than checking only old pending orders", () => {
+    expect(
+      capacity({
+        action: { ...action, orderType: "LIMIT", price: "2699", expiresAt: "2026-10-09T11:00:00Z" },
+        limits: { ...limits, maxPendingExposure: "5400" },
+      }),
+    ).toBe("ACCOUNT_PENDING_EXPOSURE_LIMIT");
+  });
+  it("rejects malformed, negative and mixed-mode accounting", () => {
+    expect(capacity({ reservations: [{ ...reservation, margin: "-1" }] })).toBe(
+      "INVALID_CAPACITY_INPUT",
+    );
+    expect(capacity({ limits: { ...limits, mode: "LIVE" } })).toBe("CAPACITY_IDENTITY_MISMATCH");
+  });
+  it("rejects excess exposure across other missions", () => {
+    expect(
+      capacity({ reservations: [{ ...reservation, mandateId: "another", exposure: "99999" }] }),
+    ).toBe("ACCOUNT_EXPOSURE_LIMIT");
+  });
+  it("leaves validated risk reduction available when existing reservations exceed ceilings", () => {
+    const close: FinancialAction = {
+      version: 1,
+      mode: "SIMULATION",
+      provider: "metaapi",
+      accountId: "account",
+      instrumentId: "gold",
+      brokerSymbol: "GOLD.a",
+      operation: "CLOSE_POSITION",
+      positionId: "position",
+      volume: null,
+    };
+    const assessment = assess({
+      action: close,
+      target,
+    });
+    expect(assessment.decision).toBe("ALLOW");
+    expect(
+      capacity({
+        assessment,
+        action: close,
+        reservations: [{ ...reservation, risk: "1000", exposure: "1000000", margin: "100000" }],
+      }),
+    ).toBeNull();
+  });
+});
 const target: FinancialRiskTarget = {
   id: "position",
   kind: "POSITION",

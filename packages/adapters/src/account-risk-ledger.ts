@@ -7,8 +7,8 @@ import {
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
 import {
+  accountRiskCapacity,
   assessFinancialAction,
-  FINANCIAL_SCALE,
   financialDecimal,
   financialUnits,
   MAIN_TRADING_AGENT_SPAWN_KEY,
@@ -247,42 +247,22 @@ export class AccountRiskLedger {
       },
     });
     if (assessment.decision !== "ALLOW") throw new Error(`Risk denied: ${assessment.code}`);
-    if (
-      sum(reservations, "risk") + financialUnits(assessment.incrementalRisk) >
-      financialUnits(limits.maxReservedRisk)
-    )
-      throw new Error("Account reserved risk limit reached");
-    if (
-      sum(reservations, "exposure") + financialUnits(assessment.notional) >
-      financialUnits(limits.maxExposure)
-    )
-      throw new Error("Account exposure limit reached");
-    const pendingMargins = reservations
-      .filter((row) => row.status !== "COMMITTED")
-      .reduce((total, row) => total + financialUnits(row.margin.toFixed()), 0n);
-    const marginLimit = financialUnits(
-      limits.maxMarginUsagePercent ?? envelope.maxMarginUsagePercent,
-    );
-    if (
-      marginLimit > 100n * FINANCIAL_SCALE ||
-      (financialUnits(facts.margin) + pendingMargins + financialUnits(assessment.margin)) *
-        100n *
-        FINANCIAL_SCALE >
-        financialUnits(facts.equity) * marginLimit ||
-      pendingMargins + financialUnits(assessment.margin) > financialUnits(facts.freeMargin)
-    )
-      throw new Error("Account reserved margin limit reached");
+    const capacity = accountRiskCapacity({
+      action,
+      mandateId: mandate.id,
+      envelope,
+      limits,
+      facts,
+      assessment,
+      reservations: reservations.map((row) => ({
+        ...row,
+        risk: row.risk.toFixed(),
+        exposure: row.exposure.toFixed(),
+        margin: row.margin.toFixed(),
+      })),
+    });
+    if (capacity) throw new Error(`Account capacity denied: ${capacity}`);
     const pending = action.orderType !== "MARKET";
-    if (
-      pending &&
-      sum(
-        reservations.filter((row) => row.kind === "PENDING"),
-        "exposure",
-      ) +
-        financialUnits(assessment.notional) >
-        financialUnits(limits.maxPendingExposure)
-    )
-      throw new Error("Account pending exposure limit reached");
     const reservationData = {
       ownerUserId: actor.ownerUserId,
       accountId: account.id,

@@ -326,6 +326,13 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
     expect(rows[0]?.risk.toFixed()).toBe("11.2");
     expect(await db.prisma.financialJournal.count({ where: { event: "RISK_RESERVED" } })).toBe(1);
   });
+  it("rejects an action beyond its allocated mission margin without consuming account capacity", async () => {
+    const a = await claimed("limited-margin", { allocatedCapital: "29" });
+    await expect(ledger().reserve(a.actor, a.effect.id, a.mandateId, facts)).rejects.toThrow(
+      "MISSION_ALLOCATED_CAPITAL_LIMIT",
+    );
+    expect(await db.prisma.tradingRiskReservation.count()).toBe(0);
+  });
   it("deduplicates identical reservations but never accepts a stale execution after takeover", async () => {
     const a = await claimed("mission-a");
     const first = await ledger().reserve(a.actor, a.effect.id, a.mandateId, facts);
@@ -397,7 +404,7 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
       data: { status: "UNCERTAIN" },
     });
     await expect(ledger().reserve(b.actor, b.effect.id, b.mandateId, facts)).rejects.toThrow(
-      "reserved risk",
+      "ACCOUNT_RESERVED_RISK_LIMIT",
     );
   });
   it("blocks new risk under account freeze and ambiguous account state", async () => {
