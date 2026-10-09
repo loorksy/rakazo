@@ -1530,3 +1530,32 @@ model ChartIndicatorDefinition {
   @@index([ownerUserId, definitionHash])
   @@map("chart_indicator_definitions")
 }
+
+// Durable observation and wake identity survive conversation/Bot deletion.
+model MarketWatch {
+  creationKey      String   @unique
+  id               String   @id @default(cuid())
+  formatVersion    Int      @default(1)
+  ownerUserId      String
+  botId            String
+  accountId        String
+  instrumentId     String
+  condition        Json
+  summary          String
+  status           String   @default("ACTIVE")
+  revision         Int      @default(1)
+  wakeGeneration   Int      @default(0)
+  lastValue        String?
+  lastSourceTime   DateTime?
+  pendingEvidence  Json?
+  triggeredRunId   String?
+  wakeCompletedAt  DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([accountId, status, expiresAt])
+  @@index([ownerUserId, botId])
+  @@index([triggeredRunId])
+  @@map("market_watches")
+}

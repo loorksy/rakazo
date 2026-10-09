@@ -71,3 +71,18 @@ imports, per-object authority/revisions and native plot projection are implement
 The combined chart/indicator gate passes 85 tests, including 17 PostgreSQL cases.
 KLine lifecycle patch correction is verified against the installed package and production
 build; the final patch uses contextual ESM hunks and local type augmentation.
+
+## Price-condition and image-delivery checkpoint
+
+Chart-only deterministic PNG rendering, real owner-scoped image attachments, mobile
+contextual chart fallback, bounded indicator/evidence calculations and provider decimal
+precision hardening are implemented. Protected expiring price-condition watches now
+share the existing Worker account sessions and Task/Run delivery; stream crossings are
+captured before coalescing. There is no per-quote model call or second scheduler.
+
+The focused PostgreSQL/observer/render gate passes 68 tests across four files, including
+actual process death, stale provider/Run ownership, duplicate wakes, session deletion,
+completion receipts and a real simulated SDK stream's brief crossing. Seven application
+package type checks pass. Migrations 007/008 apply to fixture PostgreSQL; chart and broker
+fixture databases have 104 migrations. Financial policy/risk/simulation/mandates/live
+execution and readiness are still unfinished. This checkpoint is not product completion.

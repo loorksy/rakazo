@@ -264,6 +264,7 @@ import {
   CATALOG_EXECUTE,
   uniquifyInstalledToolName,
 } from "./lazy-tool-catalog.js";
+import { MarketWatches } from "./market-watches.js";
 import {
   buildMcpCredentialBlob,
   needsOAuthProbe,
@@ -5140,6 +5141,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
+          }
+          if (name === "market_watch") {
+            try {
+              return finish(
+                await new MarketWatches(deps.prisma).command(
+                  {
+                    ownerUserId: run.userId,
+                    botId: run.botId,
+                    execution: { runId, holder: workerId, generation: fence },
+                  },
+                  args,
+                  runScopedToolExecutionId(runId, executionId),
+                ),
+              );
+            } catch (error) {
+              return finish({
+                error:
+                  error instanceof ChartConflictError
+                    ? error.message
+                    : "Market watch unavailable; choose verified account/instrument IDs and a future expiry",
+              });
+            }
           }
           if (name === "chart_inspect") {
             try {

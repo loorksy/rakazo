@@ -46,6 +46,7 @@ export function chartScene(raw: ChartEvidence) {
   const times = candles.map((c) => Date.parse(c.openTime));
   if (times.some((t, i) => i > 0 && t <= (times[i - 1] ?? t)))
     throw new Error("Chart scene time order");
+  const timeIndexes = new Map(times.map((time, index) => [time, index]));
   const palette = tokensForAppearance(chart.state.preferences.theme);
   const indicators = chart.state.indicators.filter((i) => i.visible);
   const panes = indicators.filter((i) => i.pane === "SEPARATE");
@@ -72,6 +73,8 @@ export function chartScene(raw: ChartEvidence) {
   const xIndex = (i: number) => LEFT + (i + 0.5) * step;
   const xTime = (time: string) => {
     const t = Date.parse(time);
+    const exact = timeIndexes.get(t);
+    if (exact !== undefined) return xIndex(exact);
     if (!times.length) return LEFT;
     const index = times.findIndex((value) => value >= t);
     const edgeSpacing = times.length > 1 ? (times[1] ?? t) - (times[0] ?? t) : 3600000;
@@ -86,13 +89,13 @@ export function chartScene(raw: ChartEvidence) {
     for (const out of result?.outputs ?? [])
       out.values.forEach((v, i) => {
         const t = out.anchorTimes[i] ?? result?.times[i];
-        if (v !== null && t && times.includes(Date.parse(t)) && out.type !== "state")
+        if (v !== null && t && timeIndexes.has(Date.parse(t)) && out.type !== "state")
           priceValues.push(v);
       });
   }
   const bounds = (values: number[]) => {
-    const low = values.length ? Math.min(...values) : 0;
-    const high = values.length ? Math.max(...values) : 1;
+    const low = values.length ? values.reduce((a, b) => Math.min(a, b), Infinity) : 0;
+    const high = values.length ? values.reduce((a, b) => Math.max(a, b), -Infinity) : 1;
     const pad = Math.max((high - low) * 0.08, Math.abs(high) * 0.000001, 0.000001);
     return { low: low - pad, high: high + pad };
   };
@@ -222,7 +225,12 @@ export function chartScene(raw: ChartEvidence) {
     const paneTop = PRICE_HEIGHT + Math.max(0, paneIndex) * PANE_HEIGHT;
     const values = result.outputs
       .filter((o) => o.type !== "state")
-      .flatMap((o) => o.values.filter((v): v is number => v !== null));
+      .flatMap((o) =>
+        o.values.filter((v, index): v is number => {
+          const time = o.anchorTimes[index] ?? result.times[index];
+          return v !== null && !!time && timeIndexes.has(Date.parse(time));
+        }),
+      );
     const range = bounds([...values, 0]);
     const y =
       instance.pane === "PRICE"
@@ -240,7 +248,7 @@ export function chartScene(raw: ChartEvidence) {
       let previous: { x: number; y: number } | undefined;
       out.values.forEach((v, i) => {
         const t = out.anchorTimes[i] ?? result.times[i];
-        if (v === null || !t || !times.includes(Date.parse(t))) {
+        if (v === null || !t || !timeIndexes.has(Date.parse(t))) {
           previous = undefined;
           return;
         }

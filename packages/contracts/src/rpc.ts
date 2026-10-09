@@ -98,6 +98,7 @@ import {
   IntegrationProviderConfigSchema,
   IntegrationSetupStateSchema,
 } from "./integration-settings.js";
+import { MarketWatchCommandSchema, MarketWatchSchema } from "./market-watch.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RoutineHistorySchema, RoutineRunCursorSchema, RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
@@ -171,6 +172,9 @@ const spaceName = z.string().trim().min(1).max(60);
 
 export const appContract = {
   trading: {
+    watches: oc
+      .input(MarketWatchCommandSchema)
+      .output(z.union([MarketWatchSchema, z.array(MarketWatchSchema).max(1000)])),
     chartRender: oc.input(z.object({ chartId: Id })).output(ChartRenderResponseSchema),
     chartEvidence: oc.input(z.object({ chartId: Id })).output(ChartEvidenceSchema),
     indicators: oc.input(IndicatorRegistryCommandSchema).output(IndicatorRegistryResponseSchema),

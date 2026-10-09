@@ -88,13 +88,6 @@ async function main() {
   const events = createThreadEvents(prisma, realtime, {
     runSecretWriter: createRunSecretWriter(secrets),
   });
-  const brokerSupervisor = new BrokerConnectionSupervisor(
-    prisma,
-    secrets,
-    new MetaApiBrokerProvider(),
-    realtime,
-  );
-  brokerSupervisor.start();
   const dataDir = process.env.DATA_DIR ?? "./data";
   const runtime =
     process.env.AGENT_RUNTIME === "scripted"
@@ -172,6 +165,15 @@ async function main() {
   const artifacts = new LocalArtifactStore(dataDir);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
   const jobs: JobPublisher = inMemoryJobs ?? new GraphileJobPublisher(pool);
+  const brokerSupervisor = new BrokerConnectionSupervisor(
+    prisma,
+    secrets,
+    new MetaApiBrokerProvider(),
+    realtime,
+    undefined,
+    jobs,
+  );
+  brokerSupervisor.start();
   const jobHost: JobWorkerHost =
     inMemoryJobs ??
     new GraphileJobWorkerHost(pool, {

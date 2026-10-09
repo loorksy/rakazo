@@ -3,11 +3,18 @@ import type {
   BrokerEvent,
   BrokerProvider,
   BrokerReadSession,
+  JobPublisher,
   RealtimeFanout,
   SecretStore,
 } from "@rakazo/adapter-kit";
-import type { BrokerCandle } from "@rakazo/contracts";
-import { BrokerReadCommandSchema } from "@rakazo/contracts";
+import { runContinueJob } from "@rakazo/adapter-kit";
+import type { BrokerCandle, BrokerQuote, MarketCondition } from "@rakazo/contracts";
+import {
+  BrokerQuoteSchema,
+  BrokerReadCommandSchema,
+  MarketConditionSchema,
+} from "@rakazo/contracts";
+import { observeMarketCondition } from "@rakazo/core";
 import type { BrokerLeaseToken, PrismaClient } from "@rakazo/db";
 import {
   claimBrokerSession,
@@ -18,6 +25,7 @@ import {
   withBrokerSessionFence,
 } from "@rakazo/db";
 import { z } from "zod";
+import { observeMarketWatches, recoverMarketWakes } from "./market-watches.js";
 import { BrokerProviderError, sanitizedBrokerError } from "./metaapi-normalize.js";
 
 interface Slot {
@@ -35,6 +43,24 @@ interface Slot {
   readAt: number;
   quoteTimes: Map<string, { time: string; revision: string }>;
   abort: AbortController;
+  conditions: Map<
+    string,
+    {
+      instrumentId: string;
+      condition: MarketCondition;
+      previousValue: string | null;
+      previousSourceTime: string | null;
+    }
+  >;
+  crossings: Map<
+    string,
+    {
+      id: string;
+      quote: BrokerQuote;
+      previousValue: string | null;
+      previousSourceTime: string | null;
+    }
+  >;
   history: Map<string, { expires: number; candles: BrokerCandle[] }>;
 }
 
@@ -53,6 +79,7 @@ export class BrokerConnectionSupervisor {
     private readonly provider: BrokerProvider,
     private readonly realtime?: RealtimeFanout,
     private readonly now: () => Date = () => new Date(),
+    private readonly jobs?: JobPublisher,
   ) {}
   start() {
     if (this.timer) return;
@@ -79,11 +106,18 @@ export class BrokerConnectionSupervisor {
         });
         this.lastCleanup = this.now().getTime();
       }
-      const connections = await this.prisma.tradingConnection.findMany({
-        where: { revokedAt: null, provider: "metaapi" },
-        take: 32,
-        orderBy: { createdAt: "asc" },
+      const owner = await this.prisma.deploymentSettings.findUnique({
+        where: { id: "default" },
+        select: { ownerUserId: true, ownerBootstrapCompleted: true },
       });
+      const connections =
+        owner?.ownerUserId && owner.ownerBootstrapCompleted
+          ? await this.prisma.tradingConnection.findMany({
+              where: { revokedAt: null, provider: "metaapi", ownerUserId: owner.ownerUserId },
+              take: 32,
+              orderBy: { createdAt: "asc" },
+            })
+          : [];
       const active = new Set(connections.map((row) => row.id));
       for (const [id, slot] of this.slots) if (!active.has(id)) await this.drop(id, slot);
       for (const row of connections) {
@@ -110,6 +144,8 @@ export class BrokerConnectionSupervisor {
               quoteTimes: new Map(),
               abort: new AbortController(),
               history: new Map(),
+              conditions: new Map(),
+              crossings: new Map(),
             };
             this.slots.set(row.id, slot);
           }
@@ -117,7 +153,7 @@ export class BrokerConnectionSupervisor {
             await heartbeatBrokerSession(this.prisma, slot.token, this.now());
             slot.lastHeartbeat = this.now().getTime();
           }
-          if (!slot.flushing && slot.pending.size) {
+          if (!slot.flushing && (slot.pending.size || slot.crossings.size)) {
             const current = slot;
             current.flushing = true;
             this.track(
@@ -258,6 +294,20 @@ export class BrokerConnectionSupervisor {
           }
         }
       }
+      const recovered = await withBrokerSessionFence(
+        this.prisma,
+        token,
+        async (tx) => {
+          await tx.marketWatch.updateMany({
+            where: { accountId: token.accountId, status: "ACTIVE", expiresAt: { lte: this.now() } },
+            data: { status: "EXPIRED", revision: { increment: 1 } },
+          });
+          return recoverMarketWakes(tx, token.accountId);
+        },
+        this.now(),
+      );
+      for (const runId of recovered)
+        await this.jobs?.enqueue(runContinueJob(runId)).catch(() => undefined);
       await this.updateSubscriptions(slot);
     } catch (error) {
       await slot.release?.().catch(() => undefined);
@@ -416,6 +466,34 @@ export class BrokerConnectionSupervisor {
   }
   private observe(slot: Slot, event: BrokerEvent) {
     if (this.stopping || this.slots.get(slot.token.accountId) !== slot) return;
+    if (event.type === "quote") {
+      if (
+        event.quote.accountId !== slot.token.accountId ||
+        !BrokerQuoteSchema.safeParse(event.quote).success
+      )
+        return;
+    } else if (event.accountId !== slot.token.accountId) return;
+    if (event.type === "quote")
+      for (const [id, condition] of slot.conditions) {
+        if (condition.instrumentId !== event.quote.instrumentId || slot.crossings.has(id)) continue;
+        const result = observeMarketCondition({
+          condition: condition.condition,
+          quote: event.quote,
+          now: this.now(),
+          previousValue: condition.previousValue,
+          previousSourceTime: condition.previousSourceTime,
+        });
+        if (!result.observed) continue;
+        if (result.fire)
+          slot.crossings.set(id, {
+            id,
+            quote: event.quote,
+            previousValue: condition.previousValue,
+            previousSourceTime: condition.previousSourceTime,
+          });
+        condition.previousValue = result.value;
+        condition.previousSourceTime = event.quote.sourceTime;
+      }
     const key =
       event.type === "quote"
         ? `quote:${event.quote.instrumentId}`
@@ -427,12 +505,16 @@ export class BrokerConnectionSupervisor {
       if (
         event.type === "quote" &&
         previous?.type === "quote" &&
-        previous.quote.sourceTime >= event.quote.sourceTime
+        Date.parse(previous.quote.sourceTime) >= Date.parse(event.quote.sourceTime)
       )
         return;
       if (event.type === "quote") {
         const last = slot.quoteTimes.get(event.quote.instrumentId);
-        if (last && (last.time > event.quote.sourceTime || last.revision === event.quote.revision))
+        if (
+          last &&
+          (Date.parse(last.time) > Date.parse(event.quote.sourceTime) ||
+            last.revision === event.quote.revision)
+        )
           return;
         if (slot.quoteTimes.size < 256 || slot.quoteTimes.has(event.quote.instrumentId))
           slot.quoteTimes.set(event.quote.instrumentId, {
@@ -444,15 +526,23 @@ export class BrokerConnectionSupervisor {
     }
   }
   private async flush(slot: Slot) {
-    if (!slot.pending.size) return;
+    if (!slot.pending.size && !slot.crossings.size) return;
+    const crossings = [...slot.crossings.values()].slice(0, 20);
+    for (const crossing of crossings) slot.crossings.delete(crossing.id);
     const events = [...slot.pending.values()];
     slot.pending.clear();
     const connectionEvent = events.find((event) => event.type === "connection_changed");
-    await withBrokerSessionFence(
+    const wakeRuns = await withBrokerSessionFence(
       this.prisma,
       slot.token,
-      (tx) =>
-        tx.brokerSessionLease.update({
+      async (tx) => {
+        const runs: string[] = [];
+        // Capture useful conditions before visual quote coalescing can hide a short excursion.
+        for (const crossing of crossings)
+          runs.push(...(await observeMarketWatches(tx, crossing.quote, this.now(), crossing)));
+        // Unsatisfied stream observations stay in bounded memory. Only captured logical
+        // conditions enter PostgreSQL; batch limits prevent mass triggers starving leases.
+        await tx.brokerSessionLease.update({
           where: { accountId: slot.token.accountId },
           data: {
             lastEventAt: this.now(),
@@ -463,9 +553,13 @@ export class BrokerConnectionSupervisor {
               ? { lastHealthyAt: this.now(), failureCode: null }
               : {}),
           },
-        }),
+        });
+        return runs;
+      },
       this.now(),
     );
+    for (const runId of wakeRuns)
+      await this.jobs?.enqueue(runContinueJob(runId)).catch(() => undefined);
     if (this.realtime)
       for (let offset = 0; offset < events.length; offset += 4) {
         // Small bounded batches stay beneath PostgreSQL's NOTIFY payload limit.
@@ -480,11 +574,36 @@ export class BrokerConnectionSupervisor {
   }
   private async updateSubscriptions(slot: Slot) {
     if (!slot.session) return;
-    const subscriptions = await this.prisma.brokerMarketSubscription.findMany({
-      where: { accountId: slot.token.accountId, expiresAt: { gt: this.now() } },
-      select: { instrumentId: true, expiresAt: true },
-      take: 1024,
+    const watches = await this.prisma.marketWatch.findMany({
+      where: { accountId: slot.token.accountId, status: "ACTIVE", expiresAt: { gt: this.now() } },
+      select: {
+        id: true,
+        condition: true,
+        lastValue: true,
+        lastSourceTime: true,
+        instrumentId: true,
+        expiresAt: true,
+      },
+      take: 1000,
     });
+    const activeWatches = new Set(watches.map((w) => w.id));
+    for (const id of slot.conditions.keys()) if (!activeWatches.has(id)) slot.conditions.delete(id);
+    for (const watch of watches)
+      if (!slot.conditions.has(watch.id))
+        slot.conditions.set(watch.id, {
+          instrumentId: watch.instrumentId,
+          condition: MarketConditionSchema.parse(watch.condition),
+          previousValue: watch.lastValue,
+          previousSourceTime: watch.lastSourceTime?.toISOString() ?? null,
+        });
+    const subscriptions = [
+      ...watches,
+      ...(await this.prisma.brokerMarketSubscription.findMany({
+        where: { accountId: slot.token.accountId, expiresAt: { gt: this.now() } },
+        select: { instrumentId: true, expiresAt: true },
+        take: 1024,
+      })),
+    ];
     const instruments = await this.prisma.brokerInstrument.findMany({
       where: {
         accountId: slot.token.accountId,

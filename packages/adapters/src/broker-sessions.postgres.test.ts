@@ -29,7 +29,7 @@ suite("protected broker sessions (PostgreSQL)", () => {
   const supervisors: BrokerConnectionSupervisor[] = [];
   const reset = async () =>
     db.prisma
-      .$executeRaw`TRUNCATE trading_connections, broker_session_leases, broker_read_requests, broker_instruments, broker_market_subscriptions, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE market_watches, organization, trading_connections, broker_session_leases, broker_read_requests, broker_instruments, broker_market_subscriptions, deployment_settings CASCADE`;
   beforeAll(async () => {
     if (!databaseUrl || !new URL(databaseUrl).pathname.endsWith("_test"))
       throw new Error("Dedicated fixture database ending _test required");
@@ -320,6 +320,87 @@ suite("protected broker sessions (PostgreSQL)", () => {
       emit: (event: BrokerEvent) => listener?.(event),
     };
   }
+  it("captures a crossing before quote coalescing without a UI or per-quote Run", async () => {
+    await db.prisma.organization.create({
+      data: { id: "fixture-org", slug: "fixture-org", name: "Fixture", createdAt: initialTime },
+    });
+    await db.prisma.space.create({
+      data: { id: "fixture-space", organizationId: "fixture-org", name: "Fixture" },
+    });
+    await db.prisma.deploymentSettings.update({
+      where: { id: "default" },
+      data: { ownerSpaceId: "fixture-space" },
+    });
+    await db.prisma.bot.create({
+      data: {
+        id: "fixture-main",
+        spaceId: "fixture-space",
+        userId: owner,
+        name: "Fixture",
+        color: "blue",
+        spawnKey: "trading:main:v1",
+      },
+    });
+    const instrument = await db.prisma.brokerInstrument.create({
+      data: { accountId, brokerSymbol: "GOLD.a", displayName: "Gold" },
+    });
+    const watch = await db.prisma.marketWatch.create({
+      data: {
+        creationKey: "fixture-crossing",
+        ownerUserId: owner,
+        botId: "fixture-main",
+        accountId,
+        instrumentId: instrument.id,
+        condition: { version: 1, field: "BID", comparison: "CROSS_ABOVE", price: "2700" },
+        summary: "Fixture crossing",
+        expiresAt: new Date(initialTime.getTime() + 60000),
+      },
+    });
+    const f = providerFixture();
+    await f.supervisor.tick();
+    await f.supervisor.drain();
+    expect(f.session.subscribe).toHaveBeenCalledWith(
+      [{ instrumentId: instrument.id, symbol: "GOLD.a" }],
+      expect.any(Function),
+    );
+    const emit = (price: string, offset: number) =>
+      f.emit({
+        type: "quote",
+        quote: BrokerQuoteSchema.parse({
+          version: 1,
+          provider: "metaapi",
+          accountId,
+          instrumentId: instrument.id,
+          brokerSymbol: "GOLD.a",
+          bid: price,
+          ask: price,
+          sourceTime: new Date(initialTime.getTime() + offset).toISOString(),
+          receivedAt: new Date(initialTime.getTime() + offset).toISOString(),
+          revision: `fixture-${offset}`,
+        }),
+      });
+    emit("2690", 100);
+    emit("2691", 200);
+    await f.supervisor.tick();
+    await f.supervisor.drain();
+    expect(await db.prisma.run.count()).toBe(0);
+    expect(
+      (await db.prisma.marketWatch.findUniqueOrThrow({ where: { id: watch.id } })).revision,
+    ).toBe(1);
+    emit("2701", 300);
+    emit("2699", 400);
+    await f.supervisor.tick();
+    await f.supervisor.drain();
+    const fired = await db.prisma.marketWatch.findUniqueOrThrow({ where: { id: watch.id } });
+    expect(fired.status).toBe("FIRED");
+    expect(fired.wakeGeneration).toBe(1);
+    expect(fired.pendingEvidence).toMatchObject({ price: "2701" });
+    expect(await db.prisma.run.count()).toBe(1);
+    emit("2702", 500);
+    await f.supervisor.tick();
+    await f.supervisor.drain();
+    expect(await db.prisma.run.count()).toBe(1);
+  });
   it("lets only one supervisor own SDK sessions and serves durable requests without an LLM", async () => {
     const a = providerFixture();
     const b = providerFixture();

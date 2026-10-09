@@ -135,6 +135,5 @@ web/Electron; native mobile freehand drawing/cursor animation are not yet implem
 
 Chart storage, web/Electron workstation, safe indicator factory/import versions and
 chart-only vision/image delivery are implemented. Native mobile has the contextual
-structured-control/image fallback above. The remaining financial migration, watcher
-integration and live-readiness gate are separate implementation work; chart/indicator
+structured-control/image fallback above. The remaining financial migration and live-readiness gate are separate implementation work; chart/indicator
 features do not grant trading authority.

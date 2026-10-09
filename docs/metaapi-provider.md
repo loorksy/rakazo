@@ -63,11 +63,36 @@ There is no LLM call on an account/quote observation. Quote queues are ephemeral
 expired subscription rows are swept each minute and read request/result caches are
 removed after one day. These caches are not financial audit records.
 
-The current historical API supports bounded pages, not persisted gap backfill or
-completed-candle watchers yet. Application charts and financial execution remain
-unfinished. No production credentials are required by the deterministic tests.
+The historical API supports bounded pages and a 16-page per-account cache (two-second
+live pages, thirty-second historical pages); charts and indicators share evidence reads.
+Completed-candle watchers and persisted reconnect gap backfill remain unimplemented.
+Protected price-condition watches operate without an open client. Financial execution
+remains separate unfinished work. No production credentials are used in tests.
 
 The PostgreSQL fixture suite verifies concurrent claims, stale writes, rotation,
 revocation, foreign-principal refusal, actual worker process death, read recovery,
 shared provider sessions, exact broker symbols, quote deduplication, reconnect health
 and authenticated stream cleanup. Only a dedicated database ending `_test` is accepted.
+
+## Durable price-condition wakes
+
+`market_watch` creates bounded, expiring BID/ASK threshold or crossing conditions.
+The Worker uses its existing account socket and in-memory deterministic observer;
+it never invokes the model for ordinary quotes. Useful crossings are captured before
+visual quote coalescing so an intrabatch excursion is not lost. At most twenty
+captured conditions are committed per fenced batch. Unmet high-frequency observations
+remain ephemeral; they do not append quote history or update rows on every tick.
+
+On a trigger, a watch row and one ordinary existing Task/Run are updated atomically.
+A stable watch-ID/wake-generation nonce prevents repeated events creating more turns.
+Existing job reconciliation recovers an enqueue interrupted after transaction commit.
+Missing conversation delivery is retained, recreating the same Bot's conversation when
+possible; no fallback Bot acquires authority. Run completion is receipted atomically by
+a database trigger. Deleting unfinished delivery returns the logical wake to delivery
+needed; deleting completed delivery never replays it. Failed/cancelled delivery becomes
+needs-attention rather than a model retry loop. Watch edits require current Run fencing.
+
+Streams are not an audit log. A process outage can miss a transient crossing before its
+transaction commits; reconnect begins with fresh observations and never invents a
+historical threshold event. Durable gap reconstruction and completed-candle conditions
+remain separate work. Watch observation grants no trading permission.

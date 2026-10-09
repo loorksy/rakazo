@@ -1,11 +1,12 @@
 import type { ArtifactStore } from "@rakazo/adapter-kit";
 import { CloudChartSchema, CustomIndicatorSchema } from "@rakazo/contracts";
-import { createDb } from "@rakazo/db";
+import { claimBrokerSession, createDb, withBrokerSessionFence } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { followChartEvents } from "./chart-events.js";
 import { ChartIndicators } from "./chart-indicators.js";
 import type { ChartActor } from "./cloud-charts.js";
 import { CloudCharts, guardChartProjection } from "./cloud-charts.js";
+import { MarketWatches, observeMarketWatches, recoverMarketWakes } from "./market-watches.js";
 import { InMemoryRealtimeFanout } from "./realtime.js";
 
 const url = process.env.CHART_TEST_DATABASE_URL;
@@ -19,7 +20,7 @@ suite("durable chart workspace (PostgreSQL)", () => {
   let otherInstrumentId: string;
   const reset = () =>
     db.prisma
-      .$executeRaw`TRUNCATE chart_indicator_definitions, cloud_charts, trading_connections, organization, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE market_watches, chart_indicator_definitions, cloud_charts, trading_connections, organization, deployment_settings CASCADE`;
   beforeAll(() => {
     if (!url || !new URL(url).pathname.endsWith("_test"))
       throw new Error("Dedicated _test database required");
@@ -155,6 +156,254 @@ suite("durable chart workspace (PostgreSQL)", () => {
     await expect(
       db.prisma.$transaction((tx) => guardChartProjection(tx, newer, chart.id, current.revision)),
     ).resolves.toBeUndefined();
+  });
+  async function watchFixture() {
+    const actor = await worker();
+    const now = new Date("2026-10-09T12:00:00Z");
+    const service = new MarketWatches(db.prisma, () => now);
+    const watch = await service.command(
+      actor,
+      {
+        operation: "create",
+        accountId,
+        instrumentId,
+        condition: { version: 1, field: "BID", comparison: "AT_OR_ABOVE", price: "2700" },
+        expiresAt: "2026-10-10T12:00:00Z",
+        summary: "Report price threshold",
+      },
+      "fixture-call",
+    );
+    if (Array.isArray(watch)) throw new Error("Fixture record");
+    const token = await claimBrokerSession(db.prisma, accountId, "fixture-market", now);
+    if (!token) throw new Error("Fixture broker ownership");
+    const quote = {
+      version: 1 as const,
+      provider: "metaapi",
+      accountId,
+      instrumentId,
+      brokerSymbol: "GOLD.a",
+      bid: "2700.1",
+      ask: "2700.2",
+      sourceTime: now.toISOString(),
+      receivedAt: now.toISOString(),
+      revision: "q1",
+    };
+    const observe = () =>
+      withBrokerSessionFence(db.prisma, token, (tx) => observeMarketWatches(tx, quote, now), now);
+    const recover = () =>
+      withBrokerSessionFence(db.prisma, token, (tx) => recoverMarketWakes(tx, accountId), now);
+    return { actor, now, service, watch, quote, token, observe, recover };
+  }
+  it("durably fires concurrent duplicate market events into exactly one existing turn", async () => {
+    const f = await watchFixture();
+    const before = await db.prisma.run.count();
+    const [first, second] = await Promise.all([f.observe(), f.observe()]);
+    expect(first.length + second.length).toBe(1);
+    expect(await db.prisma.run.count()).toBe(before + 1);
+    const saved = await db.prisma.marketWatch.findUniqueOrThrow({ where: { id: f.watch.id } });
+    expect(saved).toMatchObject({ status: "FIRED", wakeGeneration: 1 });
+    expect(await f.recover()).toEqual([]);
+    expect(await f.observe()).toEqual([]);
+    const wake = await db.prisma.run.findUniqueOrThrow({
+      where: { id: saved.triggeredRunId ?? "" },
+    });
+    expect(wake).toMatchObject({
+      trigger: "routine",
+      clientNonce: `market-watch:${saved.id}:1`,
+      status: "queued",
+    });
+  });
+  it("retains captured work when its conversation is deleted and relinks once", async () => {
+    const f = await watchFixture();
+    const [first] = await f.observe();
+    if (!first) throw new Error("Fixture wake");
+    const old = await db.prisma.run.findUniqueOrThrow({ where: { id: first } });
+    await db.prisma.thread.delete({ where: { id: old.threadId } });
+    expect(await db.prisma.marketWatch.findUnique({ where: { id: f.watch.id } })).toMatchObject({
+      status: "DELIVERY_NEEDED",
+      wakeGeneration: 1,
+      triggeredRunId: null,
+    });
+    const restored = await f.recover();
+    expect(restored).toHaveLength(1);
+    expect(restored[0]).not.toBe(first);
+    expect(await f.recover()).toEqual([]);
+    expect(
+      (await db.prisma.marketWatch.findUniqueOrThrow({ where: { id: f.watch.id } })).wakeGeneration,
+    ).toBe(1);
+  });
+  it("records completion atomically and never replays fulfilled work after session deletion", async () => {
+    const f = await watchFixture();
+    const [id] = await f.observe();
+    if (!id) throw new Error("Fixture wake");
+    const run = await db.prisma.run.update({
+      where: { id },
+      data: { status: "completed", completedAt: f.now },
+    });
+    expect(await db.prisma.marketWatch.findUnique({ where: { id: f.watch.id } })).toMatchObject({
+      wakeCompletedAt: f.now,
+      status: "FIRED",
+    });
+    await db.prisma.thread.delete({ where: { id: run.threadId } });
+    expect(await f.recover()).toEqual([]);
+    expect(await f.observe()).toEqual([]);
+  });
+  it("keeps failed/cancelled observation work explicit instead of repeatedly polling a model", async () => {
+    const f = await watchFixture();
+    const [id] = await f.observe();
+    if (!id) throw new Error("Fixture wake");
+    await db.prisma.run.update({ where: { id }, data: { status: "failed", completedAt: f.now } });
+    const list = await f.service.command(principal, { operation: "list" });
+    expect(list).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: f.watch.id, status: "NEEDS_ATTENTION" }),
+      ]),
+    );
+    expect(await f.recover()).toEqual([]);
+  });
+  it("deduplicates watch creation and rejects stale worker edits even after rereading", async () => {
+    const f = await watchFixture();
+    const create = {
+      operation: "create",
+      accountId,
+      instrumentId,
+      condition: { version: 1, field: "BID", comparison: "AT_OR_ABOVE", price: "2700" },
+      expiresAt: "2026-10-10T12:00:00Z",
+      summary: "Report price threshold",
+    };
+    expect(await f.service.command(f.actor, create, "fixture-call")).toMatchObject({
+      id: f.watch.id,
+    });
+    await expect(
+      f.service.command(f.actor, { ...create, summary: "Changed payload" }, "fixture-call"),
+    ).rejects.toThrow("identity changed");
+    await db.prisma.run.update({
+      where: { id: f.actor.execution.runId },
+      data: { leaseFence: 2, leaseOwner: "newer" },
+    });
+    const current = await db.prisma.marketWatch.findUniqueOrThrow({ where: { id: f.watch.id } });
+    await expect(
+      f.service.command(f.actor, {
+        operation: "cancel",
+        id: f.watch.id,
+        expectedRevision: current.revision,
+      }),
+    ).rejects.toThrow();
+    await expect(f.service.command(f.actor, create, "new-call")).rejects.toThrow();
+  });
+  it("does no model work for stale/unsatisfied quotes, and expires without creating a turn", async () => {
+    const f = await watchFixture();
+    const count = await db.prisma.run.count();
+    const below = { ...f.quote, bid: "2699", ask: "2699.1" };
+    expect(
+      await withBrokerSessionFence(
+        db.prisma,
+        f.token,
+        (tx) => observeMarketWatches(tx, below, f.now),
+        f.now,
+      ),
+    ).toEqual([]);
+    const expired = new Date(f.now.getTime() + 2 * 86400000);
+    await db.prisma.$transaction((tx) => observeMarketWatches(tx, f.quote, expired));
+    expect(await db.prisma.run.count()).toBe(count);
+    expect(await db.prisma.marketWatch.findUnique({ where: { id: f.watch.id } })).toMatchObject({
+      status: "EXPIRED",
+      wakeGeneration: 0,
+    });
+  });
+  it("preserves a witnessed intrabatch crossing even when the visible quote coalesces back below", async () => {
+    const f = await watchFixture();
+    await db.prisma.marketWatch.update({
+      where: { id: f.watch.id },
+      data: {
+        condition: { version: 1, field: "BID", comparison: "CROSS_ABOVE", price: "2700" },
+        lastValue: null,
+      },
+    });
+    const other = await f.service.command(
+      f.actor,
+      {
+        operation: "create",
+        accountId,
+        instrumentId,
+        condition: { version: 1, field: "BID", comparison: "CROSS_BELOW", price: "2700" },
+        expiresAt: "2026-10-10T12:00:00Z",
+        summary: "Other direction",
+      },
+      "other-call",
+    );
+    const runs = await withBrokerSessionFence(
+      db.prisma,
+      f.token,
+      (tx) =>
+        observeMarketWatches(tx, f.quote, f.now, {
+          id: f.watch.id,
+          previousValue: "2699",
+          previousSourceTime: new Date(f.now.getTime() - 1000).toISOString(),
+        }),
+      f.now,
+    );
+    expect(runs).toHaveLength(1);
+    if (Array.isArray(other)) throw new Error("Fixture");
+    expect(await db.prisma.marketWatch.findUnique({ where: { id: other.id } })).toMatchObject({
+      status: "ACTIVE",
+      lastValue: null,
+      wakeGeneration: 0,
+    });
+    const below = {
+      ...f.quote,
+      bid: "2699",
+      ask: "2699.1",
+      sourceTime: new Date(f.now.getTime() + 1).toISOString(),
+      revision: "q2",
+    };
+    expect(
+      await withBrokerSessionFence(
+        db.prisma,
+        f.token,
+        (tx) => observeMarketWatches(tx, below, f.now),
+        f.now,
+      ),
+    ).toEqual([]);
+    expect(
+      (await db.prisma.marketWatch.findUniqueOrThrow({ where: { id: f.watch.id } })).wakeGeneration,
+    ).toBe(1);
+  });
+  it("keeps repeated unsatisfied price quotes ephemeral instead of growing durable telemetry", async () => {
+    const f = await watchFixture();
+    const below = { ...f.quote, bid: "2699", ask: "2699.1" };
+    await withBrokerSessionFence(
+      db.prisma,
+      f.token,
+      (tx) => observeMarketWatches(tx, below, f.now),
+      f.now,
+    );
+    const first = await db.prisma.marketWatch.findUniqueOrThrow({ where: { id: f.watch.id } });
+    const next = {
+      ...below,
+      bid: "2698",
+      sourceTime: new Date(f.now.getTime() + 1).toISOString(),
+      revision: "q2",
+    };
+    await withBrokerSessionFence(
+      db.prisma,
+      f.token,
+      (tx) => observeMarketWatches(tx, next, f.now),
+      f.now,
+    );
+    expect(
+      (await db.prisma.marketWatch.findUniqueOrThrow({ where: { id: f.watch.id } })).revision,
+    ).toBe(first.revision);
+  });
+  it("captures delivery-needed state if the responsible Bot disappears without transferring authority", async () => {
+    const f = await watchFixture();
+    await db.prisma.bot.delete({ where: { id: f.actor.botId } });
+    await f.observe();
+    expect(await db.prisma.marketWatch.findUnique({ where: { id: f.watch.id } })).toMatchObject({
+      status: "DELIVERY_NEEDED",
+      wakeGeneration: 1,
+    });
+    expect(await f.recover()).toEqual([]);
   });
   const drawing = {
     type: "horizontalStraightLine",

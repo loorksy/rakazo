@@ -79,6 +79,7 @@ import {
   listBotSecretMetadata,
   listPiCatalog,
   listScratchpadItems,
+  MarketWatches,
   McpOAuthBroker,
   mapScratchpadItem,
   modelCredentialAuthKindsForSpace,
@@ -764,6 +765,9 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      watches: authed.trading.watches.handler(({ context, input }) =>
+        new MarketWatches(deps.prisma).command({ ownerUserId: context.actor.userId }, input),
+      ),
       chartRender: authed.trading.chartRender.handler(async ({ context, input }) => {
         const evidence = await chartEvidence(
           deps.prisma,

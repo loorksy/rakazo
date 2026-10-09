@@ -6,6 +6,7 @@ import {
   ChartCommandSchema,
   ChartInspectionCommandSchema,
   IndicatorRegistryCommandSchema,
+  MarketWatchCommandSchema,
   SecretAskPurpose,
   SecretHttpRequest,
 } from "@rakazo/contracts";
@@ -146,6 +147,12 @@ const scheduleCreateInputSchema = {
 };
 
 export const builtinAgentTools: ConnectorTool[] = [
+  {
+    name: "market_watch",
+    description:
+      "Persist a bounded broker price condition (bid/ask threshold or crossing) with explicit expiry. Observation is deterministic and does not poll a model; it wakes this bot once when met. Discover exact account/instrument IDs through broker_read. This grants no permission to trade.",
+    inputSchema: z.toJSONSchema(MarketWatchCommandSchema, { io: "input" }),
+  },
   {
     name: "chart_inspect",
     description:
