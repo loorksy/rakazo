@@ -3,6 +3,7 @@ import * as z from "zod";
 /** Built-in tool names a bot may disable. Kept aligned with the adapter tool list. */
 export const BUILTIN_TOOL_NAMES = [
   "trading_accounts",
+  "chart_workspace",
   "broker_read",
   "computer_observe",
   "computer_act",

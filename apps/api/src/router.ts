@@ -43,6 +43,7 @@ import {
   buildMcpCredentialBlob,
   buildModelConnectPlaintext,
   CHATGPT_OAUTH_PROVIDER,
+  CloudCharts,
   CodexCatalogCache,
   ComputerBusyError,
   cancelComputerRunWork,
@@ -63,6 +64,7 @@ import {
   enqueueTakeoverContinuation,
   expireComputerControl,
   followBrokerData,
+  followChartEvents,
   forgetBotSecret,
   hasActiveComputerControl,
   hostCredentialSource,
@@ -759,6 +761,23 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      charts: authed.trading.charts.handler(({ context, input }) =>
+        new CloudCharts(deps.prisma, deps.realtime).command(
+          { ownerUserId: context.actor.userId },
+          input,
+        ),
+      ),
+      chartEvents: authed.trading.chartEvents.handler(async function* ({ context, input }) {
+        if (!deps.realtime) throw new ORPCError("SERVICE_UNAVAILABLE");
+        yield* followChartEvents({
+          ...input,
+          prisma: deps.prisma,
+          realtime: deps.realtime,
+          ownerUserId: context.actor.userId,
+          signal: context.signal,
+          stillAuthorized: context.stillAuthorized,
+        });
+      }),
       connections: {
         list: authed.trading.connections.list.handler(({ context }) =>
           tradingConnections.list(context.actor.userId),

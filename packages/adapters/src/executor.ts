@@ -22,6 +22,7 @@ import type {
   ModelCredentialRetireReason,
   NotificationMessage,
   NotificationProvider,
+  RealtimeFanout,
   SandboxProvider,
   SecretStore,
   SemanticMemoryProvider,
@@ -60,6 +61,8 @@ import {
   blocksToAgentHistoryText,
   botMessageAllowsSilence,
   CALL_CLIENT_NONCE_PREFIX,
+  ChartConflictError,
+  ChartPermissionError,
   callIdFromClientNonce,
   connectorKindFromToolName,
   containsSecret,
@@ -199,6 +202,7 @@ import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-fac
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
 import { validCloudAgentArgs } from "./cloud-agent-tools.js";
 import { selectCloudAgentTools } from "./cloud-agent-tools-select.js";
+import { CloudCharts } from "./cloud-charts.js";
 import { cloudflareGatewayProviderEnv } from "./cloudflare-ai-gateway.js";
 import {
   collectLogIds,
@@ -2625,6 +2629,7 @@ function runtimeFallbackModel(runtime: AgentRuntime) {
 }
 
 export interface ExecutorDeps {
+  realtime?: RealtimeFanout;
   contextStrategy?: AgentContextStrategy;
   prisma: PrismaClient;
   events: ThreadEvents;
@@ -5131,6 +5136,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
+          }
+          if (name === "chart_workspace") {
+            try {
+              return finish(
+                await new CloudCharts(deps.prisma, deps.realtime).command(
+                  {
+                    ownerUserId: run.userId,
+                    botId: run.botId,
+                    execution: { runId, holder: workerId, generation: fence },
+                  },
+                  args,
+                ),
+              );
+            } catch (error) {
+              return finish({
+                error:
+                  error instanceof ChartConflictError || error instanceof ChartPermissionError
+                    ? error.message
+                    : "Chart operation unavailable",
+              });
+            }
           }
           if (name === "trading_accounts" || name === "broker_read") {
             try {

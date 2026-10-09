@@ -3,6 +3,7 @@ import {
   BotSecretName,
   BrokerReadCommandSchema,
   botSecretDestinationSchema,
+  ChartCommandSchema,
   SecretAskPurpose,
   SecretHttpRequest,
 } from "@rakazo/contracts";
@@ -143,6 +144,12 @@ const scheduleCreateInputSchema = {
 };
 
 export const builtinAgentTools: ConnectorTool[] = [
+  {
+    name: "chart_workspace",
+    description:
+      "Operate the persistent broker chart through semantic time/price coordinates. Discover deployed capabilities first. Charts and drawings survive client/Worker restart. Financial authority is separate; this tool cannot trade. Read state/revisions before editing. User drawings cannot be overwritten by bots.",
+    inputSchema: z.toJSONSchema(ChartCommandSchema, { io: "input" }),
+  },
   {
     name: "trading_accounts",
     description:

@@ -1492,3 +1492,23 @@ model IntegrationProviderConfig {
 
   @@map("integration_provider_configs")
 }
+
+// Financial workspace identity is independent of normal Bot/Thread deletion.
+model CloudChart {
+  id            String   @id @default(cuid())
+  formatVersion Int      @default(1)
+  ownerUserId   String
+  ownerBotId    String?
+  scope         String   @default("MAIN")
+  accountId     String
+  instrumentId  String
+  brokerSymbol  String
+  revision      Int      @default(1)
+  state         Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([ownerUserId, scope])
+  @@index([accountId, instrumentId])
+  @@map("cloud_charts")
+}

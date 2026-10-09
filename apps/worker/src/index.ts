@@ -184,6 +184,7 @@ async function main() {
     pushSessionExpiresAt(prisma, sessionId),
   );
   const executor = createRunExecutor({
+    realtime,
     prisma,
     runtime,
     // Live per-account Codex catalog; never refreshes or writes credentials.
