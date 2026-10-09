@@ -825,10 +825,10 @@ model CloudAgent {
 
 model ExternalEffect {
   id             String   @id @default(cuid())
-  spaceId        String
-  space          Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  runId          String
-  run            Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  spaceId        String?
+  space          Space?   @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  runId          String?
+  run            Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
   kind           String
   idempotencyKey String
   status         String
@@ -837,12 +837,38 @@ model ExternalEffect {
   reviewDecision String?
   reviewReason   String?
   reviewModel    String?
+  financialContext Json?
+  financialGeneration Int @default(0)
+  financialHolder String?
+  financialStartedAt DateTime?
+  financialProviderReference String?
+  financialExpiresAt DateTime?
+  financialApprovedByUserId String?
+  financialApprovedAt DateTime?
+  financialFailureCode String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([idempotencyKey])
   @@index([runId, status])
   @@map("external_effects")
+}
+
+// Audit snapshots have no chat/Run/Bot cascade. Market telemetry is not stored here.
+model FinancialJournal {
+  id String @id @default(cuid())
+  formatVersion Int @default(1)
+  ownerUserId String
+  accountId String
+  mode String
+  effectId String
+  event String
+  entry Json
+  createdAt DateTime @default(now())
+
+  @@index([ownerUserId, accountId, mode, createdAt])
+  @@index([effectId, createdAt])
+  @@map("financial_journal")
 }
 
 model Routine {

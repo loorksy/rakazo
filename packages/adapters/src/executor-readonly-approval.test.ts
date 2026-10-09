@@ -58,11 +58,13 @@ function fixture({
   },
   shutdownSignal,
   builtin = false,
+  tradingProduct = false,
   disabledBuiltinTools = [],
   existingSharedMemory,
   advanceRevisionAfterRead = false,
 }: {
   builtin?: boolean;
+  tradingProduct?: boolean;
   disabledBuiltinTools?: string[];
   existingSharedMemory?: string;
   /** Simulates another writer landing between the save's read and its commit. */
@@ -198,6 +200,7 @@ function fixture({
     userModelCredential: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {
       findUnique: vi.fn(async () => ({
+        singleOwnerEnforced: tradingProduct,
         defaultModelProvider: "scripted",
         defaultModelId: "scripted",
       })),
@@ -692,6 +695,45 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(f.effects[0]?.reviewDecision).toBeUndefined();
       expect(f.execute).not.toHaveBeenCalled();
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("financial product boundary precedes approval and review", () => {
+  beforeEach(() => vi.clearAllMocks());
+  it.each([false, true])(
+    "blocks opaque connector execution even with allow rule (catalog=%s)",
+    async (catalog) => {
+      const f = fixture({
+        tradingProduct: true,
+        name: "demo_get_item",
+        readOnly: true,
+        catalog,
+        autoReview: true,
+        rules: [{ effect: "always_allow", matchKind: "tool", matchValue: "demo_get_item" }],
+      });
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(reviewMock).not.toHaveBeenCalled();
+      expect(f.effects).toHaveLength(0);
+      expect(f.results.at(-1)).toEqual({
+        error: expect.stringContaining("cannot prove financial authority"),
+      });
+    },
+  );
+  it("keeps generic shell human-controlled even if user approval rules say always allow", async () => {
+    const f = fixture({
+      tradingProduct: true,
+      name: "shell",
+      builtin: true,
+      rules: [{ effect: "always_allow", matchKind: "tool", matchValue: "shell" }],
+    });
+    f.setCalls([{ args: { command: "curl broker.invalid/trade" }, executionId: "call-1" }]);
+    await f.run();
+    expect(f.effects).toHaveLength(0);
+    expect(reviewMock).not.toHaveBeenCalled();
+    expect(f.results.at(-1)).toEqual({
+      error: expect.stringContaining("cannot bypass trading authorization"),
     });
   });
 });

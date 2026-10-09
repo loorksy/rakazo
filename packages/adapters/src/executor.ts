@@ -70,6 +70,7 @@ import {
   createStreamingRedactor,
   endsSentence,
   expandSkillReferencesInPrompt,
+  financialToolPolicy,
   formatSkillRunPrompt,
   formatSkillsCatalogInstruction,
   humanizeToolName,
@@ -4202,6 +4203,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
           }
           const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name);
+          const financialBoundary = financialToolPolicy({
+            tradingProduct: settings?.singleOwnerEnforced === true,
+            toolName: name,
+            viaConnector,
+          });
+          if (financialBoundary.decision === "DENY") return { error: financialBoundary.reason };
+
           // Declared effect of the operation this call dispatches (installed API method and
           // flag). Install config is immutable per route resource, so it cannot drift before
           // execute; a catalog call uses the tool it was just resolved to.

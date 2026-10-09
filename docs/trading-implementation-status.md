@@ -86,3 +86,19 @@ completion receipts and a real simulated SDK stream's brief crossing. Seven appl
 package type checks pass. Migrations 007/008 apply to fixture PostgreSQL; chart and broker
 fixture databases have 104 migrations. Financial policy/risk/simulation/mandates/live
 execution and readiness are still unfinished. This checkpoint is not product completion.
+
+## Hard financial boundary and audit checkpoint
+
+The trading deployment now denies opaque automated Computer/browser/process,
+generic filesystem/credential and arbitrary connector/MCP actions before approval
+rules or model review. Human takeover remains available; structured chart/broker
+reads and credential-free public research remain available. This conservative
+boundary deliberately limits automated Computer/connector research (see
+`financial-execution-boundary.md`). It is not a claim that all generic tools can
+safely express financial authorization.
+
+Financial ExternalEffects and immutable journal snapshots survive Run/Bot/Space
+deletion. Three PostgreSQL retention/immutability tests pass; 126 combined policy,
+executor, broker and chart tests pass. All 105 migrations apply to two fresh fixture
+databases without reset or verification bypass. Seven package type checks pass.
+Risk engine, simulation, financial missions and live execution remain in progress.
