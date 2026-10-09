@@ -1,4 +1,4 @@
-import type { AdapterContext, AutoReviewProvider } from "@rakazo/adapter-kit";
+import type { AdapterContext, AutoReviewProvider, JobPublisher } from "@rakazo/adapter-kit";
 import type {
   FinancialAction,
   FinancialEffectOutcome,
@@ -16,6 +16,7 @@ import type { ChartActor } from "./cloud-charts.js";
 import { FinancialEffects } from "./financial-effects.js";
 import { financialPreflight } from "./financial-preflight.js";
 import { SimulationBroker } from "./simulation-broker.js";
+import { enqueueSimulationExpiries } from "./simulation-market.js";
 
 type Effect = Prisma.ExternalEffectGetPayload<Record<never, never>>;
 type Preflight = (
@@ -50,6 +51,7 @@ export class FinancialExecution {
     private readonly prisma: PrismaClient,
     now: () => Date = () => new Date(),
     preflight?: Preflight,
+    private readonly jobs?: JobPublisher,
   ) {
     this.preflight =
       preflight ?? ((actor, action, signal) => financialPreflight(prisma, actor, action, signal));
@@ -98,6 +100,12 @@ export class FinancialExecution {
     try {
       context.signal.throwIfAborted();
       outcome = await this.simulator.execute(actor, effect.id, facts);
+      // The immutable acceptance receipt is authoritative even if queue delivery fails.
+      // The existing reconciler repairs the metadata-to-job gap after a crash.
+      if (this.jobs)
+        await enqueueSimulationExpiries(this.prisma, this.jobs, action.accountId).catch(
+          () => undefined,
+        );
     } catch {
       // A timeout/transport failure after STARTED is not evidence of nonacceptance.
       outcome = FinancialEffectOutcomeSchema.parse({

@@ -621,6 +621,7 @@ export interface VoiceTranscribeRequest {
 
 export interface BackgroundJobPayloads {
   "trading.mission-wake": { wakeId: string; scheduledFor: string };
+  "trading.simulation-expire": { accountId: string; scheduledFor: string };
   "run.continue": { runId: string };
   "routine.wakeup": { routineId: string; scheduledFor: string };
   "computer.sleep": { computerId: string };

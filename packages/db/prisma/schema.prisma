@@ -1760,10 +1760,12 @@ model SimulationBook {
   formatVersion Int @default(1)
   revision Int @default(1)
   state Json
+  nextExpiryAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("simulation_books")
+  @@index([nextExpiryAt], map: "simulation_books_expiry_idx")
 }
 
 /// Immutable simulated provider acceptance; reconciliation can prove a local fill after process death.
@@ -1778,6 +1780,38 @@ model SimulationExecution {
   changes Json
   createdAt DateTime @default(now())
 
-  @@index([accountId, createdAt])
+  @@index([accountId, createdAt], map: "simulation_executions_account_created_idx")
   @@map("simulation_executions")
+}
+
+/// Bounded latest-tick state, not high-frequency history or financial authorization.
+model SimulationMarketCursor {
+  accountId String
+  instrumentId String
+  ownerUserId String
+  sourceTime DateTime
+  quote Json
+  updatedAt DateTime @updatedAt
+
+  @@id([accountId, instrumentId])
+  @@map("simulation_market_cursors")
+}
+
+/// Immutable logical provider observation, committed with book and risk ledger changes.
+model SimulationMarketReceipt {
+  id String @id @default(cuid())
+  accountId String
+  ownerUserId String
+  targetId String
+  type String
+  originEffectId String
+  mandateId String
+  formatVersion Int @default(1)
+  bookRevision Int
+  event Json
+  createdAt DateTime @default(now())
+
+  @@unique([accountId, targetId, type], map: "simulation_receipt_identity")
+  @@index([accountId, createdAt], map: "simulation_receipt_account_created")
+  @@map("simulation_market_receipts")
 }

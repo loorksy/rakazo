@@ -50,7 +50,10 @@ export async function initializeTradingOwner(prisma: PrismaClient, proof?: strin
   });
 }
 
-export async function requireTradingOwner(prisma: PrismaClient, userId: string): Promise<void> {
+export async function requireTradingOwner(
+  prisma: Pick<PrismaClient, "deploymentSettings">,
+  userId: string,
+): Promise<void> {
   const settings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
   if (!settings?.singleOwnerEnforced || !ownerSessionAllowed(settings.ownerUserId, userId))
     throw new IsolationError("Owner session required");

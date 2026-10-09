@@ -19,8 +19,9 @@ import type { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
+import { enqueueSimulationExpiries, expireSimulationAccount } from "./simulation-market.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
-import { wakeTradingMission } from "./trading-mission-wakes.js";
+import { enqueueMissionWakes, wakeTradingMission } from "./trading-mission-wakes.js";
 
 export function createBackgroundJobHandlers(deps: {
   executor: ReturnType<typeof createRunExecutor>;
@@ -54,6 +55,11 @@ export function createBackgroundJobHandlers(deps: {
   };
 
   return {
+    "trading.simulation-expire": async ({ accountId, scheduledFor }) => {
+      await expireSimulationAccount(deps.prisma, accountId, scheduledFor);
+      await enqueueSimulationExpiries(deps.prisma, deps.jobs, accountId);
+      await enqueueMissionWakes(deps.prisma, deps.jobs);
+    },
     "trading.mission-wake": ({ wakeId, scheduledFor }) =>
       wakeTradingMission(deps.prisma, deps.jobs, wakeId, scheduledFor),
     "run.continue": async (payload) => {

@@ -4315,7 +4315,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               botId: run.botId,
               execution: { runId, holder: workerId, generation: fence },
             };
-            const financial = new FinancialExecution(deps.prisma);
+            const financial = new FinancialExecution(deps.prisma, undefined, undefined, deps.jobs);
             try {
               if (name === "trade_reconcile") return await financial.reconcile(actor, args);
               const reviewer = await loadIndependentReviewer(

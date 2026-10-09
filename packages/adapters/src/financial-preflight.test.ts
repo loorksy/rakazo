@@ -117,6 +117,7 @@ function fixture(state: SimulationBookState | null = null) {
           formatVersion: 1,
           revision: 3,
           state,
+          nextExpiryAt: null,
           createdAt: new Date(time),
           updatedAt: new Date(time),
         }

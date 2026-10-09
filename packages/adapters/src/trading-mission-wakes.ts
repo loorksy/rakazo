@@ -103,18 +103,31 @@ export async function wakeTradingMission(
     )
       throw new Error("Approved mandate required for wake");
     const allowed =
-      wake.kind === "EXPIRE"
-        ? ["ACTIVE", "APPROVED_WAITING", "PAUSED", "NEEDS_ATTENTION", "EXPIRED"]
-        : [
+      wake.kind === "ACCOUNT_EVENT"
+        ? [
             "ACTIVE",
             "APPROVED_WAITING",
-            ...(wake.status === "DELIVERY_NEEDED" ? ["NEEDS_ATTENTION"] : []),
-          ];
+            "PAUSED",
+            "RISK_STOPPED",
+            "TARGET_REACHED",
+            "EXPIRED",
+            "CANCELLED",
+            "NEEDS_ATTENTION",
+            "NEEDS_RECONCILIATION",
+            "COMPLETED",
+          ]
+        : wake.kind === "EXPIRE"
+          ? ["ACTIVE", "APPROVED_WAITING", "PAUSED", "NEEDS_ATTENTION", "EXPIRED"]
+          : [
+              "ACTIVE",
+              "APPROVED_WAITING",
+              ...(wake.status === "DELIVERY_NEEDED" ? ["NEEDS_ATTENTION"] : []),
+            ];
     if (!allowed.includes(mandate.status)) {
       await tx.tradingMissionWake.update({ where: { id }, data: { status: "CANCELLED" } });
       return null;
     }
-    if (wake.kind !== "EXPIRE" && mandate.expiresAt <= now) {
+    if (wake.kind !== "EXPIRE" && wake.kind !== "ACCOUNT_EVENT" && mandate.expiresAt <= now) {
       await tx.tradingMissionWake.update({ where: { id }, data: { status: "CANCELLED" } });
       return null;
     }

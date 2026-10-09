@@ -1,6 +1,7 @@
 import type { BrokerQuote, FinancialRiskFacts } from "@rakazo/contracts";
 import {
   AccountRiskGuardrailsSchema,
+  BrokerQuoteSchema,
   FinancialEffectContextSchema,
   FinancialEffectOutcomeSchema,
   FinancialRiskFactsSchema,
@@ -26,6 +27,7 @@ import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
 import { attributedFinancialAssessment, financialTarget } from "./financial-target.js";
+import { nextSimulationExpiry } from "./simulation-market.js";
 
 /** Local provider adapter. No broker mutation SDK or credential resolver is imported. */
 export class SimulationBroker {
@@ -98,6 +100,27 @@ export class SimulationBroker {
       if (state.currency !== facts.currency || state.accountId !== facts.accountId)
         throw new Error("Simulation currency changed");
       const value = valueSimulationBook(state, [facts.quote, ...otherQuotes], this.now());
+      // Initial trusted quote seeds valuation only before exposure exists. Thereafter the
+      // provider observer owns watermarks, so a read cannot skip a captured excursion.
+      if (!state.positions.length && !state.orders.length) {
+        const quote = BrokerQuoteSchema.parse(facts.quote);
+        await tx.simulationMarketCursor.upsert({
+          where: {
+            accountId_instrumentId: {
+              accountId: facts.accountId,
+              instrumentId: facts.instrumentId,
+            },
+          },
+          create: {
+            accountId: facts.accountId,
+            instrumentId: facts.instrumentId,
+            ownerUserId: actor.ownerUserId,
+            sourceTime: new Date(quote.sourceTime),
+            quote,
+          },
+          update: {},
+        });
+      }
       const mandates = await tx.tradingMandate.findMany({
         where: {
           ownerUserId: actor.ownerUserId,
@@ -315,7 +338,11 @@ export class SimulationBroker {
       });
       await tx.simulationBook.update({
         where: { accountId: book.accountId },
-        data: { state: result.state, revision: { increment: 1 } },
+        data: {
+          state: result.state,
+          revision: { increment: 1 },
+          nextExpiryAt: nextSimulationExpiry(result.state),
+        },
       });
       await tx.simulationExecution.create({
         data: {

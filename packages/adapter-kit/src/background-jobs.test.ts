@@ -6,6 +6,7 @@ import {
   historyCompactJobKey,
   messagingDeliverJob,
   parseBackgroundJob,
+  simulationExpiryJob,
 } from "./background-jobs.js";
 import type { BackgroundJobHandlers } from "./types.js";
 
@@ -13,6 +14,7 @@ function handlers(): BackgroundJobHandlers {
   return {
     "run.continue": vi.fn(async () => undefined),
     "trading.mission-wake": vi.fn(async () => undefined),
+    "trading.simulation-expire": vi.fn(async () => undefined),
     "routine.wakeup": vi.fn(async () => undefined),
     "computer.update": vi.fn(async () => undefined),
     "computer.sleep": vi.fn(async () => undefined),
@@ -25,6 +27,20 @@ function handlers(): BackgroundJobHandlers {
 }
 
 describe("background job contracts", () => {
+  it("schedules a bounded simulation expiry on its actual deadline using the existing queue", async () => {
+    const target = handlers();
+    const dueAt = new Date("2026-10-10T08:00:00Z");
+    const job = simulationExpiryJob("account", dueAt);
+    expect(job).toEqual({
+      name: "trading.simulation-expire",
+      payload: { accountId: "account", scheduledFor: dueAt.toISOString() },
+      availableAt: dueAt,
+      replaceKey: "trading.simulation-expire:account",
+    });
+    await dispatchBackgroundJob(target, job.name, job.payload);
+    expect(target["trading.simulation-expire"]).toHaveBeenCalledWith(job.payload);
+    expect(() => parseBackgroundJob(job.name, { ...job.payload, authorize: true })).toThrow();
+  });
   it("validates and dispatches messaging.deliver", async () => {
     const target = handlers();
     await dispatchBackgroundJob(target, "messaging.deliver", { runId: "run-1" });

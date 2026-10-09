@@ -22,6 +22,7 @@ import {
   databaseCapacityBackoffMs,
   ExpoPushProvider,
   enqueueMissionWakes,
+  enqueueSimulationExpiries,
   FinancialEffects,
   GraphileJobPublisher,
   GraphileJobWorkerHost,
@@ -275,6 +276,7 @@ async function main() {
     reconcileTradingMissions: async () => {
       await new FinancialEffects(prisma).recoverInterrupted();
       await enqueueMissionWakes(prisma, jobs);
+      await enqueueSimulationExpiries(prisma, jobs);
     },
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
   });

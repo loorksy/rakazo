@@ -196,3 +196,22 @@ close acceptance and replay-free reconciliation. Core risk/simulator/preflight t
 adapters, API and Worker type checks pass. See `simulation-management.md` for precise
 semantics and remaining scope. LIVE, real manual-position supervision, inactive-mandate
 management and automatic simulator observations remain unfinished.
+
+## Simulation market observation checkpoint
+
+The existing Worker now observes pending LIMIT/STOP fills, exact expiry and protective
+stop/target exits without per-quote model calls or broker mutations. Financial raw ticks
+are buffered before visual coalescing; the account-locked durable book decides outcomes.
+Immutable receipts, ledger changes, virtual P&L and mission event wakes commit atomically.
+The existing Graphile host schedules nearest expiry and repairs missed queue delivery.
+
+Target/loss/account capacity transitions stop new risk. Stale prices, provider gaps and
+backpressure require attention rather than silently continuing. See
+`simulation-market-observation.md`. LIVE execution/readiness, real supervision, explicit
+resume and pre-authorized non-FREEZE finishing effects remain incomplete.
+
+The mission PostgreSQL suite passes 73 tests and the broker lifecycle suite passes 15,
+run sequentially on the dedicated fixture database. Focused risk/reviewer/scheduler tests
+pass 153 tests; seven central executor/security suites pass 241. Database, adapters,
+core, API and Worker TypeScript checks pass, along with scoped Biome and whitespace
+checks. All 115 forward migrations apply without reset or checksum/TLS bypass.

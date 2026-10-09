@@ -7,6 +7,10 @@ import type {
 } from "./types.js";
 
 const payloadSchemas = {
+  "trading.simulation-expire": z.strictObject({
+    accountId: z.string().min(1).max(128),
+    scheduledFor: z.iso.datetime({ offset: true }),
+  }),
   "trading.mission-wake": z.strictObject({
     wakeId: z.string().min(1),
     scheduledFor: z.iso.datetime({ offset: true }),
@@ -81,6 +85,15 @@ export function tradingMissionWakeJob(wakeId: string, scheduledFor: Date): Backg
     payload: { wakeId, scheduledFor: scheduledFor.toISOString() },
     availableAt: scheduledFor,
     replaceKey: `trading.mission-wake:${wakeId}`,
+  };
+}
+
+export function simulationExpiryJob(accountId: string, scheduledFor: Date): BackgroundJob {
+  return {
+    name: "trading.simulation-expire",
+    payload: { accountId, scheduledFor: scheduledFor.toISOString() },
+    availableAt: scheduledFor,
+    replaceKey: `trading.simulation-expire:${accountId}`,
   };
 }
 

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import type { BrokerEvent, BrokerProvider, BrokerReadSession } from "@rakazo/adapter-kit";
 import type {
   AccountRiskGuardrails,
   FinancialAction,
@@ -9,18 +10,26 @@ import type {
 import {
   SimulationBookStateSchema,
   TradeProposalViewSchema,
+  TradingCapabilitiesSchema,
   TradingGoalViewSchema,
   TradingMandateViewSchema,
   TradingPlanViewSchema,
 } from "@rakazo/contracts";
-import { answerRunInput, createDb } from "@rakazo/db";
+import { answerRunInput, claimBrokerSession, createDb, withBrokerSessionFence } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { BrokerConnectionSupervisor } from "./broker-supervisor.js";
 import type { ChartActor } from "./cloud-charts.js";
 import { FinancialEffects } from "./financial-effects.js";
 import { FinancialExecution } from "./financial-execution.js";
 import { createJobReconciler } from "./job-reconciler.js";
 import { ScriptedAutoReviewProvider } from "./scripted-auto-review.js";
+import { EncryptedSecretStore } from "./secrets.js";
 import { SimulationBroker } from "./simulation-broker.js";
+import {
+  enqueueSimulationExpiries,
+  expireSimulationAccount,
+  observeSimulationAccount,
+} from "./simulation-market.js";
 import { TradeProposals } from "./trade-proposals.js";
 import { enqueueMissionWakes, wakeTradingMission } from "./trading-mission-wakes.js";
 import { TradingMissions } from "./trading-missions.js";
@@ -140,7 +149,7 @@ suite("owner-only durable trading goals/plans/mandates", () => {
   let missions: TradingMissions;
   const reset = () =>
     db.prisma
-      .$executeRaw`TRUNCATE simulation_executions, simulation_books, trade_previews, trade_proposals, trading_mission_wakes, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE simulation_market_receipts, simulation_market_cursors, simulation_executions, simulation_books, trade_previews, trade_proposals, trading_mission_wakes, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
   beforeAll(() => {
     if (!url || !new URL(url).pathname.endsWith("_test"))
       throw new Error("Dedicated fixture _test database required");
@@ -311,7 +320,7 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       stopsLevel: 10,
       symbolTradingAllowed: true,
       specificationObservedAt: now.toISOString(),
-      orderTypes: ["MARKET", "LIMIT"],
+      orderTypes: ["MARKET", "LIMIT", "STOP"],
       partialClose: true,
       proposedMargin: "30",
       openPositions: [],
@@ -472,6 +481,527 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       instrumentId: "gold",
       brokerSymbol: "GOLD.a",
     };
+    const marketQuote = (bid: string, ask: string, at = new Date(now.getTime() + 1000)) => ({
+      ...facts.quote,
+      bid,
+      ask,
+      sourceTime: at.toISOString(),
+      receivedAt: at.toISOString(),
+      revision: `quote-${at.getTime()}`,
+    });
+    async function observed(
+      quote = marketQuote("2700", "2700.1"),
+      at = new Date(quote.receivedAt),
+    ) {
+      const token = await claimBrokerSession(db.prisma, "account", "observer", at);
+      if (!token) throw new Error("Fixture broker observer lease required");
+      await withBrokerSessionFence(
+        db.prisma,
+        token,
+        (tx) => observeSimulationAccount(tx, "account", [quote], at),
+        at,
+      );
+      return token;
+    }
+    it("observes pending fills, protection and immutable receipts without per-quote agent turns", async () => {
+      const rows = await acceptedExposure({
+        ...action,
+        orderType: "LIMIT",
+        price: "2699",
+        expiresAt: "2026-10-09T12:00:00Z",
+      });
+      const runCount = await db.prisma.run.count();
+      const neutral = marketQuote("2700", "2700.1");
+      await observed(neutral);
+      expect(await db.prisma.simulationMarketReceipt.count()).toBe(0);
+      expect(await db.prisma.run.count()).toBe(runCount);
+      await observed(marketQuote("2698", "2698.1", new Date(now.getTime() + 2000)));
+      const book = SimulationBookStateSchema.parse(
+        (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+          .state,
+      );
+      expect(book.positions[0]).toMatchObject({ entry: "2698.1", originEffectId: rows.effect.id });
+      expect(book.orders).toEqual([]);
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).kind,
+      ).toBe("POSITION");
+      const closing = marketQuote("2712", "2712.1", new Date(now.getTime() + 3000));
+      await observed(closing);
+      await observed(closing);
+      expect(await db.prisma.simulationMarketReceipt.count()).toBe(2);
+      expect(await db.prisma.tradingMissionWake.count({ where: { kind: "ACCOUNT_EVENT" } })).toBe(
+        2,
+      );
+      expect(await db.prisma.run.count()).toBe(runCount);
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).status,
+      ).toBe("RELEASED");
+      const receipt = await db.prisma.simulationMarketReceipt.findFirstOrThrow();
+      await expect(
+        db.prisma.simulationMarketReceipt.update({
+          where: { id: receipt.id },
+          data: { type: "STOP_LOSS" },
+        }),
+      ).rejects.toThrow("immutable");
+      await expect(
+        db.prisma.simulationMarketReceipt.delete({ where: { id: receipt.id } }),
+      ).rejects.toThrow("immutable");
+    });
+    async function streamFixture() {
+      let listener: ((event: BrokerEvent) => void) | undefined;
+      let clock = now;
+      const unavailable = async () => {
+        throw new Error("Unexpected provider operation in deterministic stream fixture");
+      };
+      const session: BrokerReadSession = {
+        accountId: "account",
+        account: unavailable,
+        positions: unavailable,
+        orders: unavailable,
+        symbols: unavailable,
+        specification: unavailable,
+        quote: unavailable,
+        candles: unavailable,
+        preflight: vi.fn(async () => facts),
+        capabilities: async () =>
+          TradingCapabilitiesSchema.parse({
+            version: 1,
+            provider: "metaapi",
+            accountId: "account",
+            environment: "DEMO",
+            accountMode: "HEDGING",
+            quotes: true,
+            quoteStreaming: true,
+            candles: true,
+            historicalCandles: true,
+            accountEvents: true,
+            accountRead: true,
+            positionsRead: true,
+            ordersRead: true,
+            symbolSpecifications: true,
+            operations: [],
+            orderTypes: [],
+            partialClose: false,
+            protectiveStops: false,
+            nativeOco: false,
+            clientReferences: false,
+            verifiedAt: now.toISOString(),
+            revision: "fixture-read-only",
+          }),
+        subscribe: vi.fn(async (_symbols, callback) => {
+          listener = callback;
+          return async () => {};
+        }),
+        close: vi.fn(async () => {}),
+      };
+      const provider: BrokerProvider = { id: "metaapi", connect: vi.fn(async () => session) };
+      const secrets = new EncryptedSecretStore("fixture-only-encryption-key-long-enough");
+      await secrets.start();
+      const supervisor = new BrokerConnectionSupervisor(
+        db.prisma,
+        secrets,
+        provider,
+        undefined,
+        () => clock,
+        jobs,
+      );
+      return {
+        supervisor,
+        session,
+        advance: (at: Date) => {
+          clock = at;
+        },
+        emit: (event: BrokerEvent) => listener?.(event),
+        close: async () => {
+          await supervisor.close();
+          await secrets.close();
+        },
+      };
+    }
+    it("keeps a transient fill and stop before visual coalescing without a connected UI", async () => {
+      await acceptedExposure({
+        ...action,
+        orderType: "LIMIT",
+        price: "2699",
+        expiresAt: "2026-10-09T12:00:00Z",
+      });
+      const stream = await streamFixture();
+      const { supervisor, session } = stream;
+      try {
+        await supervisor.tick();
+        await supervisor.drain();
+        expect(session.subscribe).toHaveBeenLastCalledWith(
+          [{ instrumentId: "gold", symbol: "GOLD.a" }],
+          expect.any(Function),
+        );
+        stream.advance(new Date(now.getTime() + 3000));
+        stream.emit({
+          type: "quote",
+          quote: marketQuote("2698", "2698.1", new Date(now.getTime() + 1000)),
+        });
+        stream.emit({
+          type: "quote",
+          quote: marketQuote("2690", "2690.1", new Date(now.getTime() + 2000)),
+        });
+        stream.emit({
+          type: "quote",
+          quote: marketQuote("2700", "2700.1", new Date(now.getTime() + 3000)),
+        });
+        await supervisor.tick();
+        await supervisor.drain();
+        const book = SimulationBookStateSchema.parse(
+          (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+            .state,
+        );
+        expect(book.positions).toEqual([]);
+        expect(book.orders).toEqual([]);
+        expect(book.balance).toBe("9991.9");
+        expect(
+          await db.prisma.simulationMarketReceipt.count({ where: { type: "ORDER_FILLED" } }),
+        ).toBe(1);
+        expect(
+          await db.prisma.simulationMarketReceipt.count({ where: { type: "STOP_LOSS" } }),
+        ).toBe(1);
+        expect(await db.prisma.run.count()).toBe(1);
+      } finally {
+        await stream.close();
+      }
+    });
+    it("captures protection immediately after admission before the periodic exposure cache refresh", async () => {
+      const rows = await simulatedPrepared();
+      const stream = await streamFixture();
+      try {
+        await db.prisma.brokerReadRequest.create({
+          data: {
+            accountId: "account",
+            ownerUserId: owner,
+            operation: "preflight",
+            parameters: {
+              operation: "preflight",
+              accountId: "account",
+              instrumentId: "gold",
+              action,
+            },
+            deadline: new Date(now.getTime() + 15000),
+          },
+        });
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        expect(stream.session.preflight).toHaveBeenCalledWith(action);
+        expect(stream.session.subscribe).toHaveBeenLastCalledWith(
+          [{ instrumentId: "gold", symbol: "GOLD.a" }],
+          expect.any(Function),
+        );
+        await rows.effects.begin(actor, rows.effect.id, rows.simulatedFacts);
+        await rows.effects.settle(
+          actor,
+          rows.effect.id,
+          await rows.simulator.execute(actor, rows.effect.id, rows.simulatedFacts),
+        );
+        stream.advance(new Date(now.getTime() + 2000));
+        stream.emit({
+          type: "quote",
+          quote: marketQuote("2690", "2690.1", new Date(now.getTime() + 1000)),
+        });
+        stream.emit({
+          type: "quote",
+          quote: marketQuote("2700", "2700.1", new Date(now.getTime() + 2000)),
+        });
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        expect(
+          await db.prisma.simulationMarketReceipt.count({ where: { type: "STOP_LOSS" } }),
+        ).toBe(1);
+        expect(
+          SimulationBookStateSchema.parse(
+            (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+              .state,
+          ).positions,
+        ).toEqual([]);
+      } finally {
+        await stream.close();
+      }
+    });
+    it("fails safely and journals one attention wake when financial tick buffering overflows", async () => {
+      const rows = await acceptedExposure();
+      const stream = await streamFixture();
+      try {
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        stream.advance(new Date(now.getTime() + 2000));
+        for (let index = 0; index < 300; index++)
+          stream.emit({
+            type: "quote",
+            quote: marketQuote("2700", "2700.1", new Date(now.getTime() + 1000 + index)),
+          });
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        expect(
+          (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+            .status,
+        ).toBe("NEEDS_ATTENTION");
+        expect(
+          await db.prisma.financialJournal.count({
+            where: { event: "SIMULATION_OBSERVER_BACKPRESSURE" },
+          }),
+        ).toBe(1);
+        expect(await db.prisma.simulationMarketReceipt.count()).toBe(0);
+        expect(await db.prisma.run.count()).toBe(1);
+      } finally {
+        await stream.close();
+      }
+    });
+    it("pauses on provider disconnect without cancelling already-authorized protective observation", async () => {
+      const rows = await acceptedExposure();
+      const stream = await streamFixture();
+      try {
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        stream.advance(new Date(now.getTime() + 1000));
+        stream.emit({
+          type: "connection_changed",
+          accountId: "account",
+          connected: false,
+          receivedAt: new Date(now.getTime() + 1000).toISOString(),
+        });
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        expect(
+          (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+            .status,
+        ).toBe("NEEDS_ATTENTION");
+        stream.advance(new Date(now.getTime() + 2000));
+        stream.emit({
+          type: "quote",
+          quote: marketQuote("2690", "2690.1", new Date(now.getTime() + 2000)),
+        });
+        await stream.supervisor.tick();
+        await stream.supervisor.drain();
+        expect(
+          await db.prisma.simulationMarketReceipt.count({ where: { type: "STOP_LOSS" } }),
+        ).toBe(1);
+        expect(
+          (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+            .status,
+        ).toBe("NEEDS_ATTENTION");
+      } finally {
+        await stream.close();
+      }
+    });
+    it("retains adverse-gap risk and freezes account capacity instead of pretending pending fills have no risk", async () => {
+      const rows = await acceptedExposure(
+        {
+          ...action,
+          orderType: "STOP",
+          price: "2701",
+          takeProfit: null,
+          expiresAt: "2026-10-09T12:00:00Z",
+        },
+        { ...managementScope, allowedOrderTypes: ["MARKET", "LIMIT", "STOP"] },
+      );
+      await missions.setAccountGuardrails(owner, { ...limits, maxReservedRisk: "15" });
+      await observed(marketQuote("2715", "2715.1"));
+      const reservation = await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+        where: { effectId: rows.effect.id },
+      });
+      expect(reservation.kind).toBe("POSITION");
+      expect(reservation.risk.toFixed()).toBe("23.45");
+      expect(reservation.status).toBe("COMMITTED");
+      const guard = await db.prisma.accountRiskGuardrail.findUniqueOrThrow({
+        where: { accountId_mode: { accountId: "account", mode: "SIMULATION" } },
+      });
+      expect(guard.frozen).toBe(true);
+      expect(
+        (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+          .status,
+      ).toBe("PAUSED");
+      const book = SimulationBookStateSchema.parse(
+        (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+          .state,
+      );
+      expect(book.positions[0]?.margin).toBe(reservation.margin.toFixed());
+    });
+    it("expires through the existing deadline job after downtime and ignores replaced deadlines", async () => {
+      const rows = await acceptedExposure({
+        ...action,
+        orderType: "LIMIT",
+        price: "2699",
+        expiresAt: "2026-10-09T12:00:00Z",
+      });
+      await enqueueSimulationExpiries(db.prisma, jobs, "account", now);
+      expect(jobs.enqueue).toHaveBeenCalledWith({
+        name: "trading.simulation-expire",
+        payload: { accountId: "account", scheduledFor: "2026-10-09T12:00:00.000Z" },
+        availableAt: new Date("2026-10-09T12:00:00Z"),
+        replaceKey: "trading.simulation-expire:account",
+      });
+      await expireSimulationAccount(
+        db.prisma,
+        "account",
+        "2026-10-09T11:00:00Z",
+        new Date("2026-10-09T13:00:00Z"),
+      );
+      expect(await db.prisma.simulationMarketReceipt.count()).toBe(0);
+      await expireSimulationAccount(
+        db.prisma,
+        "account",
+        "2026-10-09T12:00:00Z",
+        new Date("2026-10-09T13:00:00Z"),
+      );
+      await expireSimulationAccount(
+        db.prisma,
+        "account",
+        "2026-10-09T12:00:00Z",
+        new Date("2026-10-09T13:00:00Z"),
+      );
+      expect(await db.prisma.simulationMarketReceipt.count()).toBe(1);
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).status,
+      ).toBe("RELEASED");
+      expect(
+        (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+          .nextExpiryAt,
+      ).toBeNull();
+    });
+    it("ignores stale, out-of-order and wrong-symbol quotes without rewinding observed state", async () => {
+      await acceptedExposure();
+      await observed(marketQuote("2701", "2701.1", new Date(now.getTime() + 2000)));
+      await observed(
+        marketQuote("2690", "2690.1", new Date(now.getTime() + 1000)),
+        new Date(now.getTime() + 2000),
+      );
+      await observed({
+        ...marketQuote("2690", "2690.1", new Date(now.getTime() + 3000)),
+        brokerSymbol: "foreign",
+      });
+      await observed({
+        ...marketQuote("2690", "2690.1", new Date(now.getTime() + 3000)),
+        sourceTime: new Date(now.getTime() - 20000).toISOString(),
+      });
+      expect(await db.prisma.simulationMarketReceipt.count()).toBe(0);
+      expect(
+        SimulationBookStateSchema.parse(
+          (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+            .state,
+        ).positions,
+      ).toHaveLength(1);
+    });
+    it("rejects a stale broker session after takeover even when it reads the current book", async () => {
+      await acceptedExposure();
+      const previous = await observed();
+      const later = new Date(now.getTime() + 32000);
+      const current = await claimBrokerSession(db.prisma, "account", "replacement", later);
+      expect(current?.generation).toBe(previous.generation + 1);
+      await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } });
+      await expect(
+        withBrokerSessionFence(
+          db.prisma,
+          previous,
+          (tx) =>
+            observeSimulationAccount(tx, "account", [marketQuote("2690", "2690.1", later)], later),
+          later,
+        ),
+      ).rejects.toThrow("stale or revoked");
+      expect(await db.prisma.simulationMarketReceipt.count()).toBe(0);
+    });
+    it("rolls back book, ledger, P&L and logical wake when an observation receipt cannot commit", async () => {
+      const rows = await acceptedExposure();
+      const before = await db.prisma.simulationBook.findUniqueOrThrow({
+        where: { accountId: "account" },
+      });
+      await db.prisma
+        .$executeRaw`ALTER TABLE simulation_market_receipts ADD CONSTRAINT fixture_test_reject_observation CHECK (false) NOT VALID`;
+      try {
+        await expect(observed(marketQuote("2690", "2690.1"))).rejects.toThrow();
+        expect(
+          await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }),
+        ).toEqual(before);
+        expect(
+          (
+            await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+              where: { effectId: rows.effect.id },
+            })
+          ).status,
+        ).toBe("COMMITTED");
+        expect(await db.prisma.tradingMissionWake.count({ where: { kind: "ACCOUNT_EVENT" } })).toBe(
+          0,
+        );
+      } finally {
+        await db.prisma
+          .$executeRaw`ALTER TABLE simulation_market_receipts DROP CONSTRAINT fixture_test_reject_observation`;
+      }
+    });
+    it.each([
+      ["3001", "3001.1", "TARGET_REACHED"],
+      ["2500", "2500.1", "RISK_STOPPED"],
+    ])(
+      "stops new risk on observed target/loss and preserves terminal notification delivery",
+      async (bid, ask, status) => {
+        const rows = await acceptedExposure();
+        await observed(marketQuote(bid, ask));
+        expect(
+          (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+            .status,
+        ).toBe(status);
+        const wake = await db.prisma.tradingMissionWake.findFirstOrThrow({
+          where: { mandateId: rows.active.id, kind: "ACCOUNT_EVENT" },
+        });
+        await wakeTradingMission(
+          db.prisma,
+          jobs,
+          wake.id,
+          wake.dueAt.toISOString(),
+          new Date(now.getTime() + 1000),
+        );
+        await wakeTradingMission(
+          db.prisma,
+          jobs,
+          wake.id,
+          wake.dueAt.toISOString(),
+          new Date(now.getTime() + 1000),
+        );
+        expect(
+          (await db.prisma.tradingMissionWake.findUniqueOrThrow({ where: { id: wake.id } })).status,
+        ).toBe("QUEUED");
+        expect(await db.prisma.run.count({ where: { clientNonce: wake.wakeKey } })).toBe(1);
+      },
+    );
+    it("recovers committed observation after actual process death without another close or balance change", async () => {
+      const rows = await acceptedExposure();
+      const quote = marketQuote("2690", "2690.1");
+      await killAfterPersisted(
+        `import {createDb,claimBrokerSession,withBrokerSessionFence} from '@rakazo/db'; import {observeSimulationAccount} from './src/simulation-market.ts';
+const db=createDb(process.env.MISSION_TEST_DATABASE_URL); const quote=JSON.parse(process.env.FIXTURE_QUOTE); const now=new Date(quote.receivedAt); const token=await claimBrokerSession(db.prisma,'account','observer',now); await withBrokerSessionFence(db.prisma,token,tx=>observeSimulationAccount(tx,'account',[quote],now),now); process.stdout.write('PERSISTED'); await new Promise(()=>{});`,
+        { FIXTURE_QUOTE: JSON.stringify(quote) },
+      );
+      const before = await db.prisma.simulationBook.findUniqueOrThrow({
+        where: { accountId: "account" },
+      });
+      await observed(quote);
+      expect(
+        await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }),
+      ).toEqual(before);
+      expect(await db.prisma.simulationMarketReceipt.count()).toBe(1);
+      expect(
+        (
+          await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+            where: { effectId: rows.effect.id },
+          })
+        ).status,
+      ).toBe("RELEASED");
+    });
     it("tightens protection and partially/full closes without duplicating exposure reservations", async () => {
       const rows = await acceptedExposure({ ...action, volume: "0.02" });
       const positionId = `sim_${rows.effect.id}`;

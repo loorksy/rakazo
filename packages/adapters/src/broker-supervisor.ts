@@ -8,11 +8,17 @@ import type {
   SecretStore,
 } from "@rakazo/adapter-kit";
 import { runContinueJob } from "@rakazo/adapter-kit";
-import type { BrokerCandle, BrokerQuote, MarketCondition } from "@rakazo/contracts";
+import type {
+  BrokerCandle,
+  BrokerQuote,
+  MarketCondition,
+  SimulationBookState,
+} from "@rakazo/contracts";
 import {
   BrokerQuoteSchema,
   BrokerReadCommandSchema,
   MarketConditionSchema,
+  SimulationBookStateSchema,
 } from "@rakazo/contracts";
 import { observeMarketCondition } from "@rakazo/core";
 import type { BrokerLeaseToken, PrismaClient } from "@rakazo/db";
@@ -27,6 +33,8 @@ import {
 import { z } from "zod";
 import { observeMarketWatches, recoverMarketWakes } from "./market-watches.js";
 import { BrokerProviderError, sanitizedBrokerError } from "./metaapi-normalize.js";
+import { observeSimulationAccount, pauseSimulationObservation } from "./simulation-market.js";
+import { enqueueMissionWakes } from "./trading-mission-wakes.js";
 
 interface Slot {
   token: BrokerLeaseToken;
@@ -62,6 +70,10 @@ interface Slot {
     }
   >;
   history: Map<string, { expires: number; candles: BrokerCandle[] }>;
+  simulationState?: SimulationBookState;
+  simulationQuotes: Map<string, BrokerQuote>;
+  simulationOverflow: boolean;
+  financialDemands: Set<string>;
 }
 
 /** Account socket lifecycle inside the existing Worker; not an agent runtime or job scheduler. */
@@ -146,6 +158,9 @@ export class BrokerConnectionSupervisor {
               history: new Map(),
               conditions: new Map(),
               crossings: new Map(),
+              simulationQuotes: new Map(),
+              simulationOverflow: false,
+              financialDemands: new Set(),
             };
             this.slots.set(row.id, slot);
           }
@@ -153,7 +168,10 @@ export class BrokerConnectionSupervisor {
             await heartbeatBrokerSession(this.prisma, slot.token, this.now());
             slot.lastHeartbeat = this.now().getTime();
           }
-          if (!slot.flushing && (slot.pending.size || slot.crossings.size)) {
+          if (
+            !slot.flushing &&
+            (slot.pending.size || slot.crossings.size || slot.simulationQuotes.size)
+          ) {
             const current = slot;
             current.flushing = true;
             this.track(
@@ -224,6 +242,14 @@ export class BrokerConnectionSupervisor {
               where: { accountId: token.accountId },
               data: { state: "CONNECTED", lastHealthyAt: this.now(), failureCode: null },
             });
+            if (token.generation > 1) {
+              const book = await tx.simulationBook.findUnique({
+                where: { accountId: token.accountId },
+              });
+              const state = book ? SimulationBookStateSchema.parse(book.state) : null;
+              if (state && (state.positions.length || state.orders.length))
+                await pauseSimulationObservation(tx, token.accountId, this.now(), "CONNECTION_GAP");
+            }
           },
           this.now(),
         );
@@ -302,6 +328,11 @@ export class BrokerConnectionSupervisor {
             where: { accountId: token.accountId, status: "ACTIVE", expiresAt: { lte: this.now() } },
             data: { status: "EXPIRED", revision: { increment: 1 } },
           });
+          if (
+            slot.simulationState &&
+            (slot.simulationState.positions.length || slot.simulationState.orders.length)
+          )
+            await observeSimulationAccount(tx, token.accountId, [], this.now());
           return recoverMarketWakes(tx, token.accountId);
         },
         this.now(),
@@ -326,15 +357,21 @@ export class BrokerConnectionSupervisor {
       await withBrokerSessionFence(
         this.prisma,
         token,
-        (tx) =>
-          tx.brokerSessionLease.update({
+        async (tx) => {
+          if (
+            slot.simulationState &&
+            (slot.simulationState.positions.length || slot.simulationState.orders.length)
+          )
+            await pauseSimulationObservation(tx, token.accountId, this.now(), "CONNECTION_GAP");
+          return tx.brokerSessionLease.update({
             where: { accountId: token.accountId },
             data: {
               state: "RECONNECTING",
               failureCode: sanitizedBrokerError(error).code,
               reconnectCount: { increment: 1 },
             },
-          }),
+          });
+        },
         this.now(),
       ).catch(() => undefined);
     }
@@ -420,6 +457,18 @@ export class BrokerConnectionSupervisor {
         !session.preflight
       )
         throw new BrokerProviderError("INVALID_REQUEST");
+      if (action.mode === "SIMULATION") {
+        if (slot.demands.size >= 256 && !slot.demands.has(instrument.id))
+          throw new BrokerProviderError("UNAVAILABLE");
+        slot.financialDemands.add(instrument.id);
+        slot.demands.set(instrument.id, {
+          symbol: instrument.brokerSymbol,
+          expires: this.now().getTime() + 60000,
+        });
+        // Subscribe before returning financial evidence. The account book can change
+        // between periodic refreshes; bounded raw ticks cover that admission window.
+        await this.updateSubscriptions(slot);
+      }
       const facts = await session.preflight(action);
       await withBrokerSessionFence(
         this.prisma,
@@ -499,6 +548,30 @@ export class BrokerConnectionSupervisor {
       )
         return;
     } else if (event.accountId !== slot.token.accountId) return;
+    if (event.type === "quote" && slot.financialDemands.has(event.quote.instrumentId)) {
+      const last = slot.quoteTimes.get(event.quote.instrumentId);
+      const age = this.now().getTime() - Date.parse(event.quote.sourceTime);
+      const receivedAge = this.now().getTime() - Date.parse(event.quote.receivedAt);
+      if (
+        age >= -2000 &&
+        age <= 15000 &&
+        receivedAge >= -2000 &&
+        receivedAge <= 15000 &&
+        (!last || Date.parse(last.time) < Date.parse(event.quote.sourceTime))
+      ) {
+        // Preserve raw financial ticks before visual coalescing. The protected
+        // book, not a periodically refreshed in-memory target list, decides outcomes.
+        if (slot.simulationQuotes.size >= 256) {
+          // A full queue is not permission to guess which financial event was missed.
+          slot.simulationOverflow = true;
+        } else {
+          slot.simulationQuotes.set(
+            `${event.quote.instrumentId}:${event.quote.sourceTime}:${event.quote.revision}`,
+            event.quote,
+          );
+        }
+      }
+    }
     if (event.type === "quote")
       for (const [id, condition] of slot.conditions) {
         if (condition.instrumentId !== event.quote.instrumentId || slot.crossings.has(id)) continue;
@@ -552,7 +625,11 @@ export class BrokerConnectionSupervisor {
     }
   }
   private async flush(slot: Slot) {
-    if (!slot.pending.size && !slot.crossings.size) return;
+    if (!slot.pending.size && !slot.crossings.size && !slot.simulationQuotes.size) return;
+    const captured = [...slot.simulationQuotes.values()];
+    slot.simulationQuotes.clear();
+    const overflow = slot.simulationOverflow;
+    slot.simulationOverflow = false;
     const crossings = [...slot.crossings.values()].slice(0, 20);
     for (const crossing of crossings) slot.crossings.delete(crossing.id);
     const events = [...slot.pending.values()];
@@ -566,6 +643,33 @@ export class BrokerConnectionSupervisor {
         // Capture useful conditions before visual quote coalescing can hide a short excursion.
         for (const crossing of crossings)
           runs.push(...(await observeMarketWatches(tx, crossing.quote, this.now(), crossing)));
+        if (slot.simulationState || captured.length) {
+          if (overflow) await pauseSimulationObservation(tx, slot.token.accountId, this.now());
+          if (connectionEvent?.type === "connection_changed" && !connectionEvent.connected)
+            await pauseSimulationObservation(
+              tx,
+              slot.token.accountId,
+              this.now(),
+              "CONNECTION_GAP",
+            );
+          const quotes = [
+            ...captured,
+            ...events.flatMap((event) => (event.type === "quote" ? [event.quote] : [])),
+          ].sort((a, b) => Date.parse(a.sourceTime) - Date.parse(b.sourceTime));
+          // Capture and latest can overlap; retain the first copy of each exact provider tick.
+          const unique = new Map(
+            quotes.map((quote) => [
+              `${quote.instrumentId}:${quote.sourceTime}:${quote.revision}`,
+              quote,
+            ]),
+          );
+          await observeSimulationAccount(
+            tx,
+            slot.token.accountId,
+            [...unique.values()].slice(0, 256),
+            this.now(),
+          );
+        }
         // Unsatisfied stream observations stay in bounded memory. Only captured logical
         // conditions enter PostgreSQL; batch limits prevent mass triggers starving leases.
         await tx.brokerSessionLease.update({
@@ -586,6 +690,8 @@ export class BrokerConnectionSupervisor {
     );
     for (const runId of wakeRuns)
       await this.jobs?.enqueue(runContinueJob(runId)).catch(() => undefined);
+    if (this.jobs && (slot.simulationState || captured.length))
+      await enqueueMissionWakes(this.prisma, this.jobs).catch(() => undefined);
     if (this.realtime)
       for (let offset = 0; offset < events.length; offset += 4) {
         // Small bounded batches stay beneath PostgreSQL's NOTIFY payload limit.
@@ -600,6 +706,27 @@ export class BrokerConnectionSupervisor {
   }
   private async updateSubscriptions(slot: Slot) {
     if (!slot.session) return;
+    const simulationBook = await this.prisma.simulationBook.findUnique({
+      where: { accountId: slot.token.accountId },
+    });
+    slot.simulationState = simulationBook
+      ? SimulationBookStateSchema.parse(simulationBook.state)
+      : undefined;
+    const financialSymbols = new Set(
+      slot.simulationState
+        ? [...slot.simulationState.positions, ...slot.simulationState.orders].map(
+            (row) => row.instrumentId,
+          )
+        : [],
+    );
+    if (financialSymbols.size > 256)
+      await withBrokerSessionFence(
+        this.prisma,
+        slot.token,
+        (tx) => pauseSimulationObservation(tx, slot.token.accountId, this.now()),
+        this.now(),
+      );
+    for (const id of financialSymbols) slot.financialDemands.add(id);
     const watches = await this.prisma.marketWatch.findMany({
       where: { accountId: slot.token.accountId, status: "ACTIVE", expiresAt: { gt: this.now() } },
       select: {
@@ -624,6 +751,12 @@ export class BrokerConnectionSupervisor {
         });
     const subscriptions = [
       ...watches,
+      ...(slot.simulationState
+        ? [...slot.simulationState.positions, ...slot.simulationState.orders].map((row) => ({
+            instrumentId: row.instrumentId,
+            expiresAt: new Date(this.now().getTime() + 5000),
+          }))
+        : []),
       ...(await this.prisma.brokerMarketSubscription.findMany({
         where: { accountId: slot.token.accountId, expiresAt: { gt: this.now() } },
         select: { instrumentId: true, expiresAt: true },
@@ -651,11 +784,18 @@ export class BrokerConnectionSupervisor {
       });
     }
     for (const [id, demand] of slot.demands)
-      if (demand.expires <= this.now().getTime()) slot.demands.delete(id);
+      if (demand.expires <= this.now().getTime()) {
+        slot.demands.delete(id);
+        slot.financialDemands.delete(id);
+      }
     const key = [...slot.demands.keys()].sort().join("\n");
     if (key === slot.observed) return;
     const release = await slot.session.subscribe(
       [...slot.demands]
+        .sort(
+          ([first], [second]) =>
+            Number(slot.financialDemands.has(second)) - Number(slot.financialDemands.has(first)),
+        )
         .slice(0, 256)
         .map(([instrumentId, entry]) => ({ instrumentId, symbol: entry.symbol })),
       (event) => this.observe(slot, event),

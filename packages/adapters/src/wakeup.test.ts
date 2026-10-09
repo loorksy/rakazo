@@ -6,6 +6,7 @@ function handlers(): BackgroundJobHandlers {
   return {
     "run.continue": vi.fn(async () => undefined),
     "trading.mission-wake": vi.fn(async () => undefined),
+    "trading.simulation-expire": vi.fn(async () => undefined),
     "routine.wakeup": vi.fn(async () => undefined),
     "computer.update": vi.fn(async () => undefined),
     "computer.sleep": vi.fn(async () => undefined),

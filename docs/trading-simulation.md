@@ -15,8 +15,8 @@ Integrated simulation admission supports market/pending entries, order cancellat
 modification, protective updates and partial/full closes through mandatory review, atomic
 risk reservation and STARTED. Management resolves the exact exposure from the protected
 virtual book and its confirmed original effect/acceptance receipt. A model-provided ID
-does not confer ownership. Pending fills, expiry and protective automatic exits are not
-yet observed by this checkpoint.
+does not confer ownership. Pending fills, expiry and protective automatic exits are
+observed by the existing Worker broker sessions; see `simulation-market-observation.md`.
 
 Management reserves its incremental risk as MANAGEMENT, rather than counting it as a new
 position/order. Acceptance updates the original exposure's reservation, releases the
@@ -42,7 +42,9 @@ The calculator uses exact fixed-point arithmetic. Market buys fill at ask and se
 bid; closes use the opposite side. Fractional losses round conservatively. Partial closes
 validate volume/remaining volume and scale margin upward at the fixed-point boundary.
 The simulation currently assumes no commissions, swaps, slippage or broker latency and
-uses entry margin until changed. Its performance is **not** a live-return forecast.
+uses entry margin until changed, with conservative margin increases on adverse pending
+fills. Observed spread and price gaps affect fills and exits; there is no additional
+simulated execution slippage. Its performance is **not** a live-return forecast.
 
 Daily mission loss semantics are UTC-day realized P&L plus current unrealized P&L. Total
 mission P&L is lifetime mission-realized P&L plus current unrealized P&L; other missions and
