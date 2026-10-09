@@ -12,6 +12,7 @@ import { isApprovalPausedResult } from "./approval-effect.js";
 import { MAX_SHARED_MEMORY_CHARS } from "./builtin-tools.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { FinancialExecution } from "./financial-execution.js";
 import { catalogEntries, resolveCatalogCall } from "./lazy-tool-catalog.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
@@ -59,12 +60,14 @@ function fixture({
   shutdownSignal,
   builtin = false,
   tradingProduct = false,
+  mainFinancialPrincipal = false,
   disabledBuiltinTools = [],
   existingSharedMemory,
   advanceRevisionAfterRead = false,
 }: {
   builtin?: boolean;
   tradingProduct?: boolean;
+  mainFinancialPrincipal?: boolean;
   disabledBuiltinTools?: string[];
   existingSharedMemory?: string;
   /** Simulates another writer landing between the save's read and its commit. */
@@ -188,6 +191,8 @@ function fixture({
     bot: {
       findUniqueOrThrow: vi.fn(async () => ({
         id: run.botId,
+        spaceId: run.spaceId,
+        spawnKey: mainFinancialPrincipal ? "trading:main:v1" : null,
         name: bot.name,
         title: bot.title,
         description: bot.description,
@@ -211,6 +216,7 @@ function fixture({
     deploymentSettings: {
       findUnique: vi.fn(async () => ({
         singleOwnerEnforced: tradingProduct,
+        ownerSpaceId: "space-1",
         defaultModelProvider: "scripted",
         defaultModelId: "scripted",
       })),
@@ -333,6 +339,97 @@ describe("disabled builtins", () => {
     expect(f.commit).not.toHaveBeenCalled();
     expect(f.execute).not.toHaveBeenCalled();
     expect(f.effects).toEqual([]);
+  });
+});
+
+describe("domain-owned financial tool dispatch", () => {
+  it("routes Main execution through the financial handler even with generic review disabled/always-allow", async () => {
+    const service = vi.spyOn(FinancialExecution.prototype, "execute").mockResolvedValue({
+      effectId: "financial",
+      status: "SUCCEEDED",
+      mode: "SIMULATION",
+      providerReference: "sim_financial",
+    });
+    try {
+      const f = fixture({
+        name: "trade_execute",
+        builtin: true,
+        tradingProduct: true,
+        mainFinancialPrincipal: true,
+        autoReview: false,
+        rules: [{ effect: "always_allow", matchKind: "tool", matchValue: "trade_execute" }],
+      });
+      f.setCalls([
+        { args: { proposalId: "proposal", previewId: "preview" }, executionId: "execute" },
+      ]);
+      await f.run();
+      expect(service).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ownerUserId: "user-1",
+          botId: "bot-1",
+          execution: expect.objectContaining({ runId: "run-1" }),
+        }),
+        { proposalId: "proposal", previewId: "preview" },
+        autoReviewProvider,
+        expect.anything(),
+        expect.any(Array),
+      );
+      expect(f.effects).toEqual([]); // The domain, not the generic executor, owns its effect.
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.results[0]).toMatchObject({ status: "SUCCEEDED", mode: "SIMULATION" });
+    } finally {
+      service.mockRestore();
+    }
+  });
+  it("refuses peer execution before invoking the financial handler", async () => {
+    const service = vi.spyOn(FinancialExecution.prototype, "execute");
+    try {
+      const f = fixture({ name: "trade_execute", builtin: true, tradingProduct: true });
+      f.setCalls([
+        { args: { proposalId: "proposal", previewId: "preview" }, executionId: "execute" },
+      ]);
+      await f.run();
+      expect(service).not.toHaveBeenCalled();
+      expect(f.effects).toEqual([]);
+      expect(f.results[0]).toMatchObject({ error: expect.stringContaining("Main Trading Agent") });
+    } finally {
+      service.mockRestore();
+    }
+  });
+  it("uses the existing pause/card path for a mandatory financial escalation", async () => {
+    const ask = {
+      kind: "ask" as const,
+      approvalEffectId: "financial",
+      text: "Review simulation action",
+      status: "pending" as const,
+      actions: [
+        { id: "allow", label: "Approve once" },
+        { id: "deny", label: "Deny" },
+      ],
+    };
+    const service = vi.spyOn(FinancialExecution.prototype, "execute").mockResolvedValue({
+      effectId: "financial",
+      status: "APPROVAL_REQUIRED",
+      mode: "SIMULATION",
+      ask,
+    });
+    try {
+      const f = fixture({
+        name: "trade_execute",
+        builtin: true,
+        tradingProduct: true,
+        mainFinancialPrincipal: true,
+      });
+      f.setCalls([
+        { args: { proposalId: "proposal", previewId: "preview" }, executionId: "execute" },
+      ]);
+      await f.run();
+      expect(f.pauseRunForInput).toHaveBeenCalledWith(expect.objectContaining({ blocks: [ask] }));
+      expect(isApprovalPausedResult(f.results[0])).toBe(true);
+      expect(f.effects).toEqual([]);
+    } finally {
+      service.mockRestore();
+    }
   });
 });
 

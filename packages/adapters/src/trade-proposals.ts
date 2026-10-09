@@ -24,7 +24,7 @@ import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
-import { requestBrokerRead } from "./trading-connections.js";
+import { financialPreflight } from "./financial-preflight.js";
 
 type Proposal = Prisma.TradeProposalGetPayload<Record<never, never>>;
 type TrustedPreflight = (
@@ -34,28 +34,13 @@ type TrustedPreflight = (
 ) => Promise<FinancialRiskFacts>;
 /** Preparation only; no method grants approval or calls a broker mutation endpoint. */
 export class TradeProposals {
-  private readonly preflight: TrustedPreflight;
+  private readonly preflight: TrustedPreflight | undefined;
   constructor(
     private readonly prisma: PrismaClient,
     private readonly now: () => Date = () => new Date(),
     preflight?: TrustedPreflight,
   ) {
-    this.preflight =
-      preflight ??
-      (async (ownerUserId, action, signal) =>
-        FinancialRiskFactsSchema.parse(
-          await requestBrokerRead(
-            prisma,
-            ownerUserId,
-            {
-              operation: "preflight",
-              accountId: action.accountId,
-              instrumentId: action.instrumentId,
-              action,
-            },
-            signal,
-          ),
-        ));
+    this.preflight = preflight;
   }
   private async main(tx: Prisma.TransactionClient, actor: ChartActor) {
     await fenceChartExecution(tx, actor);
@@ -240,7 +225,9 @@ export class TradeProposals {
     if (!row || command.operation !== "preview") throw new Error("Invalid preview request");
     const action = canonicalFinancialAction(row.action);
     const facts = FinancialRiskFactsSchema.parse(
-      await this.preflight(actor.ownerUserId, action, signal),
+      this.preflight
+        ? await this.preflight(actor.ownerUserId, action, signal)
+        : await financialPreflight(this.prisma, actor, action, signal),
     );
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM trading_connections WHERE id = ${row.accountId} FOR UPDATE`;

@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { financialToolPolicy } from "./financial-tool-policy.js";
+import { financialBuiltinRead, financialToolPolicy } from "./financial-tool-policy.js";
 
 describe("hard financial tool boundary", () => {
-  it.each(["trading_mission", "trade_prepare"])(
+  it("refreshes structured reads without classifying execution or internal writes as read-only", () => {
+    expect(financialBuiltinRead("broker_read", "preflight")).toBe(true);
+    expect(financialBuiltinRead("trade_prepare", "get")).toBe(true);
+    expect(financialBuiltinRead("trading_mission", "list")).toBe(true);
+    for (const [name, operation] of [
+      ["trade_execute", "get"],
+      ["trade_reconcile", "get"],
+      ["trade_prepare", "preview"],
+      ["trading_mission", "mandate_propose"],
+      ["unknown_connector", "get"],
+    ])
+      expect(financialBuiltinRead(name ?? "", operation)).toBe(false);
+  });
+  it.each(["trading_mission", "trade_prepare", "trade_execute", "trade_reconcile"])(
     "%s belongs only to Main, not research peers",
     (toolName) => {
       expect(

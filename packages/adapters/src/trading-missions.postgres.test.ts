@@ -17,6 +17,7 @@ import { answerRunInput, createDb } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChartActor } from "./cloud-charts.js";
 import { FinancialEffects } from "./financial-effects.js";
+import { FinancialExecution } from "./financial-execution.js";
 import { createJobReconciler } from "./job-reconciler.js";
 import { ScriptedAutoReviewProvider } from "./scripted-auto-review.js";
 import { SimulationBroker } from "./simulation-broker.js";
@@ -379,6 +380,177 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       );
       return { ...rows, simulator, simulatedFacts };
     }
+    async function executionReady() {
+      const simulator = new SimulationBroker(db.prisma, () => now);
+      const rows = await financialPrepared(() => simulator.preflight(actor, facts));
+      const execution = new FinancialExecution(
+        db.prisma,
+        () => now,
+        (current) => simulator.preflight(current, facts),
+      );
+      return {
+        ...rows,
+        execution,
+        command: {
+          proposalId: rows.proposal.id,
+          previewId: rows.previewed.preview?.id ?? "missing",
+        },
+      };
+    }
+    it("runs the full approved-mandate/review/risk/effect/simulation pipeline once", async () => {
+      const rows = await executionReady();
+      const result = await rows.execution.execute(
+        actor,
+        rows.command,
+        new ScriptedAutoReviewProvider(),
+        rows.reviewContext,
+      );
+      expect(result).toMatchObject({
+        mode: "SIMULATION",
+        status: "SUCCEEDED",
+        providerReference: `sim_${rows.effect.id}`,
+      });
+      expect(
+        await rows.execution.execute(
+          actor,
+          rows.command,
+          new ScriptedAutoReviewProvider(),
+          rows.reviewContext,
+        ),
+      ).toEqual(result);
+      expect(await db.prisma.simulationExecution.count()).toBe(1);
+      expect(await db.prisma.externalEffect.count()).toBe(1);
+      expect(await db.prisma.tradingRiskReservation.count()).toBe(1);
+    });
+    it.each(["deny", "ask"] as const)(
+      "never reserves or sends a simulated action when independent review returns %s",
+      async (decision) => {
+        const rows = await executionReady();
+        const result = await rows.execution.execute(
+          actor,
+          rows.command,
+          new ScriptedAutoReviewProvider({ decision, model: "fixture" }),
+          rows.reviewContext,
+        );
+        expect(result.status).toBe(decision === "deny" ? "DENIED" : "APPROVAL_REQUIRED");
+        expect(await db.prisma.simulationExecution.count()).toBe(0);
+        expect(await db.prisma.tradingRiskReservation.count()).toBe(0);
+        if (result.status === "APPROVAL_REQUIRED")
+          expect(result.ask).toMatchObject({
+            kind: "ask",
+            approvalEffectId: rows.effect.id,
+            actions: [
+              { id: "allow", label: "Approve once" },
+              { id: "deny", label: "Deny" },
+            ],
+          });
+      },
+    );
+    it("missing independent review escalates safely without activating an effect", async () => {
+      const rows = await executionReady();
+      expect(
+        (await rows.execution.execute(actor, rows.command, undefined, rows.reviewContext)).status,
+      ).toBe("APPROVAL_REQUIRED");
+      expect(
+        (await db.prisma.externalEffect.findUniqueOrThrow({ where: { id: rows.effect.id } }))
+          .reviewDecision,
+      ).toBe("ask");
+      expect(await db.prisma.simulationExecution.count()).toBe(0);
+    });
+    it("refreshes the exact preview after an owner approval wait and resumes without blanket authority", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(now);
+      try {
+        const rows = await executionReady();
+        const requested = await rows.execution.execute(
+          actor,
+          rows.command,
+          undefined,
+          rows.reviewContext,
+        );
+        if (requested.status !== "APPROVAL_REQUIRED") throw new Error("Expected owner escalation");
+        await db.prisma.run.update({
+          where: { id: "claimed" },
+          data: { status: "waiting_input", leaseOwner: null, leaseExpiresAt: null },
+        });
+        const message = await db.prisma.message.create({
+          data: {
+            seq: 0,
+            threadId: "thread",
+            runId: "claimed",
+            botId: "main",
+            role: "bot",
+            blocks: [requested.ask],
+          },
+        });
+        const later = new Date(now.getTime() + 60000);
+        vi.setSystemTime(later);
+        expect(
+          await answerRunInput(db.prisma, {
+            spaceId: "space",
+            threadId: "thread",
+            runId: "claimed",
+            messageId: message.id,
+            answeredByUserId: owner,
+            answer: "allow",
+          }),
+        ).toBe(true);
+        await db.prisma.run.update({
+          where: { id: "claimed" },
+          data: {
+            status: "running",
+            leaseOwner: "worker-b",
+            leaseFence: 2,
+            leaseExpiresAt: new Date(later.getTime() + 60000),
+          },
+        });
+        const current = {
+          ...actor,
+          execution: { runId: "claimed", holder: "worker-b", generation: 2 },
+        };
+        const freshFacts = {
+          ...facts,
+          observedAt: later.toISOString(),
+          specificationObservedAt: later.toISOString(),
+          quote: {
+            ...facts.quote,
+            sourceTime: later.toISOString(),
+            receivedAt: later.toISOString(),
+          },
+        };
+        const simulator = new SimulationBroker(db.prisma, () => later);
+        const proposal = TradeProposalViewSchema.parse(
+          await new TradeProposals(
+            db.prisma,
+            () => later,
+            () => simulator.preflight(current, freshFacts),
+          ).command(current, {
+            operation: "preview",
+            proposalId: rows.proposal.id,
+            expectedRevision: 2,
+          }),
+        );
+        const result = await new FinancialExecution(
+          db.prisma,
+          () => later,
+          () => simulator.preflight(current, freshFacts),
+        ).execute(
+          current,
+          { proposalId: proposal.id, previewId: proposal.preview?.id ?? "missing" },
+          undefined,
+          rows.reviewContext,
+        );
+        expect(result.status).toBe("SUCCEEDED");
+        expect(await db.prisma.simulationExecution.count()).toBe(1);
+        expect(await db.prisma.actionApprovalRule.count()).toBe(0);
+        expect(
+          (await db.prisma.externalEffect.findUniqueOrThrow({ where: { id: rows.effect.id } }))
+            .reviewDecision,
+        ).toBe("ask");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
     it("executes a reserved simulation once, preserves immutable receipts and attributes fresh virtual P&L", async () => {
       const rows = await simulatedPrepared();
       expect(rows.simulatedFacts.simulationRevision).toBe(1);

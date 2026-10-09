@@ -48,6 +48,7 @@ import {
   CLOUDFLARE_AI_GATEWAY_CONFIG_MESSAGE,
   COMPUTER_COMMAND_OUTPUT_MAX_CHARS,
   disabledBuiltinToolSet,
+  FinancialEffectContextSchema,
   HistoryReadInputSchema,
   HistorySearchInputSchema,
   isAttachmentImageMimeType,
@@ -70,6 +71,7 @@ import {
   createStreamingRedactor,
   endsSentence,
   expandSkillReferencesInPrompt,
+  financialBuiltinRead,
   financialToolPolicy,
   formatSkillRunPrompt,
   formatSkillsCatalogInstruction,
@@ -166,6 +168,7 @@ import {
   settleUncertainEffect,
   uncertainEffectResult,
 } from "./approval-effect.js";
+import type { AutoReviewChecker } from "./auto-review.js";
 import {
   autoReviewTimeoutMs,
   deploymentAutoReviewDefault,
@@ -249,6 +252,7 @@ import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
+import { FinancialExecution } from "./financial-execution.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
   COMPACTION_BATCH_SIZE,
@@ -3834,11 +3838,96 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const taskCatalogInstruction = tools.some((tool) => tool.name === "task_catalog")
           ? TASK_CATALOG_GUIDANCE
           : undefined;
-        const approvedEffects = await deps.prisma.externalEffect.findMany({
+        const loadIndependentReviewer = async (
+          checker: AutoReviewChecker | null | undefined,
+          injectedReview?: AutoReviewProvider,
+        ): Promise<AutoReviewProvider | undefined> => {
+          let provider = injectedReview;
+          if (!provider) {
+            if (!checker) return undefined;
+            const kind = resolveAutoReviewProviderKind();
+            if (kind === "jev" || kind === "scripted") {
+              provider = createAutoReviewProvider(kind);
+            } else {
+              const reviewCredential = await findModelCredential(
+                deps.prisma,
+                { userId: run.userId, spaceId: run.spaceId },
+                checker.provider,
+                checker.model,
+              );
+              const judgeKey = await resolveModelKey(
+                deps,
+                run.userId,
+                run.spaceId,
+                reviewCredential,
+                checker.provider,
+                checker.model,
+                (values) => runSecrets.push(...values),
+              );
+              provider = createAutoReviewProvider("llm", {
+                llm: {
+                  onUsage: (event) =>
+                    recordUsage(deps.prisma, event, {
+                      spaceId: run.spaceId,
+                      userId: run.userId,
+                      botId: bot.id,
+                      parentRunId: runId,
+                      runId,
+                      operationId: `auto-review:${runId}`,
+                      operationKind: "setup",
+                    }),
+                  runtime: deps.runtime,
+                  checker: checker,
+                  apiKey: judgeKey.oauth ? undefined : judgeKey.apiKey,
+                  accountId: judgeKey.accountId,
+                  gatewayId: judgeKey.gatewayId,
+                  baseUrl: judgeKey.baseUrl,
+                  cacheCapabilities: judgeKey.cacheCapabilities,
+                  contextWindow: judgeKey.contextWindow,
+                  maxTokens: judgeKey.maxTokens,
+                  reasoning: judgeKey.reasoning,
+                  oauth: judgeKey.oauth
+                    ? {
+                        credential: judgeKey.oauth,
+                        persist: judgeKey.persistOAuth,
+                        retire: judgeKey.retireOAuth,
+                      }
+                    : undefined,
+                  runId,
+                  spaceId: run.spaceId,
+                  userId: run.userId,
+                  botId: bot.id,
+                  threadId: thread.id,
+                  timeoutMs: autoReviewTimeoutMs(),
+                },
+              });
+            }
+          }
+          return provider;
+        };
+        const approvedEffectRows = await deps.prisma.externalEffect.findMany({
           where: { runId, status: "approved" },
           orderBy: APPROVED_EFFECT_REPLAY_ORDER,
-          select: { kind: true, request: true },
+          select: { kind: true, request: true, financialContext: true },
         });
+        // Financial effects are domain-owned: their canonical action is not generic tool arguments.
+        const approvedEffects = approvedEffectRows.filter(
+          (effect) => effect.financialContext == null,
+        );
+        const approvedFinancialProposals = approvedEffectRows
+          .flatMap((effect) => {
+            const parsed = FinancialEffectContextSchema.safeParse(effect.financialContext);
+            return parsed.success &&
+              parsed.data.version === 2 &&
+              parsed.data.ownerUserId === run.userId &&
+              parsed.data.botId === bot.id
+              ? [parsed.data.proposalId]
+              : [];
+          })
+          .slice(0, 10);
+        const financialApprovalContinuation = approvedFinancialProposals.length
+          ? `The owner approved exact financial actions for proposals ${JSON.stringify(approvedFinancialProposals)}. Read each proposal, refresh its preview using trade_prepare, then use trade_execute with the fresh IDs. Financial approval never permits changed material terms or bypasses current risk/freshness checks.`
+          : undefined;
         const approvedEffectReplays = createApprovedEffectReplayQueue(approvedEffects);
         const baseComputerInstruction = persistentComputerInstruction({
           heldForTakeover,
@@ -4218,6 +4307,52 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (financialBoundary.decision === "DENY") return { error: financialBoundary.reason };
 
+          // Domain-owned financial effects deliberately bypass generic tool replay/journaling,
+          // after hard product policy. Financial review/risk/approval/effect admission is mandatory.
+          if (name === "trade_execute" || name === "trade_reconcile") {
+            const actor = {
+              ownerUserId: run.userId,
+              botId: run.botId,
+              execution: { runId, holder: workerId, generation: fence },
+            };
+            const financial = new FinancialExecution(deps.prisma);
+            try {
+              if (name === "trade_reconcile") return await financial.reconcile(actor, args);
+              const reviewer = await loadIndependentReviewer(
+                resolveAutoReviewChecker(),
+                deps.autoReview,
+              ).catch(() => undefined);
+              const result = await financial.execute(actor, args, reviewer, context, runSecrets);
+              if (result.status !== "APPROVAL_REQUIRED") return result;
+              if (!(await renewRunLease(deps, runId, workerId, fence))) return pauseForApproval();
+              await workspaceCheckpoint.flush();
+              const paused = await deps.events.pauseRunForInput({
+                spaceId: run.spaceId,
+                threadId: run.threadId,
+                botId: run.botId,
+                runId,
+                attemptId: attempt.id,
+                leaseOwner: workerId,
+                leaseFence: fence,
+                blocks: [result.ask],
+              });
+              if (!paused) throw new Error("Financial approval pause unavailable");
+              await notifyRun(deps, run, {
+                kind: "help",
+                title: `${bot.name} needs approval`,
+                body: "Review the exact financial action",
+                botId: bot.id,
+                threadId: thread.id,
+              });
+              return pauseForApproval();
+            } catch {
+              return {
+                error:
+                  "Financial action blocked or requires reconciliation. Refresh trusted account/preview state and inspect the effect; never blindly retry a started action. LIVE remains disabled.",
+              };
+            }
+          }
+
           // Declared effect of the operation this call dispatches (installed API method and
           // flag). Install config is immutable per route resource, so it cannot drift before
           // execute; a catalog call uses the tool it was just resolved to.
@@ -4298,17 +4433,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? approvalEffectKey(runId, replayEffectToolName, args)
               : toolEffectIdempotencyKey(runId, replayEffectToolName, args, occurrence);
           // Connector read-only hints must not bypass approval, review, or replay decisions.
-          const applied = READ_ONLY_AGENT_TOOLS.has(name)
-            ? undefined
-            : await recordEffect(
-                deps,
-                run,
-                replayEffectToolName,
-                effectKey,
-                effectRequest,
-                executionId,
-                consumedEffectIds,
-              );
+          const applied =
+            READ_ONLY_AGENT_TOOLS.has(name) ||
+            (!viaConnector && financialBuiltinRead(name, args.operation))
+              ? undefined
+              : await recordEffect(
+                  deps,
+                  run,
+                  replayEffectToolName,
+                  effectKey,
+                  effectRequest,
+                  executionId,
+                  consumedEffectIds,
+                );
 
           const runAutoReview = async () => {
             if (!injectedReview && !checker) return;
@@ -4336,66 +4473,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   AbortSignal.timeout(autoReviewTimeoutMs()),
                 ]),
               };
-              let provider = injectedReview;
-              if (!provider) {
-                const kind = resolveAutoReviewProviderKind();
-                if (kind === "jev" || kind === "scripted") {
-                  provider = createAutoReviewProvider(kind);
-                } else {
-                  const reviewCredential = await findModelCredential(
-                    deps.prisma,
-                    { userId: run.userId, spaceId: run.spaceId },
-                    checker!.provider,
-                    checker!.model,
-                  );
-                  const judgeKey = await resolveModelKey(
-                    deps,
-                    run.userId,
-                    run.spaceId,
-                    reviewCredential,
-                    checker!.provider,
-                    checker!.model,
-                    (values) => runSecrets.push(...values),
-                  );
-                  provider = createAutoReviewProvider("llm", {
-                    llm: {
-                      onUsage: (event) =>
-                        recordUsage(deps.prisma, event, {
-                          spaceId: run.spaceId,
-                          userId: run.userId,
-                          botId: bot.id,
-                          parentRunId: runId,
-                          runId,
-                          operationId: `auto-review:${runId}`,
-                          operationKind: "setup",
-                        }),
-                      runtime: deps.runtime,
-                      checker: checker!,
-                      apiKey: judgeKey.oauth ? undefined : judgeKey.apiKey,
-                      accountId: judgeKey.accountId,
-                      gatewayId: judgeKey.gatewayId,
-                      baseUrl: judgeKey.baseUrl,
-                      cacheCapabilities: judgeKey.cacheCapabilities,
-                      contextWindow: judgeKey.contextWindow,
-                      maxTokens: judgeKey.maxTokens,
-                      reasoning: judgeKey.reasoning,
-                      oauth: judgeKey.oauth
-                        ? {
-                            credential: judgeKey.oauth,
-                            persist: judgeKey.persistOAuth,
-                            retire: judgeKey.retireOAuth,
-                          }
-                        : undefined,
-                      runId,
-                      spaceId: run.spaceId,
-                      userId: run.userId,
-                      botId: bot.id,
-                      threadId: thread.id,
-                      timeoutMs: autoReviewTimeoutMs(),
-                    },
-                  });
-                }
-              }
+              const provider = await loadIndependentReviewer(checker, injectedReview);
+              if (!provider) return;
               const judge = await provider.review(reviewRequest, reviewContext);
               if (context.signal.aborted) return;
               reviewReason = judge.reason;
@@ -6493,6 +6572,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           basePrompt,
           takeoverResume?.promptNote,
           approvalContinuation,
+          financialApprovalContinuation,
           // A hang-up turn is read, not heard: no spoken-reply constraint.
           voiceCall && !callEndRun ? voiceCallInstruction(disabledBuiltinTools) : undefined,
           // Per-turn, not in the system prompt: the timestamp changes every call and would break the cacheable prefix.

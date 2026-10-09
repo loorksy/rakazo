@@ -24,6 +24,15 @@ export type FinancialToolDecision =
       reason: string;
     };
 
+/** Fresh trusted reads must not replay a stored generic result after approval/restart. */
+export function financialBuiltinRead(toolName: string, operation: unknown): boolean {
+  if (toolName === "broker_read") return true;
+  return (
+    ["trade_prepare", "trading_mission"].includes(toolName) &&
+    ["get", "list"].includes(typeof operation === "string" ? operation : "")
+  );
+}
+
 /**
  * Browser sessions and arbitrary process/API/MCP capabilities cannot prove bounded financial
  * authority. In the trading product, those actions remain available to human takeover only.
@@ -41,6 +50,8 @@ export function financialToolPolicy(input: {
   if (
     (input.toolName === "trading_mission" ||
       input.toolName === "trade_prepare" ||
+      input.toolName === "trade_execute" ||
+      input.toolName === "trade_reconcile" ||
       (input.toolName === "broker_read" &&
         ["account", "positions", "orders", "preflight"].includes(input.operation ?? ""))) &&
     input.accountReadsAllowed !== true

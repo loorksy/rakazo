@@ -9,7 +9,9 @@ import {
   MarketWatchCommandSchema,
   SecretAskPurpose,
   SecretHttpRequest,
+  TradeExecuteCommandSchema,
   TradePrepareCommandSchema,
+  TradeReconcileCommandSchema,
   TradingMissionCommandSchema,
 } from "@rakazo/contracts";
 import { z } from "zod";
@@ -149,6 +151,18 @@ const scheduleCreateInputSchema = {
 };
 
 export const builtinAgentTools: ConnectorTool[] = [
+  {
+    name: "trade_execute",
+    description:
+      "Execute one exact, fresh proposal/preview through mandatory financial review, user-approved mandate, deterministic risk and durable effects. Currently SIMULATION only: this never mutates the real broker account. Missing review escalates to owner approval; a started/uncertain effect must reconcile rather than retry. Only Main may execute. Refresh a proposal preview after an approval wait; changed material terms require a new proposal.",
+    inputSchema: z.toJSONSchema(TradeExecuteCommandSchema, { io: "input" }),
+  },
+  {
+    name: "trade_reconcile",
+    description:
+      "Reconcile an uncertain simulation effect against immutable local provider receipts without resending. Only Main can reconcile under current execution ownership. Remote broker mutation remains disabled pending LIVE readiness. Ambiguous remote state must never be inferred from missing local records.",
+    inputSchema: z.toJSONSchema(TradeReconcileCommandSchema, { io: "input" }),
+  },
   {
     name: "trade_prepare",
     description:

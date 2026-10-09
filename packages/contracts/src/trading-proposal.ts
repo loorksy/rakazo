@@ -3,6 +3,8 @@ import { TradingMandateEnvelopeSchema } from "./financial-risk.js";
 import { FinancialActionSchema, TradingDecimalSchema } from "./trading.js";
 
 const Id = z.string().min(1).max(128);
+export const TradeExecuteCommandSchema = z.strictObject({ proposalId: Id, previewId: Id });
+export const TradeReconcileCommandSchema = z.strictObject({ effectId: Id });
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Refs = z.array(Id).max(128);
 export const TradePrepareCommandSchema = z.discriminatedUnion("operation", [

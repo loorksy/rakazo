@@ -150,3 +150,19 @@ scoped Biome, whitespace checks and production web build pass. The native chart
 remains the documented structured/image fallback. Simulation execution, durable
 mission scheduling and controlled LIVE execution/reconciliation are still unfinished.
 See `trading-missions.md` for current scope.
+
+## Mandatory financial tool dispatch checkpoint
+
+Main now has real `trade_execute` and `trade_reconcile` handlers in the existing
+executor. SIMULATION uses the isolated virtual book and immutable acceptance receipts;
+LIVE remains disabled. Independent financial review runs regardless of generic
+Auto Review settings and always-allow rules. Escalation uses the existing owner-only
+chat approval transaction, with fresh previews after an approval wait.
+
+The mission PostgreSQL suite passes 49 tests, including process death, atomic
+admission, exact owner approval and one-fill simulation execution. The focused
+executor/reviewer/policy regression suite passes 145 tests. Adapters, core, database,
+API and Worker TypeScript checks pass. See `financial-execution-tools.md`,
+`financial-effects.md` and `trading-simulation.md` for the implemented boundaries.
+Management dispatch, automatic simulator fills/exits, recovery from deleted Runs,
+controlled LIVE provider execution and formal readiness remain unfinished.
