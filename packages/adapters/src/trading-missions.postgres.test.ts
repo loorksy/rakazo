@@ -1,9 +1,12 @@
 import type {
   AccountRiskGuardrails,
+  FinancialAction,
+  FinancialRiskFacts,
   TradingMandateEnvelope,
   TradingPlanInput,
 } from "@rakazo/contracts";
 import {
+  TradeProposalViewSchema,
   TradingGoalViewSchema,
   TradingMandateViewSchema,
   TradingPlanViewSchema,
@@ -12,6 +15,7 @@ import { createDb } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChartActor } from "./cloud-charts.js";
 import { createJobReconciler } from "./job-reconciler.js";
+import { TradeProposals } from "./trade-proposals.js";
 import { enqueueMissionWakes, wakeTradingMission } from "./trading-mission-wakes.js";
 import { TradingMissions } from "./trading-missions.js";
 
@@ -98,7 +102,7 @@ suite("owner-only durable trading goals/plans/mandates", () => {
   let missions: TradingMissions;
   const reset = () =>
     db.prisma
-      .$executeRaw`TRUNCATE trading_mission_wakes, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE trade_previews, trade_proposals, trading_mission_wakes, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
   beforeAll(() => {
     if (!url || !new URL(url).pathname.endsWith("_test"))
       throw new Error("Dedicated fixture _test database required");
@@ -214,6 +218,258 @@ suite("owner-only durable trading goals/plans/mandates", () => {
     });
     return { ...rows, active };
   }
+  describe("immutable financial preparation and trusted preview", () => {
+    const action: FinancialAction = {
+      version: 1,
+      mode: "SIMULATION",
+      provider: "metaapi",
+      accountId: "account",
+      instrumentId: "gold",
+      brokerSymbol: "GOLD.a",
+      operation: "OPEN",
+      side: "BUY",
+      orderType: "MARKET",
+      volume: "0.01",
+      price: null,
+      stopLimitPrice: null,
+      expiresAt: null,
+      fillingMode: null,
+      stopLoss: "2695",
+      takeProfit: "2710",
+    };
+    const facts: FinancialRiskFacts = {
+      version: 1,
+      accountId: "account",
+      instrumentId: "gold",
+      brokerSymbol: "GOLD.a",
+      currency: "USD",
+      connected: true,
+      tradingAllowed: true,
+      accountMode: "HEDGING",
+      observedAt: now.toISOString(),
+      equity: "10000",
+      freeMargin: "9500",
+      margin: "500",
+      quote: {
+        version: 1,
+        provider: "metaapi",
+        accountId: "account",
+        instrumentId: "gold",
+        brokerSymbol: "GOLD.a",
+        bid: "2700",
+        ask: "2700.1",
+        sourceTime: now.toISOString(),
+        receivedAt: now.toISOString(),
+        revision: "q1",
+      },
+      tickSize: "0.01",
+      lossTickValue: "1",
+      contractSize: "100",
+      profitCurrency: "USD",
+      minVolume: "0.01",
+      maxVolume: "100",
+      volumeStep: "0.01",
+      digits: 2,
+      stopsLevel: 10,
+      symbolTradingAllowed: true,
+      specificationObservedAt: now.toISOString(),
+      orderTypes: ["MARKET", "LIMIT"],
+      partialClose: true,
+      proposedMargin: "30",
+      openPositions: [],
+      pendingOrders: [],
+    };
+    async function prepared(overrideAction = action, preflight = vi.fn(async () => facts)) {
+      const { active, createdPlan } = await activated();
+      // Trusted observer fixture, not an agent tool; initial accounting is known empty here.
+      await db.prisma.tradingMandate.update({
+        where: { id: active.id },
+        data: { observedAt: now },
+      });
+      const service = new TradeProposals(db.prisma, () => now, preflight);
+      const command = {
+        operation: "create",
+        mandateId: active.id,
+        planId: createdPlan.id,
+        action: overrideAction,
+        rationaleSummary: "A bounded opportunity, not a promised return",
+        evidenceRefs: [],
+        chartRefs: [],
+      };
+      const proposal = TradeProposalViewSchema.parse(
+        await service.command(actor, command, "prepare"),
+      );
+      return { service, proposal, active, createdPlan, command, preflight };
+    }
+    it("persists exact material terms and plan attribution without approval, reservation or mutation", async () => {
+      const { service, proposal, command, preflight } = await prepared();
+      expect(proposal.action).toEqual(action);
+      expect(proposal.preview).toBeNull();
+      expect(proposal.planVersion).toBe(1);
+      expect(await service.command(actor, command, "prepare")).toEqual(proposal);
+      expect(preflight).not.toHaveBeenCalled();
+      expect(await db.prisma.tradingRiskReservation.count()).toBe(0);
+      expect(await db.prisma.externalEffect.count()).toBe(0);
+      await expect(
+        service.command(actor, { ...command, action: { ...action, volume: "0.02" } }, "prepare"),
+      ).rejects.toThrow("identity changed");
+    });
+    it("uses trusted preflight and immutable preview versions; preview never grants authority", async () => {
+      const { service, proposal, preflight } = await prepared();
+      const result = TradeProposalViewSchema.parse(
+        await service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 1,
+        }),
+      );
+      expect(preflight).toHaveBeenCalledWith(owner, action, undefined);
+      expect(result).toMatchObject({
+        status: "PREVIEWED",
+        revision: 2,
+        preview: {
+          version: 1,
+          authorizationGranted: false,
+          actionFingerprint: proposal.actionFingerprint,
+          risk: { decision: "ALLOW", incrementalRisk: "6.1" },
+          expiresAt: "2026-10-09T10:00:15.000Z",
+        },
+      });
+      const second = TradeProposalViewSchema.parse(
+        await service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 2,
+        }),
+      );
+      expect(second.preview?.version).toBe(2);
+      expect(await db.prisma.tradePreview.count()).toBe(2);
+      await expect(
+        db.prisma.tradePreview.update({ where: { id: result.preview?.id }, data: { facts: {} } }),
+      ).rejects.toThrow("immutable");
+    });
+    it("rejects a stale proposal revision before another provider request", async () => {
+      const { service, proposal, preflight } = await prepared();
+      const command = { operation: "preview", proposalId: proposal.id, expectedRevision: 1 };
+      await service.command(actor, command);
+      await expect(service.command(actor, command)).rejects.toThrow("revision conflict");
+      expect(preflight).toHaveBeenCalledTimes(1);
+    });
+    it("rechecks claimed execution after provider IO and refuses stale worker results", async () => {
+      const preflight = vi.fn(async () => {
+        await db.prisma.run.update({
+          where: { id: "claimed" },
+          data: { leaseFence: 2, leaseOwner: "worker-b" },
+        });
+        return facts;
+      });
+      const { service, proposal } = await prepared(action, preflight);
+      await expect(
+        service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 1,
+        }),
+      ).rejects.toThrow();
+      expect(await db.prisma.tradePreview.count()).toBe(0);
+    });
+    it("denies an unsafe stop using deterministic arithmetic rather than the rationale", async () => {
+      const { service, proposal } = await prepared({ ...action, stopLoss: "2800" });
+      expect(
+        await service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 1,
+        }),
+      ).toMatchObject({ status: "BLOCKED", preview: { risk: { decision: "DENY" } } });
+    });
+    it("blocks stale broker evidence, unknown mission accounting and emergency freeze", async () => {
+      const { service, proposal, active } = await prepared(
+        action,
+        vi.fn(async () => ({ ...facts, observedAt: "2026-10-09T09:00:00Z" })),
+      );
+      expect(
+        await service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 1,
+        }),
+      ).toMatchObject({ preview: { risk: { decision: "DENY", code: "STALE_BROKER_STATE" } } });
+      await db.prisma.tradingMandate.update({
+        where: { id: active.id },
+        data: { observedAt: null },
+      });
+      expect(
+        await service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 2,
+        }),
+      ).toMatchObject({ preview: { risk: { code: "STALE_MISSION_ACCOUNTING" } } });
+      await missions.controlMandate(owner, {
+        id: active.id,
+        expectedRevision: active.revision,
+        action: "EMERGENCY_STOP",
+      });
+      expect((await db.prisma.accountRiskGuardrail.findFirstOrThrow()).frozen).toBe(true);
+    });
+    it("rejects account/symbol aliases, peer authority and model-supplied risk facts", async () => {
+      const { service, command, proposal } = await prepared();
+      await expect(
+        service.command(
+          actor,
+          { ...command, action: { ...action, brokerSymbol: "XAUUSD" } },
+          "other",
+        ),
+      ).rejects.toThrow("account-scoped");
+      await expect(
+        service.command({ ...actor, botId: "peer" }, { operation: "get", proposalId: proposal.id }),
+      ).rejects.toThrow();
+      await expect(
+        service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 1,
+          facts,
+        }),
+      ).rejects.toThrow();
+    });
+    it("preserves financial proposals after chat deletion and rejects direct material rewrite", async () => {
+      const { service, proposal } = await prepared();
+      await expect(
+        db.prisma.tradeProposal.update({
+          where: { id: proposal.id },
+          data: { action: { ...action, volume: "1" }, revision: { increment: 1 } },
+        }),
+      ).rejects.toThrow("immutable");
+      await db.prisma.thread.delete({ where: { id: "thread" } });
+      expect(
+        await service.command(human, { operation: "get", proposalId: proposal.id }),
+      ).toMatchObject({ id: proposal.id, actionFingerprint: proposal.actionFingerprint });
+      expect(await db.prisma.financialJournal.count({ where: { event: "TRADE_PROPOSED" } })).toBe(
+        1,
+      );
+    });
+    it("provider failure leaves the proposal unchanged and emits no effect", async () => {
+      const { service, proposal } = await prepared(
+        action,
+        vi.fn(async () => {
+          throw new Error("Fixture unavailable");
+        }),
+      );
+      await expect(
+        service.command(actor, {
+          operation: "preview",
+          proposalId: proposal.id,
+          expectedRevision: 1,
+        }),
+      ).rejects.toThrow();
+      expect(
+        await service.command(actor, { operation: "get", proposalId: proposal.id }),
+      ).toMatchObject({ revision: 1, preview: null });
+      expect(await db.prisma.externalEffect.count()).toBe(0);
+    });
+  });
   it("persists goal/immutable plan and an unapproved hard envelope, never guaranteeing a target", async () => {
     const { created, mandate } = await proposed();
     expect(created.targetGuaranteed).toBe(false);

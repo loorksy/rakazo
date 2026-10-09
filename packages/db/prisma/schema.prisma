@@ -1706,3 +1706,48 @@ model TradingMissionWake {
   @@index([mandateId, status])
   @@map("trading_mission_wakes")
 }
+
+/// Financial proposal identity survives conversation and Run deletion.
+model TradeProposal {
+  id String @id @default(cuid())
+  requestKey String @unique
+  formatVersion Int @default(1)
+  ownerUserId String
+  botId String
+  accountId String
+  mode String
+  goalId String
+  mandateId String
+  planId String
+  planVersion Int
+  action Json
+  actionFingerprint String
+  rationaleSummary String
+  evidenceRefs Json
+  chartRefs Json
+  status String @default("DRAFT")
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerUserId, mandateId, createdAt])
+  @@map("trade_proposals")
+}
+
+model TradePreview {
+  id String @id @default(cuid())
+  formatVersion Int @default(1)
+  proposalId String
+  version Int
+  actionFingerprint String
+  action Json
+  facts Json
+  risk Json
+  state Json
+  observedAt DateTime
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([proposalId, version])
+  @@map("trade_previews")
+}

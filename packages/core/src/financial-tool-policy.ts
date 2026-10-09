@@ -40,6 +40,7 @@ export function financialToolPolicy(input: {
   if (!input.tradingProduct) return { decision: "ALLOW" };
   if (
     (input.toolName === "trading_mission" ||
+      input.toolName === "trade_prepare" ||
       (input.toolName === "broker_read" &&
         ["account", "positions", "orders", "preflight"].includes(input.operation ?? ""))) &&
     input.accountReadsAllowed !== true

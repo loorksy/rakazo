@@ -375,6 +375,7 @@ import {
 } from "./thread-artifacts.js";
 import { advanceToolCallLoopGuard } from "./tool-loop.js";
 import { textContentArg } from "./tool-text.js";
+import { TradeProposals } from "./trade-proposals.js";
 import { requestBrokerRead, TradingConnections } from "./trading-connections.js";
 import { enqueueMissionWakes } from "./trading-mission-wakes.js";
 import { TradingMissions } from "./trading-missions.js";
@@ -5156,6 +5157,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
+          }
+          if (name === "trade_prepare") {
+            try {
+              return finish(
+                await new TradeProposals(deps.prisma).command(
+                  {
+                    ownerUserId: run.userId,
+                    botId: run.botId,
+                    execution: { runId, holder: workerId, generation: fence },
+                  },
+                  args,
+                  runScopedToolExecutionId(runId, executionId),
+                  context.signal,
+                ),
+              );
+            } catch {
+              return finish({
+                error:
+                  "Trade preparation rejected. Use an existing mandate/plan and exact account-specific broker symbol. Refresh the proposal revision and broker/account state; no trade was sent.",
+              });
+            }
           }
           if (name === "trading_mission") {
             try {
