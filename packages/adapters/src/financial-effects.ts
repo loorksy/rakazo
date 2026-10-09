@@ -74,7 +74,7 @@ export class FinancialEffects {
       context.botId !== actor.botId ||
       context.accountId !== accountId ||
       effect.runId !== execution.runId ||
-      effect.financialGeneration !== execution.generation ||
+      effect.financialRunFence !== execution.generation ||
       effect.financialHolder !== execution.holder
     )
       throw new Error("Stale financial effect ownership");
@@ -160,15 +160,6 @@ export class FinancialEffects {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM trading_connections WHERE id = ${proposal.accountId} FOR UPDATE`;
       const execution = await this.actor(tx, actor);
-      const preview = await tx.tradePreview.findFirst({ where: { id: previewId, proposalId } });
-      if (
-        !preview ||
-        preview.expiresAt <= this.now() ||
-        FinancialRiskAssessmentSchema.parse(preview.risk).decision !== "ALLOW" ||
-        preview.actionFingerprint !== proposal.actionFingerprint ||
-        financialActionFingerprint(preview.action) !== proposal.actionFingerprint
-      )
-        throw new Error("Fresh allowed exact preview required");
       const key = createHash("sha256")
         .update(
           JSON.stringify([
@@ -195,23 +186,47 @@ export class FinancialEffects {
         planVersion: proposal.planVersion,
         clientId: `rz_${key.slice(0, 10)}_${key.slice(10, 20)}`,
       };
-      const { mandate } = await this.authority(tx, context);
       const prior = await tx.externalEffect.findUnique({ where: { idempotencyKey: key } });
       if (prior) {
         const bound = contextOf(prior);
         if (
           bound.proposalId !== proposalId ||
           bound.actionFingerprint !== context.actionFingerprint ||
-          prior.runId !== execution.runId
+          bound.ownerUserId !== actor.ownerUserId ||
+          bound.botId !== actor.botId
         )
-          throw new Error("Existing financial effect needs explicit recovery");
+          throw new Error("Financial effect binding mismatch");
+        // Inspect an already started/terminal result even after preview/mandate expiry.
+        // This returns evidence only; it cannot authorize another outbound call.
         if (prior.financialStartedAt || !["intended", "approved"].includes(prior.status))
           return prior;
-        if (prior.financialGeneration > execution.generation)
+        if (prior.runId !== execution.runId)
+          throw new Error("Unstarted financial effect belongs to another Run");
+      }
+      const preview = await tx.tradePreview.findFirst({ where: { id: previewId, proposalId } });
+      if (
+        !preview ||
+        preview.expiresAt <= this.now() ||
+        FinancialRiskAssessmentSchema.parse(preview.risk).decision !== "ALLOW" ||
+        preview.actionFingerprint !== proposal.actionFingerprint ||
+        financialActionFingerprint(preview.action) !== proposal.actionFingerprint
+      )
+        throw new Error("Fresh allowed exact preview required");
+      const { mandate } = await this.authority(tx, context);
+      if (prior) {
+        if (prior.financialRunFence > execution.generation)
           throw new Error("Stale financial claim");
         return tx.externalEffect.update({
           where: { id: prior.id },
-          data: { financialGeneration: execution.generation, financialHolder: execution.holder },
+          data: {
+            financialGeneration:
+              prior.financialRunFence === execution.generation &&
+              prior.financialHolder === execution.holder
+                ? prior.financialGeneration
+                : prior.financialGeneration + 1,
+            financialRunFence: execution.generation,
+            financialHolder: execution.holder,
+          },
         });
       }
       const run = await tx.run.findUniqueOrThrow({ where: { id: execution.runId } });
@@ -224,7 +239,8 @@ export class FinancialEffects {
           status: "intended",
           request: canonicalFinancialAction(proposal.action),
           financialContext: context,
-          financialGeneration: execution.generation,
+          financialGeneration: 1,
+          financialRunFence: execution.generation,
           financialHolder: execution.holder,
           financialExpiresAt: new Date(
             Math.min(mandate.expiresAt.getTime(), this.now().getTime() + 600000),
@@ -332,12 +348,7 @@ export class FinancialEffects {
     const initial = await this.prisma.externalEffect.findUniqueOrThrow({ where: { id } });
     const initialContext = contextOf(initial);
     return this.prisma.$transaction(async (tx) => {
-      const { effect, context, execution } = await this.owned(
-        tx,
-        actor,
-        id,
-        initialContext.accountId,
-      );
+      const { effect, context } = await this.owned(tx, actor, id, initialContext.accountId);
       await this.authority(tx, context);
       const humanApproved =
         effect.financialApprovedByUserId === actor.ownerUserId && !!effect.financialApprovedAt;
@@ -379,7 +390,7 @@ export class FinancialEffects {
         reservation.mode !== context.mode ||
         reservation.mandateId !== context.authorizationId ||
         reservation.actionFingerprint !== context.actionFingerprint ||
-        reservation.executionGeneration !== execution.generation
+        reservation.executionGeneration !== effect.financialGeneration
       )
         throw new Error("Current risk reservation required");
       const conflicting = await tx.externalEffect.count({
@@ -461,16 +472,22 @@ export class FinancialEffects {
       await tx.$queryRaw`SELECT id FROM external_effects WHERE id = ${id} FOR UPDATE`;
       const effect = await tx.externalEffect.findUniqueOrThrow({ where: { id } });
       const context = contextOf(effect);
-      if (
-        context.ownerUserId !== actor.ownerUserId ||
-        context.botId !== actor.botId ||
-        effect.runId !== execution.runId ||
-        effect.financialGeneration > execution.generation
-      )
+      if (context.ownerUserId !== actor.ownerUserId || context.botId !== actor.botId)
         throw new Error("Current reconciliation principal required");
       if (["completed", "failed"].includes(effect.status)) return effect;
       if (effect.status !== "uncertain" || !effect.financialStartedAt)
         throw new Error("Uncertain STARTED effect required");
+      if (effect.runId && effect.runId !== execution.runId) {
+        await tx.$queryRaw`SELECT id FROM runs WHERE id = ${effect.runId} FOR UPDATE`;
+        const oldRun = await tx.run.findUnique({ where: { id: effect.runId } });
+        if (
+          oldRun?.status === "running" &&
+          oldRun.leaseExpiresAt &&
+          oldRun.leaseExpiresAt > this.now()
+        )
+          throw new Error("Previous financial Run still owns a valid lease");
+      }
+      const generation = effect.financialGeneration + 1;
       const receipt = await tx.simulationExecution.findUnique({ where: { effectId: id } });
       if (
         receipt &&
@@ -495,7 +512,9 @@ export class FinancialEffects {
         where: { id },
         data: {
           status: outcome.status === "SUCCEEDED" ? "completed" : "failed",
-          financialGeneration: execution.generation,
+          runId: execution.runId,
+          financialGeneration: generation,
+          financialRunFence: execution.generation,
           financialHolder: execution.holder,
           result: outcome,
           financialProviderReference: outcome.providerReference,
@@ -507,7 +526,7 @@ export class FinancialEffects {
         data: {
           status: outcome.status === "SUCCEEDED" ? "COMMITTED" : "RELEASED",
           providerReference: outcome.providerReference,
-          executionGeneration: execution.generation,
+          executionGeneration: generation,
         },
       });
       if (
@@ -530,6 +549,9 @@ export class FinancialEffects {
         providerReference: outcome.providerReference,
         code: outcome.code,
         proof: receipt ? "SIMULATION_ACCEPTANCE_RECEIPT" : "FENCED_LOCAL_RECEIPT_ABSENCE",
+        previousRunId: effect.runId,
+        recoveryRunId: execution.runId,
+        financialGeneration: generation,
       });
       return updated;
     });
@@ -555,7 +577,7 @@ export class FinancialEffects {
           run?.status === "running" &&
           run.leaseExpiresAt &&
           run.leaseExpiresAt > this.now() &&
-          run.leaseFence === current.financialGeneration &&
+          run.leaseFence === current.financialRunFence &&
           run.leaseOwner === current.financialHolder
         )
           return;

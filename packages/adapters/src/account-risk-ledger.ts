@@ -152,14 +152,17 @@ export class AccountRiskLedger {
       effect.runId !== actor.execution?.runId
     )
       throw new Error("Financial action binding mismatch");
-    if (effect.financialGeneration !== actor.execution?.generation)
+    if (
+      effect.financialRunFence !== actor.execution?.generation ||
+      effect.financialHolder !== actor.execution.holder
+    )
       throw new Error("Stale financial execution");
     const prior = await tx.tradingRiskReservation.findUnique({ where: { effectId } });
     if (prior) {
       if (
         prior.actionFingerprint !== actionFingerprint ||
         prior.mandateId !== mandate.id ||
-        prior.executionGeneration > actor.execution.generation ||
+        prior.executionGeneration > effect.financialGeneration ||
         prior.status !== "RESERVED" ||
         effect.financialStartedAt !== null
       )
@@ -282,7 +285,7 @@ export class AccountRiskLedger {
       risk: assessment.incrementalRisk,
       exposure: assessment.notional,
       margin: assessment.margin,
-      executionGeneration: actor.execution?.generation ?? 0,
+      executionGeneration: effect.financialGeneration,
     };
     const reservation = prior
       ? await tx.tradingRiskReservation.update({ where: { id: prior.id }, data: reservationData })

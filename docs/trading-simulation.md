@@ -35,12 +35,14 @@ mission P&L is lifetime mission-realized P&L plus current unrealized P&L; other 
 manual broker positions are not attributed to it. Structured accounting is version 1.
 
 After process death the existing reconciler marks STARTED effects UNCERTAIN and retains
-risk. A current fenced execution of the original Run can reconcile the immutable local
+risk. A current fenced Main execution can reconcile the immutable local
 acceptance receipt without another fill. An absent receipt proves no local mutation only
 because the virtual account write and receipt are atomic and the old execution is fenced
 out; **this inference never applies to remote MetaApi requests**. Success commits risk,
 proven nonacceptance releases it, and the mission remains PAUSED for safe recovery.
-Recovery from a deleted original Run and automatic resumption are not implemented here.
+Recovery from a new Run is supported after the old lease ends or its Run is deleted;
+financial ownership advances independently of per-Run fences. Automatic mission resumption
+is not implemented here. Cancellation is preserved during reconciliation.
 
 Database tests cover atomic rollback, duplicate prevention, exact accounting, stale book
 facts, stale workers, immutable receipts, process death after provider acceptance, successful

@@ -292,6 +292,8 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
         idempotencyKey: `effect-${id}`,
         request: material,
         financialGeneration: 1,
+        financialRunFence: 1,
+        financialHolder: "fixture-worker",
         financialContext: {
           version: 1,
           ownerUserId: owner,

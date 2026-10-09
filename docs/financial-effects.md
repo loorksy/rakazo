@@ -24,10 +24,12 @@ records STARTED **in the same transaction**. Emergency freeze takes the same acc
 A freeze committed first prevents admission. Once STARTED, the outcome must be reconciled;
 an emergency stop cannot make an already-sent request disappear.
 
-Every execution-produced write requires its claimed Run generation and holder. A later
-execution can adopt an unstarted effect after a monotonic Run takeover. A stale execution
-cannot review, start or settle it even after rereading the latest record. Started effects
-are never adopted for another outbound call.
+Every execution-produced write requires the captured Run ID, Run fence and holder.
+`financialRunFence` is scoped to that Run; `financialGeneration` is a separate monotonic
+effect ownership generation. A Run takeover advances effect ownership; reservation
+ownership uses that effect generation. A new Run whose fence starts at one therefore
+cannot rewind financial ownership. A stale execution cannot review, start or settle even
+after rereading the latest record. Started effects are never adopted for another call.
 
 Confirmed success commits the reservation; confirmed failure releases it. An uncertain
 outcome retains its reservation and moves the mandate to NEEDS_RECONCILIATION. Interrupted
@@ -35,10 +37,24 @@ STARTED effects with no valid owning Run lease become UNCERTAIN exactly once. Re
 never resends the request. Process-death tests terminate a child after the STARTED commit,
 then verify retained risk, one STARTED journal receipt and refusal to retry.
 
-This checkpoint provides lifecycle/admission safety, not a mutation adapter. LIVE remains
-disabled pending the readiness gate. Simulation execution, owner escalation resolution,
-provider reconciliation and broker mutation dispatch are separate integration work; this
-module does not imply that any of those paths is enabled.
+Simulation execution and owner escalation are implemented in the existing tool executor.
+LIVE remains disabled pending the provider/reconciliation/readiness gate.
+
+## Recovery across conversation executions
+
+A current owner/Main Run can inspect a started or terminal effect even when its previous
+preview or mandate expired. Inspection grants no execution authority. Simulator
+reconciliation can run from a new Run after the previous Run's lease is no longer valid
+or its record was deleted. It takes the account and effect locks, checks current Main
+ownership, advances the effect generation and records the previous/recovery Run IDs in
+the immutable journal. Same-Run takeover remains supported. A valid prior Run lease
+blocks cross-Run recovery; stale recovery Runs fail their captured execution fence.
+
+Simulation acceptance and its immutable receipt commit atomically. That receipt proves
+success; its absence proves local nonacceptance only after the old execution is fenced.
+Neither rule infers remote broker failure from missing local data. Recovery updates risk
+and the final receipt once without invoking a provider mutation. A cancelled mandate stays
+cancelled; otherwise resolved NEEDS_RECONCILIATION becomes PAUSED, never auto-resumed.
 
 ## Owner escalation
 

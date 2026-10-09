@@ -166,3 +166,16 @@ API and Worker TypeScript checks pass. See `financial-execution-tools.md`,
 `financial-effects.md` and `trading-simulation.md` for the implemented boundaries.
 Management dispatch, automatic simulator fills/exits, recovery from deleted Runs,
 controlled LIVE provider execution and formal readiness remain unfinished.
+
+## Cross-Run financial recovery checkpoint
+
+Financial effect ownership now has an independent monotonic generation and a separate
+captured Run fence. A new Main Run can reconcile an uncertain simulator effect after its
+old Run was deleted or lost ownership, without another fill and without decreasing its
+financial generation. Terminal/started inspection remains available after authorization
+expiry, but grants no new authority. A valid old lease blocks cross-Run recovery.
+
+The mission PostgreSQL suite passes 52 tests; the eight account-ledger PostgreSQL tests
+also pass against all 114 forward migrations. Database/adapters/API/Worker type checks
+pass. Simulation/live mode separation, stale-worker rejection and immutable receipts remain
+enforced. Management and LIVE readiness are still incomplete.

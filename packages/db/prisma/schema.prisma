@@ -839,6 +839,7 @@ model ExternalEffect {
   reviewModel    String?
   financialContext Json?
   financialGeneration Int @default(0)
+  financialRunFence Int @default(0)
   financialHolder String?
   financialStartedAt DateTime?
   financialProviderReference String?

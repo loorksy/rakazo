@@ -172,7 +172,7 @@ export class SimulationBroker {
         context.ownerUserId !== actor.ownerUserId ||
         context.botId !== actor.botId ||
         effect.runId !== actor.execution?.runId ||
-        effect.financialGeneration !== actor.execution?.generation ||
+        effect.financialRunFence !== actor.execution?.generation ||
         effect.financialHolder !== actor.execution?.holder ||
         financialActionFingerprint(action) !== context.actionFingerprint
       )
@@ -223,7 +223,7 @@ export class SimulationBroker {
         reservation.accountId !== context.accountId ||
         reservation.mode !== "SIMULATION" ||
         reservation.mandateId !== mandate.id ||
-        reservation.executionGeneration !== actor.execution?.generation
+        reservation.executionGeneration !== effect.financialGeneration
       )
         throw new Error("Current simulation risk reservation required");
       const book = await tx.simulationBook.findUniqueOrThrow({

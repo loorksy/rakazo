@@ -720,6 +720,123 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       ).rejects.toThrow();
       expect(await db.prisma.simulationExecution.count()).toBe(0);
     });
+    it.each([true, false])(
+      "recovers a deleted high-fence Run in a new Run without replay (accepted=%s)",
+      async (accepted) => {
+        const rows = await simulatedPrepared();
+        await db.prisma.run.update({
+          where: { id: "claimed" },
+          data: { leaseFence: 7, leaseOwner: "worker-seven" },
+        });
+        const highFence = {
+          ...actor,
+          execution: { runId: "claimed", holder: "worker-seven", generation: 7 },
+        };
+        await rows.effects.prepare(
+          highFence,
+          rows.proposal.id,
+          rows.previewed.preview?.id ?? "missing",
+        );
+        await rows.effects.begin(highFence, rows.effect.id, rows.simulatedFacts);
+        if (accepted) await rows.simulator.execute(highFence, rows.effect.id, rows.simulatedFacts);
+        const before = await db.prisma.externalEffect.findUniqueOrThrow({
+          where: { id: rows.effect.id },
+        });
+        expect(before.financialRunFence).toBe(7);
+        await db.prisma.run.delete({ where: { id: "claimed" } });
+        await rows.effects.recoverInterrupted();
+        await db.prisma.run.create({
+          data: {
+            id: "recovery",
+            botId: "main",
+            userId: owner,
+            spaceId: "space",
+            threadId: "thread",
+            taskId: "task",
+            status: "running",
+            trigger: "message",
+            leaseOwner: "recovery-worker",
+            leaseFence: 1,
+            leaseExpiresAt: new Date(Date.now() + 60000),
+          },
+        });
+        const recovery = {
+          ...actor,
+          execution: { runId: "recovery", holder: "recovery-worker", generation: 1 },
+        };
+        // Inspection never requires renewed trading authority or another preview.
+        await db.prisma.tradingMandate.update({
+          where: { id: rows.active.id },
+          data: { status: "CANCELLED", revision: { increment: 1 } },
+        });
+        const inspected = await rows.effects.prepare(recovery, rows.proposal.id, "expired-preview");
+        expect(inspected.status).toBe("uncertain");
+        const reconciled = await rows.effects.reconcileSimulation(recovery, rows.effect.id);
+        expect(reconciled).toMatchObject({
+          status: accepted ? "completed" : "failed",
+          runId: "recovery",
+          financialRunFence: 1,
+          financialGeneration: before.financialGeneration + 1,
+        });
+        expect(reconciled.financialContext).toEqual(before.financialContext);
+        expect(await db.prisma.simulationExecution.count()).toBe(accepted ? 1 : 0);
+        const generation = reconciled.financialGeneration;
+        expect(
+          (await rows.effects.reconcileSimulation(recovery, rows.effect.id)).financialGeneration,
+        ).toBe(generation);
+        await expect(
+          rows.effects.settle(highFence, rows.effect.id, {
+            version: 1,
+            status: "SUCCEEDED",
+            providerReference: "late",
+            code: null,
+          }),
+        ).rejects.toThrow();
+        await expect(
+          rows.simulator.execute(highFence, rows.effect.id, rows.simulatedFacts),
+        ).rejects.toThrow();
+        expect(
+          (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+            .status,
+        ).toBe("CANCELLED");
+      },
+    );
+    it("refuses cross-Run reconciliation while the previous Run still has a valid lease", async () => {
+      const rows = await simulatedPrepared();
+      await rows.effects.begin(actor, rows.effect.id, rows.simulatedFacts);
+      await rows.effects.settle(actor, rows.effect.id, {
+        version: 1,
+        status: "UNCERTAIN",
+        providerReference: null,
+        code: "PROVIDER_TIMEOUT",
+      });
+      await db.prisma.run.create({
+        data: {
+          id: "other",
+          botId: "main",
+          userId: owner,
+          spaceId: "space",
+          threadId: "thread",
+          taskId: "task",
+          status: "running",
+          trigger: "message",
+          leaseOwner: "other-worker",
+          leaseFence: 1,
+          leaseExpiresAt: new Date(Date.now() + 60000),
+        },
+      });
+      const other = {
+        ...actor,
+        execution: { runId: "other", holder: "other-worker", generation: 1 },
+      };
+      await expect(rows.effects.reconcileSimulation(other, rows.effect.id)).rejects.toThrow(
+        "valid lease",
+      );
+      expect(
+        (await db.prisma.externalEffect.findUniqueOrThrow({ where: { id: rows.effect.id } }))
+          .status,
+      ).toBe("uncertain");
+    });
     async function financialAsk() {
       const rows = await financialPrepared();
       await rows.effects.review(

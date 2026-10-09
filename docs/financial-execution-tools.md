@@ -37,5 +37,5 @@ accounting step. Too-old or missing data blocks execution.
 
 After STARTED, any uncertain error remains UNCERTAIN with risk retained. Reconciliation
 reads immutable simulator acceptance receipts and never sends another mutation. Management,
-automatic pending fills/protective exits, deleted-Run recovery and LIVE dispatch remain
+automatic pending fills/protective exits and LIVE dispatch remain
 separate unfinished integration work; the current tools do not claim those capabilities.
