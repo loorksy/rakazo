@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import type { JobPublisher, JobWorkerHost } from "@rakazo/adapter-kit";
 import {
   ComposioConnector,
@@ -177,6 +179,7 @@ async function main() {
   const artifacts = new LocalArtifactStore(dataDir);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
   const jobs: JobPublisher = inMemoryJobs ?? new GraphileJobPublisher(pool);
+  await mkdir(path.join(process.cwd(), ".metaapi"), { recursive: true });
   const brokerSupervisor = new BrokerConnectionSupervisor(
     prisma,
     secrets,

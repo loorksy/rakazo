@@ -1,5 +1,6 @@
 .deepsec/
 node_modules
+.metaapi
 __pycache__/
 *.py[cod]
 .turbo
