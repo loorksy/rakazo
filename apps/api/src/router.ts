@@ -770,6 +770,9 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      liveSettings: authed.trading.liveSettings.handler(({ context }) =>
+        new TradingOwnerControls(deps.prisma).liveSettings(context.actor.userId),
+      ),
       setLiveEnabled: authed.trading.setLiveEnabled.handler(({ context, input }) =>
         new TradingOwnerControls(deps.prisma).setLiveEnabled(context.actor.userId, input.enabled),
       ),

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { SandboxProvider } from "@rakazo/adapter-kit";
-import { financialDecimal, financialUnits } from "@rakazo/core";
+import { financialRiskEngineHealthy } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { Logger } from "@rakazo/logging";
 
@@ -11,7 +11,12 @@ export class TradingRuntimeHealthProbe {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly sandbox: SandboxProvider,
-    private readonly workerHealth: () => { active: boolean; streams: number },
+    private readonly workerHealth: () => {
+      active: boolean;
+      streams: number;
+      quoteAgeMs?: number;
+      chartDataLagMs?: number;
+    },
     private readonly logger: Logger,
   ) {}
   start() {
@@ -102,13 +107,15 @@ export class TradingRuntimeHealthProbe {
     const effectsHealthy = worker.active && database[0]?.effects === true;
     const emergencyStopHealthy = database[0]?.emergency === true;
     // The engine is local deterministic code; exact decimal arithmetic must remain intact.
-    const riskHealthy = financialDecimal(financialUnits("0.1") + financialUnits("0.2")) === "0.3";
+    const riskHealthy = financialRiskEngineHealthy(new Date());
     const jobLagMs = job ? Math.ceil(job[0]?.lag ?? 0) : null;
     const metrics = {
       connectedProviders: leases.filter((l) => l.state === "CONNECTED").length,
       reconnects: leases.reduce((n, l) => n + l.reconnectCount, 0),
       maxStreamFence: Math.max(0, ...leases.map((l) => l.generation)),
       streams: worker.streams,
+      quoteAgeMs: worker.quoteAgeMs ?? null,
+      chartDataLagMs: worker.chartDataLagMs ?? null,
       eventLagMs: oldest(leases.map((l) => l.lastEventAt)),
       connectionAgeMs: oldest(leases.map((l) => l.lastHealthyAt)),
       accountAgeMs: oldest([snapshots._min.observedAt]),

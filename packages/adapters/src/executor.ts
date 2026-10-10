@@ -3471,6 +3471,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           connectedComposio.map((connection) => connection.provider),
         );
         const context = {
+          financialResearchOnly: settings?.singleOwnerEnforced === true,
           operationId: runId,
           traceId: runId,
           spaceId: run.spaceId,

@@ -145,3 +145,25 @@ being inferred from an unrelated current state. Unverified remote execution and
 opaque connector contracts do not gain financial network authority. Research
 network destinations are trusted compiled origins, not model-selected policy.
 Kili and upstream/main have not been modified.
+
+## Owner controls and provider history stage (2026-10-10)
+
+Owner-facing Web/Mobile controls now separate bounded LIVE Mandate approval from
+backend product enablement. Owner drift reconciliation retires prior authority;
+manual changes require a new exact approval. Trusted synchronized provider deal
+history supplies realized PnL after confirmed closes, deduplicates callbacks, and
+pauses activity when previously recorded deal evidence changes. Exact related
+pending-order cancellation preserves supervision of the selected position.
+
+Opaque MCP discovery/execution is rejected before connector credential resolution
+or subprocess launch in the trading context. Normal Computer research remains
+available through the isolated research gateway. The deterministic Risk Engine is
+checked with a real golden assessment in backend runtime health.
+
+Stage verification: 39 PostgreSQL LIVE fixture acceptance tests and four real
+Chromium owner-interface scenarios passed. The Web production build passed.
+Focused MCP/executor/installed-connector tests passed (98 tests). These counts
+overlap earlier runs and are not cumulative. No real-money automated tests or
+private live-provider verification were performed. Full repository verification
+and final completion review remain in progress; this stage does not claim that
+the entire transformation is complete.

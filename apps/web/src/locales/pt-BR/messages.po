@@ -225,13 +225,22 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "Token de acesso (opcional)"
 
+#: src/components/TradingMandateCard.tsx
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Account"
 msgstr "Conta"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Account access"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Account default"
 msgstr "Padrão da conta"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Account guardrails"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -242,6 +251,14 @@ msgstr "ID da conta"
 msgid "Account label"
 msgstr ""
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Account name"
+msgstr ""
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Account read"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Accounts"
 msgstr ""
@@ -249,6 +266,10 @@ msgstr ""
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Action confirmations"
 msgstr "Confirmações de ação"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Action rejected. Refresh and review the current mandate."
+msgstr ""
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
@@ -276,6 +297,7 @@ msgstr "Modelo ativo"
 msgid "Activity"
 msgstr "Atividade"
 
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/ModelBackupsSettings.tsx
 #: src/pages/PluginsOverlay.tsx
 #: src/pages/ScratchpadSection.tsx
@@ -426,6 +448,10 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allocation"
+msgstr ""
+
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Allow {0} actions without asking"
@@ -457,9 +483,21 @@ msgstr "Permitir ações de compra sem perguntar"
 msgid "Allow writing"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed actions"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed instruments"
+msgstr ""
+
 #: src/components/AskCard.tsx
 msgid "Allowed once"
 msgstr "Permitido uma vez"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed order types"
+msgstr ""
 
 #: src/pages/Auth.tsx
 msgid "Already have an account?"
@@ -519,6 +557,10 @@ msgstr "Chave de API"
 msgid "API key header"
 msgstr "Cabeçalho da chave API"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "API token"
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Appearance"
 msgstr "Aparência"
@@ -531,6 +573,10 @@ msgstr "Limites de aprovação"
 #: src/pages/shell/message-cards.tsx
 msgid "Approve"
 msgstr "Aprovar"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Approve mandate"
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Approve this server to let your agent use its tools."
@@ -626,6 +672,10 @@ msgstr "A autenticação falhou."
 #: src/pages/Onboarding.tsx
 msgid "Authorization code or callback URL"
 msgstr "Código de autorização ou URL de retorno de chamada"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Authorization details"
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Authorization timed out. Please try again."
@@ -759,6 +809,14 @@ msgstr ""
 msgid "Brain label"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Breach behavior"
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Broker accounts"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Browse MCP servers"
 msgstr ""
@@ -790,9 +848,13 @@ msgstr "Não é possível acessar o servidor."
 msgid "Cancel"
 msgstr "Cancelar"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Cancel mandate"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
-msgid "Cancel new bot"
-msgstr "Cancelar novo bot"
+msgid "Cancel new Agent"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx
 msgid "Cancel new group"
@@ -829,6 +891,14 @@ msgstr "Alterando…"
 
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Channels"
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Chart changed or data is unavailable. Reopen to refresh."
+msgstr ""
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Chart data unavailable. Reopen to reconnect."
 msgstr ""
 
 #: src/pages/shell/message-cards.tsx
@@ -898,6 +968,10 @@ msgstr "Escolha uma forma e cor do bot, ou envie uma imagem"
 
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Choose a bot…"
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Choose a connected account and broker instrument."
 msgstr ""
 
 #: src/pages/Auth.tsx
@@ -1015,6 +1089,10 @@ msgstr "Fechar configurações de voz"
 msgid "Cloud"
 msgstr "Nuvem"
 
+#: src/pages/Shell.tsx
+msgid "Cloud chart"
+msgstr ""
+
 #: src/components/AskCard.tsx
 msgid "Code"
 msgstr "Código"
@@ -1125,6 +1203,10 @@ msgstr "Conectar um modelo"
 msgid "Connect a provider to add backups."
 msgstr "Conecte um provedor para adicionar backups."
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Connect account"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Connect API key"
 msgstr "Conecte-se com a chave API"
@@ -1233,6 +1315,10 @@ msgstr "Copiar"
 
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Copy .env example"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Cost reserve per trade"
 msgstr ""
 
 #: src/pages/ScratchpadSection.tsx
@@ -1707,6 +1793,11 @@ msgstr "Crie uma seção e mova {0} para ela."
 msgid "Create account"
 msgstr "Criar Conta"
 
+#: src/pages/Onboarding.tsx
+#: src/pages/shell/bot-panel.tsx
+msgid "Create Agent"
+msgstr ""
+
 #: src/pages/GroupPanel.tsx
 msgid "Create group"
 msgstr "Criar grupo"
@@ -1788,6 +1879,10 @@ msgstr ""
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Customize bot avatar"
 msgstr "Personalizar avatar do bot"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Daily loss limit"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Dark"
@@ -1897,16 +1992,13 @@ msgid "Denied"
 msgstr "Negado"
 
 #: src/components/AskCard.tsx
+#: src/components/TradingMandateCard.tsx
 msgid "Deny"
 msgstr "Negar"
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Deployment default"
 msgstr "Padrão de implantação"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "Describe what this bot does"
-msgstr "Descreva o que este bot faz"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Description"
@@ -1924,6 +2016,10 @@ msgstr ""
 msgid "Direct MCP"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Disable LIVE"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Disabled tools"
 msgstr ""
@@ -1931,6 +2027,7 @@ msgstr ""
 #: src/pages/McpServersOverlay.tsx
 #: src/pages/MemorySettingsOverlay.tsx
 #: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Disconnect"
 msgstr "Desconectar"
@@ -2025,6 +2122,10 @@ msgstr "Habilidade de rascunho"
 msgid "Drag, drop, or paste an image"
 msgstr "Arraste, solte ou cole uma imagem"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Draw"
+msgstr ""
+
 #: src/pages/BotContextMenu.tsx
 msgid "Duplicate"
 msgstr "Duplicar"
@@ -2052,6 +2153,14 @@ msgstr "Este e-mail não tem permissão para se cadastrar"
 #: src/lib/user-error.ts
 msgid "Email verification required"
 msgstr "É necessário verificar o e-mail"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Emergency stop"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Enable LIVE"
+msgstr ""
 
 #: src/pages/BillingSettingsPanel.tsx
 msgid "Ends {day}"
@@ -2125,6 +2234,10 @@ msgstr "A cada mês"
 msgid "Every week"
 msgstr "A cada semana"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Execution also requires account readiness and an exact approved mandate."
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Executor token"
 msgstr "Token do Executor"
@@ -2139,6 +2252,14 @@ msgstr "Expandir"
 msgid "Expand {0}"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Expires"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Expiry behavior"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Export"
 msgstr "Exportar"
@@ -2146,6 +2267,10 @@ msgstr "Exportar"
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "Exporte a lista desta semana do CRM e solte-a na pasta compartilhada"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Exposure limit"
+msgstr ""
 
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -2238,6 +2363,10 @@ msgstr "Finalizando conexão MCP…"
 
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Flag unexpected actions"
+msgstr ""
+
+#: src/pages/Onboarding.tsx
+msgid "Focus"
 msgstr ""
 
 #: src/pages/Auth.tsx
@@ -2408,6 +2537,10 @@ msgstr ""
 msgid "Inbox & email"
 msgstr ""
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Indicator"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Inherit default"
 msgstr "Herdar (padrão)"
@@ -2462,6 +2595,10 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Suas conversas, arquivos e rotinas serão excluídos permanentemente. Os bots criados ficam na sua lista."
+
+#: src/components/TradingJournal.tsx
+msgid "Journal"
+msgstr ""
 
 #: src/pages/Shell.tsx
 msgid "Jump to latest"
@@ -2532,10 +2669,15 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "LIVE availability"
+msgstr ""
+
 #: src/pages/Shell.tsx
 msgid "Load earlier messages"
 msgstr "Carregar mensagens anteriores..."
 
+#: src/components/TradingJournal.tsx
 #: src/pages/Artifacts.tsx
 msgid "Load more"
 msgstr ""
@@ -2559,6 +2701,10 @@ msgstr "Carregando integrações…"
 #: src/pages/MemorySettingsOverlay.tsx
 msgid "Loading memory settings…"
 msgstr "Carregando configurações de memória..."
+
+#: src/components/TradingMandateCard.tsx
+msgid "Loading mission…"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Loading model catalog…"
@@ -2655,6 +2801,10 @@ msgstr ""
 msgid "Manual setup required"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Margin usage limit"
+msgstr ""
+
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Read"
 msgstr "Marcar como Lido"
@@ -2662,6 +2812,10 @@ msgstr "Marcar como Lido"
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Unread"
 msgstr "Marcar como Não Lida"
+
+#: src/pages/shell/bot-panel.tsx
+msgid "Markets and working instructions"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2681,6 +2835,10 @@ msgstr ""
 #: src/pages/Onboarding.tsx
 msgid "Maximum images per request"
 msgstr "Máximo de imagens por solicitação"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Maximum loss"
+msgstr ""
 
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Maximum of 10 backup models."
@@ -2773,6 +2931,10 @@ msgstr "Enviou mensagem para {peer}"
 msgid "Messaging"
 msgstr ""
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "MetaApi account ID"
+msgstr ""
+
 #: src/lib/call-session.ts
 msgid "Microphone failed"
 msgstr "Falha no microfone"
@@ -2802,6 +2964,10 @@ msgstr "minuto"
 #: src/pages/RoutineSchedule.tsx
 msgid "minutes"
 msgstr "minutos"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Mission unavailable"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2888,6 +3054,7 @@ msgstr "Silenciar"
 #: src/components/teach/SkillDraftCard.tsx
 #: src/pages/Auth.tsx
 #: src/pages/GroupPanel.tsx
+#: src/pages/Onboarding.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/bot-panel.tsx
@@ -2896,8 +3063,8 @@ msgid "Name"
 msgstr "Nome"
 
 #: src/pages/shell/bot-panel.tsx
-msgid "Name this bot"
-msgstr "Nomeie este bot"
+msgid "Name this Agent"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx
 msgid "Name this group"
@@ -2918,10 +3085,6 @@ msgstr "Requer assumir o controle"
 #: src/pages/Shell.tsx
 msgid "Needs you"
 msgstr ""
-
-#: src/pages/shell/bot-panel.tsx
-msgid "New bot"
-msgstr "Novo bot"
 
 #: src/pages/GroupPanel.tsx
 msgid "New group"
@@ -2987,6 +3150,10 @@ msgstr ""
 
 #: src/pages/shell/bot-credentials.tsx
 msgid "No credentials saved for this bot."
+msgstr ""
+
+#: src/components/TradingJournal.tsx
+msgid "No financial events"
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -3160,6 +3327,10 @@ msgstr ""
 msgid "Open <0>{0}</0> to finish signing in."
 msgstr ""
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Open chart"
+msgstr ""
+
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Open computer settings"
 msgstr ""
@@ -3175,6 +3346,10 @@ msgstr "Abrir em janela cheia"
 #: src/pages/Shell.tsx
 msgid "Open navigation"
 msgstr "Abrir a navegação"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Open risk limit"
+msgstr ""
 
 #: src/components/computer/TerminalApp.tsx
 msgid "Open shell"
@@ -3196,10 +3371,6 @@ msgstr ""
 #: src/pages/Shell.tsx
 msgid "Opened its thread."
 msgstr "Abriu a conversa."
-
-#: src/pages/Onboarding.tsx
-msgid "Opening chat…"
-msgstr "Abrindo o chat…"
 
 #: src/App.tsx
 msgid "Opening your Space…"
@@ -3290,8 +3461,20 @@ msgstr "Cole sua chave API"
 msgid "Paste your API key, then test again."
 msgstr "Cole sua chave de API e teste novamente."
 
+#: src/components/TradingMandateCard.tsx
+msgid "Pause"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "Paused"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Pending order limit"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Per trade limit"
 msgstr ""
 
 #: src/pages/Shell.tsx
@@ -3318,6 +3501,10 @@ msgstr "Reproduzindo"
 #: src/pages/KnowledgeSection.tsx
 msgid "Plugin"
 msgstr "Plugin"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Position limit"
+msgstr ""
 
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
@@ -3377,6 +3564,10 @@ msgstr "Reagir"
 #: src/pages/Shell.tsx
 msgid "Reactions"
 msgstr "Reações"
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Read access through active mandate"
+msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Read replies aloud"
@@ -3476,6 +3667,10 @@ msgstr ""
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Refreshing…"
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Region (optional)"
 msgstr ""
 
 #: src/lib/user-error.ts
@@ -3622,6 +3817,10 @@ msgstr "Redefinir o computador?"
 msgid "Reset password"
 msgstr "Redefinir senha"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Reset view"
+msgstr ""
+
 #: src/pages/Auth.tsx
 msgid "Reset your password"
 msgstr "Redefina sua senha"
@@ -3654,6 +3853,10 @@ msgstr "Restaure o último espaço de trabalho salvo. O trabalho não salvo no c
 msgid "Restoring your workspace"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Resume"
+msgstr ""
+
 #: src/components/AccountAccess.tsx
 #: src/pages/Auth.tsx
 #: src/pages/ModelBackupsSettings.tsx
@@ -3684,6 +3887,10 @@ msgstr "Revise as configurações do provedor e teste novamente."
 
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Revoke"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Risk-increase permissions"
 msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
@@ -3755,6 +3962,10 @@ msgstr ""
 msgid "Save"
 msgstr "Salvar"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Save account limits"
+msgstr ""
+
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Save backups"
 msgstr "Salvar backups"
@@ -3809,6 +4020,7 @@ msgstr ""
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 msgid "Saving…"
 msgstr "Salvando..."
 
@@ -3951,6 +4163,10 @@ msgstr "Configurações: Uso"
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Setup help"
 msgstr "Ajuda"
+
+#: src/pages/Auth.tsx
+msgid "Setup key"
+msgstr ""
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Shape"
@@ -4139,6 +4355,10 @@ msgstr "Iniciando"
 msgid "Starting…"
 msgstr "Iniciando…"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Starts"
+msgstr ""
+
 #: src/pages/ActivityList.tsx
 msgid "Status"
 msgstr ""
@@ -4193,6 +4413,14 @@ msgstr ""
 msgid "Subscription required"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised orders"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised position"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Supports images"
@@ -4214,6 +4442,14 @@ msgstr "Alternando…"
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "System"
 msgstr "Sistema"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target behavior"
+msgstr ""
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Teach a task"
@@ -4274,6 +4510,10 @@ msgstr ""
 #: src/lib/model-connection-preflight.ts
 msgid "The connection timed out."
 msgstr "O tempo da conexão se esgotou."
+
+#: src/components/TradingMandateCard.tsx
+msgid "The profit target is not guaranteed. Capital allocation is an accounting budget, not segregated funds."
+msgstr ""
 
 #: src/lib/model-connection-preflight.ts
 msgid "The provider is rate-limiting requests."
@@ -4412,6 +4652,22 @@ msgstr "Fontes de ferramentas"
 msgid "Tools"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Total exposure limit"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Total reserved risk limit"
+msgstr ""
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Trading Agent"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Trading mission"
+msgstr ""
+
 #: src/components/call/CallCard.tsx
 msgid "Transcript"
 msgstr "Transcrição"
@@ -4433,7 +4689,6 @@ msgid "Trial ends {day}"
 msgstr ""
 
 #: src/pages/ActivityList.tsx
-#: src/pages/Onboarding.tsx
 msgid "Try again"
 msgstr "Tentar novamente"
 
@@ -4459,6 +4714,10 @@ msgstr "Não atribuído"
 
 #: src/components/SoftwareUpdateSection.tsx
 msgid "Unavailable"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Unfreeze account"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
@@ -4675,13 +4934,13 @@ msgstr ""
 msgid "What result will you demonstrate?"
 msgstr "Que resultado você demonstrará?"
 
+#: src/pages/shell/bot-panel.tsx
+msgid "What should this Agent focus on?"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "What should this routine do each time it runs?"
 msgstr ""
-
-#: src/pages/shell/bot-panel.tsx
-msgid "What this bot is for"
-msgstr "Para que serve este bot"
 
 #: src/components/teach/SkillDraftCard.tsx
 msgid "What to return"

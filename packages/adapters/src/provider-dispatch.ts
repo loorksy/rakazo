@@ -370,6 +370,18 @@ export class ProviderDispatcher {
           },
         });
         if (outcome.status === "SUCCEEDED") {
+          if (request.action.operation === "CLOSE_POSITION")
+            await tx.tradingMandate.update({
+              where: { id: context.authorizationId },
+              data: {
+                observedAt: null,
+                observedState: {
+                  version: 1,
+                  accounting: "REALIZED_HISTORY_REQUIRED",
+                  positionId: request.action.positionId,
+                },
+              },
+            });
           const admission = ProviderAdmissionSchema.parse(dispatch.admission);
           if (request.action.operation === "OPEN") {
             if (!confirmation?.target) throw new Error("Confirmed provider target required");
@@ -395,7 +407,12 @@ export class ProviderDispatcher {
             const supervision = await tx.tradingPositionSupervision.findUnique({
               where: { mandateId: context.authorizationId },
             });
-            if (supervision)
+            if (
+              supervision &&
+              (request.action.operation === "MODIFY_PROTECTION" ||
+                request.action.operation === "CLOSE_POSITION") &&
+              request.action.positionId === supervision.positionId
+            )
               await tx.tradingPositionSupervision.update({
                 where: { id: supervision.id },
                 data: {

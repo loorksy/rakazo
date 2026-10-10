@@ -3355,10 +3355,14 @@ const db=createDb(process.env.MISSION_TEST_DATABASE_URL); const quote=JSON.parse
     ).toMatchObject({ status: "CANCELLED" });
   });
   it("does not silently upgrade simulation to LIVE or activate expired mandates", async () => {
-    await expect(missions.setAccountGuardrails(owner, { ...limits, mode: "LIVE" })).rejects.toThrow(
-      "disabled",
-    );
+    expect(await missions.setAccountGuardrails(owner, { ...limits, mode: "LIVE" })).toMatchObject({
+      mode: "LIVE",
+    });
+    expect(
+      await db.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
+    ).toMatchObject({ tradingLiveEnabled: false });
     const { mandate } = await proposed();
+    expect(mandate.envelope.mode).toBe("SIMULATION");
     await missions.setAccountGuardrails(owner, limits);
     const expired = new TradingMissions(db.prisma, () => new Date("2026-10-12T10:00:00Z"));
     await expect(

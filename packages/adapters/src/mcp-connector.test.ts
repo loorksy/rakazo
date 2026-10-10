@@ -1,3 +1,5 @@
+import type { SecretStore } from "@rakazo/adapter-kit";
+import type { PrismaClient } from "@rakazo/db";
 import { createLogger, createTestSink, getLogger, installLogger } from "@rakazo/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InfisicalSecretStore } from "./infisical-secret-store.js";
@@ -1216,5 +1218,51 @@ describe("allowlistDrift", () => {
       offered: 2,
       stringAllowedCount: 1,
     });
+  });
+});
+
+describe("trading MCP discovery and execution containment", () => {
+  it("does not start host subprocesses, open remote sessions or resolve secrets for opaque trading MCP", async () => {
+    const assignment = vi.fn();
+    const load = vi.fn();
+    const connector = new McpConnector(
+      { botMcpServer: { findMany: assignment } } as unknown as PrismaClient,
+      { load } as unknown as SecretStore,
+    );
+    const context = {
+      operationId: "fixture",
+      traceId: "fixture",
+      spaceId: "fixture",
+      userId: "owner",
+      botId: "peer",
+      financialResearchOnly: true,
+      signal: new AbortController().signal,
+    };
+    expect(await connector.discoverTools(context)).toEqual([]);
+    const events = [];
+    for await (const event of connector.execute(
+      {
+        tool: "readOnly_buy",
+        args: {},
+        executionId: "fixture",
+        route: {
+          connectorId: "mcp",
+          resourceId: "broker-fixture",
+          toolName: "buy",
+          financialClass: "NON_FINANCIAL",
+        },
+      },
+      context,
+    ))
+      events.push(event);
+    expect(events).toEqual([
+      {
+        type: "error",
+        message: expect.stringContaining("STRUCTURED_FINANCIAL_EXECUTION_REQUIRED"),
+      },
+    ]);
+    expect(assignment).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+    await connector.close();
   });
 });

@@ -225,13 +225,22 @@ msgstr "Access token"
 msgid "Access token (optional)"
 msgstr "Access token (optional)"
 
+#: src/components/TradingMandateCard.tsx
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Account"
 msgstr "Account"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Account access"
+msgstr "Account access"
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Account default"
 msgstr "Account default"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Account guardrails"
+msgstr "Account guardrails"
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -242,6 +251,14 @@ msgstr "Account ID"
 msgid "Account label"
 msgstr "Account label"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Account name"
+msgstr "Account name"
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Account read"
+msgstr "Account read"
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Accounts"
 msgstr "Accounts"
@@ -249,6 +266,10 @@ msgstr "Accounts"
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Action confirmations"
 msgstr "Action confirmations"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Action rejected. Refresh and review the current mandate."
+msgstr "Action rejected. Refresh and review the current mandate."
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
@@ -276,6 +297,7 @@ msgstr "Active model"
 msgid "Activity"
 msgstr "Activity"
 
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/ModelBackupsSettings.tsx
 #: src/pages/PluginsOverlay.tsx
 #: src/pages/ScratchpadSection.tsx
@@ -426,6 +448,10 @@ msgstr "All statuses"
 msgid "All time"
 msgstr "All time"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allocation"
+msgstr "Allocation"
+
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Allow {0} actions without asking"
@@ -457,9 +483,21 @@ msgstr "Allow purchase actions without asking"
 msgid "Allow writing"
 msgstr "Allow writing"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed actions"
+msgstr "Allowed actions"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed instruments"
+msgstr "Allowed instruments"
+
 #: src/components/AskCard.tsx
 msgid "Allowed once"
 msgstr "Allowed once"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed order types"
+msgstr "Allowed order types"
 
 #: src/pages/Auth.tsx
 msgid "Already have an account?"
@@ -519,6 +557,10 @@ msgstr "API key"
 msgid "API key header"
 msgstr "API key header"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "API token"
+msgstr "API token"
+
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Appearance"
 msgstr "Appearance"
@@ -531,6 +573,10 @@ msgstr "Approval boundaries"
 #: src/pages/shell/message-cards.tsx
 msgid "Approve"
 msgstr "Approve"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Approve mandate"
+msgstr "Approve mandate"
 
 #: src/pages/shell/message-cards.tsx
 msgid "Approve this server to let your agent use its tools."
@@ -626,6 +672,10 @@ msgstr "Authentication failed."
 #: src/pages/Onboarding.tsx
 msgid "Authorization code or callback URL"
 msgstr "Authorization code or callback URL"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Authorization details"
+msgstr "Authorization details"
 
 #: src/pages/shell/message-cards.tsx
 msgid "Authorization timed out. Please try again."
@@ -759,6 +809,14 @@ msgstr "Bots with their own computer and browser"
 msgid "Brain label"
 msgstr "Brain label"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Breach behavior"
+msgstr "Breach behavior"
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Broker accounts"
+msgstr "Broker accounts"
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Browse MCP servers"
 msgstr "Browse MCP servers"
@@ -790,9 +848,13 @@ msgstr "Can't reach the server."
 msgid "Cancel"
 msgstr "Cancel"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Cancel mandate"
+msgstr "Cancel mandate"
+
 #: src/pages/shell/bot-panel.tsx
-msgid "Cancel new bot"
-msgstr "Cancel new bot"
+msgid "Cancel new Agent"
+msgstr "Cancel new Agent"
 
 #: src/pages/GroupPanel.tsx
 msgid "Cancel new group"
@@ -830,6 +892,14 @@ msgstr "Changing…"
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Channels"
 msgstr "Channels"
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Chart changed or data is unavailable. Reopen to refresh."
+msgstr "Chart changed or data is unavailable. Reopen to refresh."
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Chart data unavailable. Reopen to reconnect."
+msgstr "Chart data unavailable. Reopen to reconnect."
 
 #: src/pages/shell/message-cards.tsx
 msgid "Chart failed to render: {error}"
@@ -899,6 +969,10 @@ msgstr "Choose a bot shape, color, or upload an image"
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Choose a bot…"
 msgstr "Choose a bot…"
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Choose a connected account and broker instrument."
+msgstr "Choose a connected account and broker instrument."
 
 #: src/pages/Auth.tsx
 msgid "Choose a new password"
@@ -1015,6 +1089,10 @@ msgstr "Close voice settings"
 msgid "Cloud"
 msgstr "Cloud"
 
+#: src/pages/Shell.tsx
+msgid "Cloud chart"
+msgstr "Cloud chart"
+
 #: src/components/AskCard.tsx
 msgid "Code"
 msgstr "Code"
@@ -1125,6 +1203,10 @@ msgstr "Connect a model"
 msgid "Connect a provider to add backups."
 msgstr "Connect a provider to add backups."
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Connect account"
+msgstr "Connect account"
+
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Connect API key"
 msgstr "Connect API key"
@@ -1234,6 +1316,10 @@ msgstr "Copy"
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Copy .env example"
 msgstr "Copy .env example"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Cost reserve per trade"
+msgstr "Cost reserve per trade"
 
 #: src/pages/ScratchpadSection.tsx
 msgid "Could not add"
@@ -1707,6 +1793,11 @@ msgstr "Create a section and move {0} into it."
 msgid "Create account"
 msgstr "Create account"
 
+#: src/pages/Onboarding.tsx
+#: src/pages/shell/bot-panel.tsx
+msgid "Create Agent"
+msgstr "Create Agent"
+
 #: src/pages/GroupPanel.tsx
 msgid "Create group"
 msgstr "Create group"
@@ -1788,6 +1879,10 @@ msgstr "Customer support"
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Customize bot avatar"
 msgstr "Customize bot avatar"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Daily loss limit"
+msgstr "Daily loss limit"
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Dark"
@@ -1897,16 +1992,13 @@ msgid "Denied"
 msgstr "Denied"
 
 #: src/components/AskCard.tsx
+#: src/components/TradingMandateCard.tsx
 msgid "Deny"
 msgstr "Deny"
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Deployment default"
 msgstr "Deployment default"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "Describe what this bot does"
-msgstr "Describe what this bot does"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Description"
@@ -1924,6 +2016,10 @@ msgstr "Desktop update"
 msgid "Direct MCP"
 msgstr "Direct MCP"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Disable LIVE"
+msgstr "Disable LIVE"
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Disabled tools"
 msgstr "Disabled tools"
@@ -1931,6 +2027,7 @@ msgstr "Disabled tools"
 #: src/pages/McpServersOverlay.tsx
 #: src/pages/MemorySettingsOverlay.tsx
 #: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Disconnect"
 msgstr "Disconnect"
@@ -2025,6 +2122,10 @@ msgstr "Draft skill"
 msgid "Drag, drop, or paste an image"
 msgstr "Drag, drop, or paste an image"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Draw"
+msgstr "Draw"
+
 #: src/pages/BotContextMenu.tsx
 msgid "Duplicate"
 msgstr "Duplicate"
@@ -2052,6 +2153,14 @@ msgstr "Email is not allowed to register"
 #: src/lib/user-error.ts
 msgid "Email verification required"
 msgstr "Email verification required"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Emergency stop"
+msgstr "Emergency stop"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Enable LIVE"
+msgstr "Enable LIVE"
 
 #: src/pages/BillingSettingsPanel.tsx
 msgid "Ends {day}"
@@ -2125,6 +2234,10 @@ msgstr "Every month"
 msgid "Every week"
 msgstr "Every week"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Execution also requires account readiness and an exact approved mandate."
+msgstr "Execution also requires account readiness and an exact approved mandate."
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Executor token"
 msgstr "Executor token"
@@ -2139,6 +2252,14 @@ msgstr "Expand"
 msgid "Expand {0}"
 msgstr "Expand {0}"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Expires"
+msgstr "Expires"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Expiry behavior"
+msgstr "Expiry behavior"
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Export"
 msgstr "Export"
@@ -2146,6 +2267,10 @@ msgstr "Export"
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "Export this week's list from the CRM and drop it in the shared folder"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Exposure limit"
+msgstr "Exposure limit"
 
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -2239,6 +2364,10 @@ msgstr "Finishing MCP connection…"
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Flag unexpected actions"
 msgstr "Flag unexpected actions"
+
+#: src/pages/Onboarding.tsx
+msgid "Focus"
+msgstr "Focus"
 
 #: src/pages/Auth.tsx
 msgid "Forgot password?"
@@ -2408,6 +2537,10 @@ msgstr "Inactive"
 msgid "Inbox & email"
 msgstr "Inbox & email"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Indicator"
+msgstr "Indicator"
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Inherit default"
 msgstr "Inherit default"
@@ -2462,6 +2595,10 @@ msgstr "Isolated preview — no access to your account"
 #: src/pages/shell/dialogs.tsx
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
+
+#: src/components/TradingJournal.tsx
+msgid "Journal"
+msgstr "Journal"
 
 #: src/pages/Shell.tsx
 msgid "Jump to latest"
@@ -2532,10 +2669,15 @@ msgstr "Listen"
 msgid "Listening"
 msgstr "Listening"
 
+#: src/components/TradingMandateCard.tsx
+msgid "LIVE availability"
+msgstr "LIVE availability"
+
 #: src/pages/Shell.tsx
 msgid "Load earlier messages"
 msgstr "Load earlier messages"
 
+#: src/components/TradingJournal.tsx
 #: src/pages/Artifacts.tsx
 msgid "Load more"
 msgstr "Load more"
@@ -2559,6 +2701,10 @@ msgstr "Loading integrations…"
 #: src/pages/MemorySettingsOverlay.tsx
 msgid "Loading memory settings…"
 msgstr "Loading memory settings…"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Loading mission…"
+msgstr "Loading mission…"
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Loading model catalog…"
@@ -2655,6 +2801,10 @@ msgstr "Manual"
 msgid "Manual setup required"
 msgstr "Manual setup required"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Margin usage limit"
+msgstr "Margin usage limit"
+
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Read"
 msgstr "Mark as Read"
@@ -2662,6 +2812,10 @@ msgstr "Mark as Read"
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Unread"
 msgstr "Mark as Unread"
+
+#: src/pages/shell/bot-panel.tsx
+msgid "Markets and working instructions"
+msgstr "Markets and working instructions"
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2681,6 +2835,10 @@ msgstr "Maximize"
 #: src/pages/Onboarding.tsx
 msgid "Maximum images per request"
 msgstr "Maximum images per request"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Maximum loss"
+msgstr "Maximum loss"
 
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Maximum of 10 backup models."
@@ -2773,6 +2931,10 @@ msgstr "Messaged {peer}"
 msgid "Messaging"
 msgstr "Messaging"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "MetaApi account ID"
+msgstr "MetaApi account ID"
+
 #: src/lib/call-session.ts
 msgid "Microphone failed"
 msgstr "Microphone failed"
@@ -2802,6 +2964,10 @@ msgstr "minute"
 #: src/pages/RoutineSchedule.tsx
 msgid "minutes"
 msgstr "minutes"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Mission unavailable"
+msgstr "Mission unavailable"
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2888,6 +3054,7 @@ msgstr "Mute"
 #: src/components/teach/SkillDraftCard.tsx
 #: src/pages/Auth.tsx
 #: src/pages/GroupPanel.tsx
+#: src/pages/Onboarding.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/bot-panel.tsx
@@ -2896,8 +3063,8 @@ msgid "Name"
 msgstr "Name"
 
 #: src/pages/shell/bot-panel.tsx
-msgid "Name this bot"
-msgstr "Name this bot"
+msgid "Name this Agent"
+msgstr "Name this Agent"
 
 #: src/pages/GroupPanel.tsx
 msgid "Name this group"
@@ -2918,10 +3085,6 @@ msgstr "Needs takeover"
 #: src/pages/Shell.tsx
 msgid "Needs you"
 msgstr "Needs you"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "New bot"
-msgstr "New bot"
 
 #: src/pages/GroupPanel.tsx
 msgid "New group"
@@ -2988,6 +3151,10 @@ msgstr "No chat apps linked yet."
 #: src/pages/shell/bot-credentials.tsx
 msgid "No credentials saved for this bot."
 msgstr "No credentials saved for this bot."
+
+#: src/components/TradingJournal.tsx
+msgid "No financial events"
+msgstr "No financial events"
 
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "No group chats yet."
@@ -3160,6 +3327,10 @@ msgstr "Open <0>{0}</0> and enter this code:"
 msgid "Open <0>{0}</0> to finish signing in."
 msgstr "Open <0>{0}</0> to finish signing in."
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Open chart"
+msgstr "Open chart"
+
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Open computer settings"
 msgstr "Open computer settings"
@@ -3175,6 +3346,10 @@ msgstr "Open in full window"
 #: src/pages/Shell.tsx
 msgid "Open navigation"
 msgstr "Open navigation"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Open risk limit"
+msgstr "Open risk limit"
 
 #: src/components/computer/TerminalApp.tsx
 msgid "Open shell"
@@ -3196,10 +3371,6 @@ msgstr "Opened {path}"
 #: src/pages/Shell.tsx
 msgid "Opened its thread."
 msgstr "Opened its thread."
-
-#: src/pages/Onboarding.tsx
-msgid "Opening chat…"
-msgstr "Opening chat…"
 
 #: src/App.tsx
 msgid "Opening your Space…"
@@ -3290,9 +3461,21 @@ msgstr "Paste your API key"
 msgid "Paste your API key, then test again."
 msgstr "Paste your API key, then test again."
 
+#: src/components/TradingMandateCard.tsx
+msgid "Pause"
+msgstr "Pause"
+
 #: src/pages/RoutineEditor.tsx
 msgid "Paused"
 msgstr "Paused"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Pending order limit"
+msgstr "Pending order limit"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Per trade limit"
+msgstr "Per trade limit"
 
 #: src/pages/Shell.tsx
 #: src/pages/shell/chat-context.tsx
@@ -3318,6 +3501,10 @@ msgstr "Playing…"
 #: src/pages/KnowledgeSection.tsx
 msgid "Plugin"
 msgstr "Plugin"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Position limit"
+msgstr "Position limit"
 
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
@@ -3377,6 +3564,10 @@ msgstr "React"
 #: src/pages/Shell.tsx
 msgid "Reactions"
 msgstr "Reactions"
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Read access through active mandate"
+msgstr "Read access through active mandate"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Read replies aloud"
@@ -3477,6 +3668,10 @@ msgstr "Refresh view"
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Refreshing…"
 msgstr "Refreshing…"
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Region (optional)"
+msgstr "Region (optional)"
 
 #: src/lib/user-error.ts
 msgid "Registration is closed"
@@ -3622,6 +3817,10 @@ msgstr "Reset computer?"
 msgid "Reset password"
 msgstr "Reset password"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Reset view"
+msgstr "Reset view"
+
 #: src/pages/Auth.tsx
 msgid "Reset your password"
 msgstr "Reset your password"
@@ -3654,6 +3853,10 @@ msgstr "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgid "Restoring your workspace"
 msgstr "Restoring your workspace"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Resume"
+msgstr "Resume"
+
 #: src/components/AccountAccess.tsx
 #: src/pages/Auth.tsx
 #: src/pages/ModelBackupsSettings.tsx
@@ -3685,6 +3888,10 @@ msgstr "Review provider settings and test again."
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Revoke"
 msgstr "Revoke"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Risk-increase permissions"
+msgstr "Risk-increase permissions"
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Robot"
@@ -3755,6 +3962,10 @@ msgstr "Runs when this bot receives a verified message from this provider."
 msgid "Save"
 msgstr "Save"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Save account limits"
+msgstr "Save account limits"
+
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Save backups"
 msgstr "Save backups"
@@ -3809,6 +4020,7 @@ msgstr "Saving..."
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 msgid "Saving…"
 msgstr "Saving…"
 
@@ -3951,6 +4163,10 @@ msgstr "Settings: Usage"
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Setup help"
 msgstr "Setup help"
+
+#: src/pages/Auth.tsx
+msgid "Setup key"
+msgstr "Setup key"
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Shape"
@@ -4139,6 +4355,10 @@ msgstr "Starting"
 msgid "Starting…"
 msgstr "Starting…"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Starts"
+msgstr "Starts"
+
 #: src/pages/ActivityList.tsx
 msgid "Status"
 msgstr "Status"
@@ -4193,6 +4413,14 @@ msgstr "Subscribe"
 msgid "Subscription required"
 msgstr "Subscription required"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised orders"
+msgstr "Supervised orders"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised position"
+msgstr "Supervised position"
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Supports images"
@@ -4214,6 +4442,14 @@ msgstr "Switching…"
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "System"
 msgstr "System"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target"
+msgstr "Target"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target behavior"
+msgstr "Target behavior"
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Teach a task"
@@ -4274,6 +4510,10 @@ msgstr "The API did not come back. Refresh this page."
 #: src/lib/model-connection-preflight.ts
 msgid "The connection timed out."
 msgstr "The connection timed out."
+
+#: src/components/TradingMandateCard.tsx
+msgid "The profit target is not guaranteed. Capital allocation is an accounting budget, not segregated funds."
+msgstr "The profit target is not guaranteed. Capital allocation is an accounting budget, not segregated funds."
 
 #: src/lib/model-connection-preflight.ts
 msgid "The provider is rate-limiting requests."
@@ -4412,6 +4652,22 @@ msgstr "Tool sources"
 msgid "Tools"
 msgstr "Tools"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Total exposure limit"
+msgstr "Total exposure limit"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Total reserved risk limit"
+msgstr "Total reserved risk limit"
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Trading Agent"
+msgstr "Trading Agent"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Trading mission"
+msgstr "Trading mission"
+
 #: src/components/call/CallCard.tsx
 msgid "Transcript"
 msgstr "Transcript"
@@ -4433,7 +4689,6 @@ msgid "Trial ends {day}"
 msgstr "Trial ends {day}"
 
 #: src/pages/ActivityList.tsx
-#: src/pages/Onboarding.tsx
 msgid "Try again"
 msgstr "Try again"
 
@@ -4460,6 +4715,10 @@ msgstr "Unassigned"
 #: src/components/SoftwareUpdateSection.tsx
 msgid "Unavailable"
 msgstr "Unavailable"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Unfreeze account"
+msgstr "Unfreeze account"
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Uninstall"
@@ -4675,13 +4934,13 @@ msgstr "What do you want me on first?"
 msgid "What result will you demonstrate?"
 msgstr "What result will you demonstrate?"
 
+#: src/pages/shell/bot-panel.tsx
+msgid "What should this Agent focus on?"
+msgstr "What should this Agent focus on?"
+
 #: src/pages/RoutineEditor.tsx
 msgid "What should this routine do each time it runs?"
 msgstr "What should this routine do each time it runs?"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "What this bot is for"
-msgstr "What this bot is for"
 
 #: src/components/teach/SkillDraftCard.tsx
 msgid "What to return"

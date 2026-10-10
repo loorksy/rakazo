@@ -2,12 +2,16 @@ import type { BrokerReadSession } from "@rakazo/adapter-kit";
 import {
   SignedTradingDecimalSchema,
   TradingDecimalSchema,
+  TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
 import { financialDecimal, financialUnits } from "@rakazo/core";
 import type { BrokerLeaseToken, Prisma, PrismaClient } from "@rakazo/db";
 import { withBrokerSessionFence } from "@rakazo/db";
 import { z } from "zod";
+
+import type { BrokerPositionHistory } from "./broker-history.js";
+import { closedPositionPnl, recordBrokerHistories } from "./broker-history.js";
 
 const Id = z.string().min(1).max(128);
 export const BrokerPositionStateSchema = z.object({
@@ -225,6 +229,7 @@ export async function observeBrokerState(
   token: BrokerLeaseToken,
   state: BrokerState,
   now: Date,
+  histories: BrokerPositionHistory[] = [],
 ) {
   // Even fixture providers must pass the secret-stripping schema before persistence.
   state = BrokerStateSchema.parse(state);
@@ -239,16 +244,26 @@ export async function observeBrokerState(
         where: { accountId: token.accountId },
       });
       const previous = prior ? BrokerStateSchema.parse(prior) : null;
+      const history = await recordBrokerHistories(
+        tx,
+        connection.ownerUserId,
+        token.accountId,
+        histories,
+        prior?.observedAt ?? null,
+        now,
+      );
       const supervisions = await tx.tradingPositionSupervision.findMany({
         where: { accountId: token.accountId, status: "ACTIVE" },
         take: 1001,
       });
       if (supervisions.length > 1000) throw new Error("Supervision capacity exceeded");
       const reasons = new Set<string>();
+      if (history.conflict) reasons.add("PROVIDER_HISTORY_CONFLICT");
       if (previous) {
         if (prior?.generation !== token.generation) reasons.add("PROVIDER_SESSION_GAP");
         if (
-          previous.account.balance !== state.account.balance ||
+          financialUnits(previous.account.balance) + history.cash !==
+            financialUnits(state.account.balance) ||
           previous.account.currency !== state.account.currency ||
           previous.account.accountMode !== state.account.accountMode ||
           previous.account.tradingAllowed !== state.account.tradingAllowed
@@ -261,11 +276,15 @@ export async function observeBrokerState(
             reasons.add("SUPERVISED_POSITION_CHANGED");
         }
         const known = await tx.tradingRiskReservation.findMany({
-          where: { accountId: token.accountId, mode: "LIVE", status: "COMMITTED" },
+          where: {
+            accountId: token.accountId,
+            mode: "LIVE",
+            status: { in: ["COMMITTED", "RELEASED"] },
+          },
         });
         const knownIds = new Set(known.map((row) => row.providerReference));
         for (const reservation of known) {
-          if (reservation.kind === "MANAGEMENT") continue;
+          if (reservation.kind === "MANAGEMENT" || reservation.status === "RELEASED") continue;
           const current = (reservation.kind === "POSITION" ? state.positions : state.orders).find(
             (row) => row.id === reservation.providerReference,
           );
@@ -285,6 +304,13 @@ export async function observeBrokerState(
           )
         )
           reasons.add("UNATTRIBUTED_POSITION_OPENED");
+        if (
+          state.orders.some(
+            (order) =>
+              !previous.orders.some((old) => old.id === order.id) && !knownIds.has(order.id),
+          )
+        )
+          reasons.add("UNATTRIBUTED_PENDING_ORDER_OPENED");
         for (const old of previous.orders) {
           const current = state.orders.find((row) => row.id === old.id);
           if (JSON.stringify(old) !== JSON.stringify(current) && !knownIds.has(old.id))
@@ -348,7 +374,7 @@ export async function observeBrokerState(
       // A realized cash/exposure change needs history reconciliation; never infer zero profit.
       if (!reasons.size) {
         const mandates = await tx.tradingMandate.findMany({
-          where: { accountId: token.accountId, mode: "LIVE", status: "ACTIVE" },
+          where: { accountId: token.accountId, mode: "LIVE", status: { in: ["ACTIVE", "PAUSED"] } },
           take: 1000,
         });
         for (const mandate of mandates) {
@@ -359,18 +385,26 @@ export async function observeBrokerState(
               status: { in: ["COMMITTED", "RELEASED"] },
             },
           });
-          if (reservations.some((row) => row.status === "RELEASED")) continue;
+
           let pnl = 0n;
           let verified = true;
           for (const reservation of reservations) {
             const valuation = state.account.positionValuations?.find(
               (row) => row.id === reservation.providerReference,
             );
-            if (!valuation) {
+            const closed = history.verified.get(reservation.providerReference ?? "");
+            const realized = closed ? closedPositionPnl(closed) : null;
+            if (valuation && reservation.status === "COMMITTED")
+              pnl += financialUnits(valuation.profit);
+            else if (
+              realized !== null &&
+              !state.positions.some((position) => position.id === reservation.providerReference)
+            )
+              pnl += realized;
+            else {
               verified = false;
               break;
             }
-            pnl += financialUnits(valuation.profit);
           }
           const supervision = await tx.tradingPositionSupervision.findUnique({
             where: { mandateId: mandate.id },
@@ -385,14 +419,24 @@ export async function observeBrokerState(
           }
           if (!verified) continue;
           const envelope = TradingMandateEnvelopeSchema.parse(mandate.envelope);
+          const objective = TradingGoalInputSchema.parse(
+            (await tx.tradingGoal.findUniqueOrThrow({ where: { id: mandate.goalId } })).definition,
+          );
           const stopped = pnl <= -financialUnits(envelope.maxMissionLoss);
+          const target =
+            objective.targetProfit !== null && pnl >= financialUnits(objective.targetProfit);
           await tx.tradingMandate.update({
             where: { id: mandate.id },
             data: {
               observedAt: now,
               missionPnl: financialDecimal(pnl),
               dailyPnl: financialDecimal(pnl),
-              ...(stopped ? { status: "RISK_STOPPED", revision: { increment: 1 } } : {}),
+              ...(target && mandate.status === "ACTIVE"
+                ? { status: "TARGET_REACHED", revision: { increment: 1 } }
+                : {}),
+              ...(stopped && mandate.status === "ACTIVE"
+                ? { status: "RISK_STOPPED", revision: { increment: 1 } }
+                : {}),
               observedState: {
                 version: 1,
                 generation: token.generation,

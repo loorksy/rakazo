@@ -225,13 +225,22 @@ msgstr "Токен доступа"
 msgid "Access token (optional)"
 msgstr "Токен доступа (необязательно)"
 
+#: src/components/TradingMandateCard.tsx
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Account"
 msgstr "Аккаунт"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Account access"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Account default"
 msgstr "Учетная запись по умолчанию"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Account guardrails"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -242,6 +251,14 @@ msgstr "ID аккаунта"
 msgid "Account label"
 msgstr "Ярлык аккаунта"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Account name"
+msgstr ""
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Account read"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Accounts"
 msgstr "Аккаунты"
@@ -249,6 +266,10 @@ msgstr "Аккаунты"
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Action confirmations"
 msgstr "Подтверждения действий"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Action rejected. Refresh and review the current mandate."
+msgstr ""
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
@@ -276,6 +297,7 @@ msgstr "Активная модель"
 msgid "Activity"
 msgstr "Активность"
 
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/ModelBackupsSettings.tsx
 #: src/pages/PluginsOverlay.tsx
 #: src/pages/ScratchpadSection.tsx
@@ -426,6 +448,10 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allocation"
+msgstr ""
+
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Allow {0} actions without asking"
@@ -457,9 +483,21 @@ msgstr "Разрешить действия по покупке без запр�
 msgid "Allow writing"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed actions"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed instruments"
+msgstr ""
+
 #: src/components/AskCard.tsx
 msgid "Allowed once"
 msgstr "Разрешено один раз"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed order types"
+msgstr ""
 
 #: src/pages/Auth.tsx
 msgid "Already have an account?"
@@ -519,6 +557,10 @@ msgstr "API-ключ"
 msgid "API key header"
 msgstr "Заголовок ключа API"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "API token"
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Appearance"
 msgstr "Внешний вид"
@@ -531,6 +573,10 @@ msgstr "Границы одобрения"
 #: src/pages/shell/message-cards.tsx
 msgid "Approve"
 msgstr "Утвердить"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Approve mandate"
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Approve this server to let your agent use its tools."
@@ -626,6 +672,10 @@ msgstr "Аутентификация не удалась."
 #: src/pages/Onboarding.tsx
 msgid "Authorization code or callback URL"
 msgstr "Код авторизации или URL обратного вызова"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Authorization details"
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Authorization timed out. Please try again."
@@ -759,6 +809,14 @@ msgstr ""
 msgid "Brain label"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Breach behavior"
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Broker accounts"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Browse MCP servers"
 msgstr "Просмотреть MCP-серверы"
@@ -790,9 +848,13 @@ msgstr "Не удаётся связаться с сервером."
 msgid "Cancel"
 msgstr "Отмена"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Cancel mandate"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
-msgid "Cancel new bot"
-msgstr "Отменить создание бота"
+msgid "Cancel new Agent"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx
 msgid "Cancel new group"
@@ -830,6 +892,14 @@ msgstr "Изменение…"
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Channels"
 msgstr "Каналы"
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Chart changed or data is unavailable. Reopen to refresh."
+msgstr ""
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Chart data unavailable. Reopen to reconnect."
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Chart failed to render: {error}"
@@ -899,6 +969,10 @@ msgstr "Выберите форму и цвет бота или загрузит
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Choose a bot…"
 msgstr "Выбрать бота…"
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Choose a connected account and broker instrument."
+msgstr ""
 
 #: src/pages/Auth.tsx
 msgid "Choose a new password"
@@ -1015,6 +1089,10 @@ msgstr "Закрыть настройки голоса"
 msgid "Cloud"
 msgstr "Облако"
 
+#: src/pages/Shell.tsx
+msgid "Cloud chart"
+msgstr ""
+
 #: src/components/AskCard.tsx
 msgid "Code"
 msgstr "Код"
@@ -1125,6 +1203,10 @@ msgstr "Подключить модель"
 msgid "Connect a provider to add backups."
 msgstr "Подключите провайдера, чтобы добавить резервные модели."
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Connect account"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Connect API key"
 msgstr "Подключить API-ключ"
@@ -1233,6 +1315,10 @@ msgstr "Копировать"
 
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Copy .env example"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Cost reserve per trade"
 msgstr ""
 
 #: src/pages/ScratchpadSection.tsx
@@ -1707,6 +1793,11 @@ msgstr "Создайте раздел и переместите в него {0}.
 msgid "Create account"
 msgstr "Зарегистрироваться"
 
+#: src/pages/Onboarding.tsx
+#: src/pages/shell/bot-panel.tsx
+msgid "Create Agent"
+msgstr ""
+
 #: src/pages/GroupPanel.tsx
 msgid "Create group"
 msgstr "Создать группу"
@@ -1788,6 +1879,10 @@ msgstr "Поддержка клиентов"
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Customize bot avatar"
 msgstr "Настроить аватар бота"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Daily loss limit"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Dark"
@@ -1897,16 +1992,13 @@ msgid "Denied"
 msgstr "Отклонено"
 
 #: src/components/AskCard.tsx
+#: src/components/TradingMandateCard.tsx
 msgid "Deny"
 msgstr "Запретить"
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Deployment default"
 msgstr "Развертывание по умолчанию"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "Describe what this bot does"
-msgstr "Опишите, что делает этот бот"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Description"
@@ -1924,6 +2016,10 @@ msgstr "Обновление настольного приложения"
 msgid "Direct MCP"
 msgstr "Прямой MCP"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Disable LIVE"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Disabled tools"
 msgstr ""
@@ -1931,6 +2027,7 @@ msgstr ""
 #: src/pages/McpServersOverlay.tsx
 #: src/pages/MemorySettingsOverlay.tsx
 #: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Disconnect"
 msgstr "Отключить"
@@ -2025,6 +2122,10 @@ msgstr "Черновик навыка"
 msgid "Drag, drop, or paste an image"
 msgstr "Перетащите или вставьте изображение"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Draw"
+msgstr ""
+
 #: src/pages/BotContextMenu.tsx
 msgid "Duplicate"
 msgstr "Дублировать"
@@ -2052,6 +2153,14 @@ msgstr "Регистрация с этим адресом электронной
 #: src/lib/user-error.ts
 msgid "Email verification required"
 msgstr "Требуется подтверждение электронной почты"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Emergency stop"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Enable LIVE"
+msgstr ""
 
 #: src/pages/BillingSettingsPanel.tsx
 msgid "Ends {day}"
@@ -2125,6 +2234,10 @@ msgstr "Каждый месяц"
 msgid "Every week"
 msgstr "Каждую неделю"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Execution also requires account readiness and an exact approved mandate."
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Executor token"
 msgstr "Токен Executor"
@@ -2139,6 +2252,14 @@ msgstr "Развернуть"
 msgid "Expand {0}"
 msgstr "Развернуть {0}"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Expires"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Expiry behavior"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Export"
 msgstr "Экспорт"
@@ -2146,6 +2267,10 @@ msgstr "Экспорт"
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "Экспортируйте список этой недели из CRM и поместите его в общую папку."
+
+#: src/components/TradingMandateCard.tsx
+msgid "Exposure limit"
+msgstr ""
 
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -2239,6 +2364,10 @@ msgstr "Завершение подключения MCP…"
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Flag unexpected actions"
 msgstr "Пометить неожиданные действия"
+
+#: src/pages/Onboarding.tsx
+msgid "Focus"
+msgstr ""
 
 #: src/pages/Auth.tsx
 msgid "Forgot password?"
@@ -2408,6 +2537,10 @@ msgstr ""
 msgid "Inbox & email"
 msgstr ""
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Indicator"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Inherit default"
 msgstr "Наследовать значение по умолчанию"
@@ -2462,6 +2595,10 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Его диалог, файлы и задачи будут безвозвратно удалены. Созданные им боты останутся в вашем списке."
+
+#: src/components/TradingJournal.tsx
+msgid "Journal"
+msgstr ""
 
 #: src/pages/Shell.tsx
 msgid "Jump to latest"
@@ -2532,10 +2669,15 @@ msgstr "Слушать"
 msgid "Listening"
 msgstr "Прослушивание"
 
+#: src/components/TradingMandateCard.tsx
+msgid "LIVE availability"
+msgstr ""
+
 #: src/pages/Shell.tsx
 msgid "Load earlier messages"
 msgstr "Загрузить более ранние сообщения"
 
+#: src/components/TradingJournal.tsx
 #: src/pages/Artifacts.tsx
 msgid "Load more"
 msgstr ""
@@ -2559,6 +2701,10 @@ msgstr "Загрузка интеграций…"
 #: src/pages/MemorySettingsOverlay.tsx
 msgid "Loading memory settings…"
 msgstr "Загрузка настроек памяти…"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Loading mission…"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Loading model catalog…"
@@ -2655,6 +2801,10 @@ msgstr "Вручную"
 msgid "Manual setup required"
 msgstr "Требуется ручная настройка"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Margin usage limit"
+msgstr ""
+
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Read"
 msgstr "Отметить как прочитанное"
@@ -2662,6 +2812,10 @@ msgstr "Отметить как прочитанное"
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Unread"
 msgstr "Отметить как непрочитанное"
+
+#: src/pages/shell/bot-panel.tsx
+msgid "Markets and working instructions"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2680,6 +2834,10 @@ msgstr ""
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Maximum images per request"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Maximum loss"
 msgstr ""
 
 #: src/pages/ModelBackupsSettings.tsx
@@ -2773,6 +2931,10 @@ msgstr "Отправлено сообщение {peer}"
 msgid "Messaging"
 msgstr "Обмен сообщениями"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "MetaApi account ID"
+msgstr ""
+
 #: src/lib/call-session.ts
 msgid "Microphone failed"
 msgstr "Ошибка микрофона"
@@ -2802,6 +2964,10 @@ msgstr "минута"
 #: src/pages/RoutineSchedule.tsx
 msgid "minutes"
 msgstr "минуты"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Mission unavailable"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2888,6 +3054,7 @@ msgstr "Выключить микрофон"
 #: src/components/teach/SkillDraftCard.tsx
 #: src/pages/Auth.tsx
 #: src/pages/GroupPanel.tsx
+#: src/pages/Onboarding.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/bot-panel.tsx
@@ -2896,8 +3063,8 @@ msgid "Name"
 msgstr "Имя"
 
 #: src/pages/shell/bot-panel.tsx
-msgid "Name this bot"
-msgstr "Назовите этого бота"
+msgid "Name this Agent"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx
 msgid "Name this group"
@@ -2918,10 +3085,6 @@ msgstr "Требуется передача управления"
 #: src/pages/Shell.tsx
 msgid "Needs you"
 msgstr "Требуется ваше участие"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "New bot"
-msgstr "Новый бот"
 
 #: src/pages/GroupPanel.tsx
 msgid "New group"
@@ -2987,6 +3150,10 @@ msgstr "Приложения для чата пока не связаны."
 
 #: src/pages/shell/bot-credentials.tsx
 msgid "No credentials saved for this bot."
+msgstr ""
+
+#: src/components/TradingJournal.tsx
+msgid "No financial events"
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -3160,6 +3327,10 @@ msgstr ""
 msgid "Open <0>{0}</0> to finish signing in."
 msgstr ""
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Open chart"
+msgstr ""
+
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Open computer settings"
 msgstr ""
@@ -3175,6 +3346,10 @@ msgstr "Открыть в полном окне"
 #: src/pages/Shell.tsx
 msgid "Open navigation"
 msgstr "Открыть навигацию"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Open risk limit"
+msgstr ""
 
 #: src/components/computer/TerminalApp.tsx
 msgid "Open shell"
@@ -3196,10 +3371,6 @@ msgstr ""
 #: src/pages/Shell.tsx
 msgid "Opened its thread."
 msgstr "Диалог открыт."
-
-#: src/pages/Onboarding.tsx
-msgid "Opening chat…"
-msgstr ""
 
 #: src/App.tsx
 msgid "Opening your Space…"
@@ -3290,9 +3461,21 @@ msgstr "Вставьте свой ключ API"
 msgid "Paste your API key, then test again."
 msgstr "Вставьте API-ключ и повторите тест."
 
+#: src/components/TradingMandateCard.tsx
+msgid "Pause"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "Paused"
 msgstr "Приостановлено"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Pending order limit"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Per trade limit"
+msgstr ""
 
 #: src/pages/Shell.tsx
 #: src/pages/shell/chat-context.tsx
@@ -3318,6 +3501,10 @@ msgstr "Воспроизведение…"
 #: src/pages/KnowledgeSection.tsx
 msgid "Plugin"
 msgstr "Плагин"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Position limit"
+msgstr ""
 
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
@@ -3376,6 +3563,10 @@ msgstr ""
 
 #: src/pages/Shell.tsx
 msgid "Reactions"
+msgstr ""
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Read access through active mandate"
 msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
@@ -3477,6 +3668,10 @@ msgstr "Обновить экран"
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Refreshing…"
 msgstr "Обновление…"
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Region (optional)"
+msgstr ""
 
 #: src/lib/user-error.ts
 msgid "Registration is closed"
@@ -3622,6 +3817,10 @@ msgstr "Сбросить компьютер?"
 msgid "Reset password"
 msgstr "Сбросить пароль"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Reset view"
+msgstr ""
+
 #: src/pages/Auth.tsx
 msgid "Reset your password"
 msgstr "Сбросить пароль"
@@ -3654,6 +3853,10 @@ msgstr "Восстановите последнее сохраненное ра�
 msgid "Restoring your workspace"
 msgstr "Восстановление вашего рабочего пространства"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Resume"
+msgstr ""
+
 #: src/components/AccountAccess.tsx
 #: src/pages/Auth.tsx
 #: src/pages/ModelBackupsSettings.tsx
@@ -3685,6 +3888,10 @@ msgstr "Проверьте настройки поставщика и повто
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Revoke"
 msgstr "Отозвать"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Risk-increase permissions"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Robot"
@@ -3755,6 +3962,10 @@ msgstr "Запускается, когда этот бот получает пр
 msgid "Save"
 msgstr "Сохранить"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Save account limits"
+msgstr ""
+
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Save backups"
 msgstr "Сохранить резервные модели"
@@ -3809,6 +4020,7 @@ msgstr "Сохранение..."
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 msgid "Saving…"
 msgstr "Сохранение…"
 
@@ -3951,6 +4163,10 @@ msgstr "Настройки: Использование"
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Setup help"
 msgstr "Помощь по настройке"
+
+#: src/pages/Auth.tsx
+msgid "Setup key"
+msgstr ""
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Shape"
@@ -4139,6 +4355,10 @@ msgstr "Запуск"
 msgid "Starting…"
 msgstr "Запуск…"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Starts"
+msgstr ""
+
 #: src/pages/ActivityList.tsx
 msgid "Status"
 msgstr ""
@@ -4193,6 +4413,14 @@ msgstr ""
 msgid "Subscription required"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised orders"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised position"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Supports images"
@@ -4214,6 +4442,14 @@ msgstr "Переключение…"
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "System"
 msgstr "Системная"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target behavior"
+msgstr ""
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Teach a task"
@@ -4274,6 +4510,10 @@ msgstr "API не вернулся. Обновите эту страницу."
 #: src/lib/model-connection-preflight.ts
 msgid "The connection timed out."
 msgstr "Время ожидания соединения истекло."
+
+#: src/components/TradingMandateCard.tsx
+msgid "The profit target is not guaranteed. Capital allocation is an accounting budget, not segregated funds."
+msgstr ""
 
 #: src/lib/model-connection-preflight.ts
 msgid "The provider is rate-limiting requests."
@@ -4412,6 +4652,22 @@ msgstr "Источники инструментов"
 msgid "Tools"
 msgstr "Инструменты"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Total exposure limit"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Total reserved risk limit"
+msgstr ""
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Trading Agent"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Trading mission"
+msgstr ""
+
 #: src/components/call/CallCard.tsx
 msgid "Transcript"
 msgstr "Расшифровка"
@@ -4433,7 +4689,6 @@ msgid "Trial ends {day}"
 msgstr ""
 
 #: src/pages/ActivityList.tsx
-#: src/pages/Onboarding.tsx
 msgid "Try again"
 msgstr ""
 
@@ -4460,6 +4715,10 @@ msgstr "Без раздела"
 #: src/components/SoftwareUpdateSection.tsx
 msgid "Unavailable"
 msgstr "Недоступно"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Unfreeze account"
+msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Uninstall"
@@ -4675,13 +4934,13 @@ msgstr ""
 msgid "What result will you demonstrate?"
 msgstr "Какой результат вы продемонстрируете?"
 
+#: src/pages/shell/bot-panel.tsx
+msgid "What should this Agent focus on?"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "What should this routine do each time it runs?"
 msgstr "Что должна делать эта задача при каждом запуске?"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "What this bot is for"
-msgstr "Для чего нужен этот бот"
 
 #: src/components/teach/SkillDraftCard.tsx
 msgid "What to return"

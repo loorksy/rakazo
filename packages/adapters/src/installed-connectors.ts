@@ -146,7 +146,7 @@ export class InstalledConnectorProvider implements ConnectorProvider {
   }
 
   private async authorizedTools(context: AdapterContext): Promise<ConnectorTool[]> {
-    const installs = await this.prisma.capabilityInstall.findMany({
+    const stored = await this.prisma.capabilityInstall.findMany({
       where: {
         spaceId: context.spaceId,
         userId: context.userId,
@@ -154,6 +154,9 @@ export class InstalledConnectorProvider implements ConnectorProvider {
       },
       orderBy: { createdAt: "asc" },
     });
+    const installs = context.financialResearchOnly
+      ? stored.filter((install) => install.kind === "api")
+      : stored;
     // Only MCP installs reach the network during discovery.
     const remote = installs.some((install) => install.kind === "mcp")
       ? await this.remoteFor(context)

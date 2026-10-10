@@ -225,13 +225,22 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "访问令牌（可选）"
 
+#: src/components/TradingMandateCard.tsx
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Account"
 msgstr "账户"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Account access"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Account default"
 msgstr "账户默认"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Account guardrails"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -242,6 +251,14 @@ msgstr "账户 ID"
 msgid "Account label"
 msgstr ""
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Account name"
+msgstr ""
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Account read"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Accounts"
 msgstr ""
@@ -249,6 +266,10 @@ msgstr ""
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Action confirmations"
 msgstr "操作确认"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Action rejected. Refresh and review the current mandate."
+msgstr ""
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
@@ -276,6 +297,7 @@ msgstr "当前模型"
 msgid "Activity"
 msgstr "动态"
 
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/ModelBackupsSettings.tsx
 #: src/pages/PluginsOverlay.tsx
 #: src/pages/ScratchpadSection.tsx
@@ -426,6 +448,10 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allocation"
+msgstr ""
+
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Allow {0} actions without asking"
@@ -457,9 +483,21 @@ msgstr "允许购买操作，无需询问"
 msgid "Allow writing"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed actions"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed instruments"
+msgstr ""
+
 #: src/components/AskCard.tsx
 msgid "Allowed once"
 msgstr "已允许一次"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed order types"
+msgstr ""
 
 #: src/pages/Auth.tsx
 msgid "Already have an account?"
@@ -519,6 +557,10 @@ msgstr "API 密钥"
 msgid "API key header"
 msgstr "API 密钥请求头"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "API token"
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Appearance"
 msgstr "外观"
@@ -531,6 +573,10 @@ msgstr "审批边界"
 #: src/pages/shell/message-cards.tsx
 msgid "Approve"
 msgstr "批准"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Approve mandate"
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Approve this server to let your agent use its tools."
@@ -626,6 +672,10 @@ msgstr "身份验证失败。"
 #: src/pages/Onboarding.tsx
 msgid "Authorization code or callback URL"
 msgstr "授权码或回调 URL"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Authorization details"
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Authorization timed out. Please try again."
@@ -759,6 +809,14 @@ msgstr ""
 msgid "Brain label"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Breach behavior"
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Broker accounts"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Browse MCP servers"
 msgstr ""
@@ -790,9 +848,13 @@ msgstr "无法连接服务器。"
 msgid "Cancel"
 msgstr "取消"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Cancel mandate"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
-msgid "Cancel new bot"
-msgstr "取消新建 Bot"
+msgid "Cancel new Agent"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx
 msgid "Cancel new group"
@@ -830,6 +892,14 @@ msgstr "正在修改…"
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Channels"
 msgstr "频道"
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Chart changed or data is unavailable. Reopen to refresh."
+msgstr ""
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Chart data unavailable. Reopen to reconnect."
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Chart failed to render: {error}"
@@ -899,6 +969,10 @@ msgstr "选择机器人形状和颜色，或上传图片"
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Choose a bot…"
 msgstr "选择 Bot…"
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Choose a connected account and broker instrument."
+msgstr ""
 
 #: src/pages/Auth.tsx
 msgid "Choose a new password"
@@ -1015,6 +1089,10 @@ msgstr "关闭语音设置"
 msgid "Cloud"
 msgstr "云端"
 
+#: src/pages/Shell.tsx
+msgid "Cloud chart"
+msgstr ""
+
 #: src/components/AskCard.tsx
 msgid "Code"
 msgstr "代码"
@@ -1125,6 +1203,10 @@ msgstr "连接模型"
 msgid "Connect a provider to add backups."
 msgstr "连接提供商后即可添加备用模型。"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Connect account"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Connect API key"
 msgstr "连接 API 密钥"
@@ -1233,6 +1315,10 @@ msgstr "复制"
 
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Copy .env example"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Cost reserve per trade"
 msgstr ""
 
 #: src/pages/ScratchpadSection.tsx
@@ -1707,6 +1793,11 @@ msgstr "创建分组并把 {0} 移入。"
 msgid "Create account"
 msgstr "创建账户"
 
+#: src/pages/Onboarding.tsx
+#: src/pages/shell/bot-panel.tsx
+msgid "Create Agent"
+msgstr ""
+
 #: src/pages/GroupPanel.tsx
 msgid "Create group"
 msgstr "创建群组"
@@ -1788,6 +1879,10 @@ msgstr "客户支持"
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Customize bot avatar"
 msgstr "自定义机器人头像"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Daily loss limit"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Dark"
@@ -1897,16 +1992,13 @@ msgid "Denied"
 msgstr "已拒绝"
 
 #: src/components/AskCard.tsx
+#: src/components/TradingMandateCard.tsx
 msgid "Deny"
 msgstr "拒绝"
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Deployment default"
 msgstr "部署默认"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "Describe what this bot does"
-msgstr "描述这个 Bot 做什么"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Description"
@@ -1924,6 +2016,10 @@ msgstr ""
 msgid "Direct MCP"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Disable LIVE"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Disabled tools"
 msgstr ""
@@ -1931,6 +2027,7 @@ msgstr ""
 #: src/pages/McpServersOverlay.tsx
 #: src/pages/MemorySettingsOverlay.tsx
 #: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Disconnect"
 msgstr "断开"
@@ -2025,6 +2122,10 @@ msgstr "技能草稿"
 msgid "Drag, drop, or paste an image"
 msgstr "拖放或粘贴图片"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Draw"
+msgstr ""
+
 #: src/pages/BotContextMenu.tsx
 msgid "Duplicate"
 msgstr "复制"
@@ -2052,6 +2153,14 @@ msgstr "该邮箱不允许注册"
 #: src/lib/user-error.ts
 msgid "Email verification required"
 msgstr "需要验证邮箱"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Emergency stop"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Enable LIVE"
+msgstr ""
 
 #: src/pages/BillingSettingsPanel.tsx
 msgid "Ends {day}"
@@ -2125,6 +2234,10 @@ msgstr "每月"
 msgid "Every week"
 msgstr "每周"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Execution also requires account readiness and an exact approved mandate."
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Executor token"
 msgstr "Executor 令牌"
@@ -2139,6 +2252,14 @@ msgstr "展开"
 msgid "Expand {0}"
 msgstr "展开 {0}"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Expires"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Expiry behavior"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Export"
 msgstr "导出"
@@ -2146,6 +2267,10 @@ msgstr "导出"
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "从 CRM 导出本周名单并放到共享文件夹"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Exposure limit"
+msgstr ""
 
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -2239,6 +2364,10 @@ msgstr "正在完成 MCP 连接…"
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Flag unexpected actions"
 msgstr "标记异常操作"
+
+#: src/pages/Onboarding.tsx
+msgid "Focus"
+msgstr ""
 
 #: src/pages/Auth.tsx
 msgid "Forgot password?"
@@ -2408,6 +2537,10 @@ msgstr ""
 msgid "Inbox & email"
 msgstr "收件箱和邮件"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Indicator"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Inherit default"
 msgstr "沿用默认"
@@ -2462,6 +2595,10 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "它的对话、文件和例行任务将被永久删除。它创建的 Bot 仍留在列表中。"
+
+#: src/components/TradingJournal.tsx
+msgid "Journal"
+msgstr ""
 
 #: src/pages/Shell.tsx
 msgid "Jump to latest"
@@ -2532,10 +2669,15 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "LIVE availability"
+msgstr ""
+
 #: src/pages/Shell.tsx
 msgid "Load earlier messages"
 msgstr "加载更早的消息"
 
+#: src/components/TradingJournal.tsx
 #: src/pages/Artifacts.tsx
 msgid "Load more"
 msgstr ""
@@ -2559,6 +2701,10 @@ msgstr "正在加载集成…"
 #: src/pages/MemorySettingsOverlay.tsx
 msgid "Loading memory settings…"
 msgstr "正在加载记忆设置…"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Loading mission…"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Loading model catalog…"
@@ -2655,6 +2801,10 @@ msgstr ""
 msgid "Manual setup required"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Margin usage limit"
+msgstr ""
+
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Read"
 msgstr "标为已读"
@@ -2662,6 +2812,10 @@ msgstr "标为已读"
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Unread"
 msgstr "标为未读"
+
+#: src/pages/shell/bot-panel.tsx
+msgid "Markets and working instructions"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2681,6 +2835,10 @@ msgstr ""
 #: src/pages/Onboarding.tsx
 msgid "Maximum images per request"
 msgstr "每次请求的最大图像数"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Maximum loss"
+msgstr ""
 
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Maximum of 10 backup models."
@@ -2773,6 +2931,10 @@ msgstr "已发给 {peer}"
 msgid "Messaging"
 msgstr "消息"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "MetaApi account ID"
+msgstr ""
+
 #: src/lib/call-session.ts
 msgid "Microphone failed"
 msgstr "麦克风失败"
@@ -2802,6 +2964,10 @@ msgstr "分钟"
 #: src/pages/RoutineSchedule.tsx
 msgid "minutes"
 msgstr "分钟"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Mission unavailable"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2888,6 +3054,7 @@ msgstr "静音"
 #: src/components/teach/SkillDraftCard.tsx
 #: src/pages/Auth.tsx
 #: src/pages/GroupPanel.tsx
+#: src/pages/Onboarding.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/bot-panel.tsx
@@ -2896,8 +3063,8 @@ msgid "Name"
 msgstr "名称"
 
 #: src/pages/shell/bot-panel.tsx
-msgid "Name this bot"
-msgstr "给这个 Bot 命名"
+msgid "Name this Agent"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx
 msgid "Name this group"
@@ -2918,10 +3085,6 @@ msgstr "需要接管"
 #: src/pages/Shell.tsx
 msgid "Needs you"
 msgstr ""
-
-#: src/pages/shell/bot-panel.tsx
-msgid "New bot"
-msgstr "新建 Bot"
 
 #: src/pages/GroupPanel.tsx
 msgid "New group"
@@ -2987,6 +3150,10 @@ msgstr "还没有关联聊天应用。"
 
 #: src/pages/shell/bot-credentials.tsx
 msgid "No credentials saved for this bot."
+msgstr ""
+
+#: src/components/TradingJournal.tsx
+msgid "No financial events"
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -3160,6 +3327,10 @@ msgstr ""
 msgid "Open <0>{0}</0> to finish signing in."
 msgstr ""
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Open chart"
+msgstr ""
+
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Open computer settings"
 msgstr ""
@@ -3175,6 +3346,10 @@ msgstr "在完整窗口中打开"
 #: src/pages/Shell.tsx
 msgid "Open navigation"
 msgstr "打开导航"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Open risk limit"
+msgstr ""
 
 #: src/components/computer/TerminalApp.tsx
 msgid "Open shell"
@@ -3196,10 +3371,6 @@ msgstr ""
 #: src/pages/Shell.tsx
 msgid "Opened its thread."
 msgstr "已打开其对话。"
-
-#: src/pages/Onboarding.tsx
-msgid "Opening chat…"
-msgstr "正在打开聊天…"
 
 #: src/App.tsx
 msgid "Opening your Space…"
@@ -3290,9 +3461,21 @@ msgstr "粘贴你的 API 密钥"
 msgid "Paste your API key, then test again."
 msgstr "请粘贴你的 API 密钥，然后重新测试。"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Pause"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "Paused"
 msgstr "已暂停"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Pending order limit"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Per trade limit"
+msgstr ""
 
 #: src/pages/Shell.tsx
 #: src/pages/shell/chat-context.tsx
@@ -3318,6 +3501,10 @@ msgstr "播放中…"
 #: src/pages/KnowledgeSection.tsx
 msgid "Plugin"
 msgstr "插件"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Position limit"
+msgstr ""
 
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
@@ -3377,6 +3564,10 @@ msgstr "回应"
 #: src/pages/Shell.tsx
 msgid "Reactions"
 msgstr "表情回应"
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Read access through active mandate"
+msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Read replies aloud"
@@ -3476,6 +3667,10 @@ msgstr ""
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Refreshing…"
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Region (optional)"
 msgstr ""
 
 #: src/lib/user-error.ts
@@ -3622,6 +3817,10 @@ msgstr "重置电脑？"
 msgid "Reset password"
 msgstr "重置密码"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Reset view"
+msgstr ""
+
 #: src/pages/Auth.tsx
 msgid "Reset your password"
 msgstr "重置你的密码"
@@ -3652,6 +3851,10 @@ msgstr "还原上次保存的工作区。电脑上未保存的工作会丢失。
 
 #: src/components/ComputerUpdateProgress.tsx
 msgid "Restoring your workspace"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Resume"
 msgstr ""
 
 #: src/components/AccountAccess.tsx
@@ -3685,6 +3888,10 @@ msgstr "请检查提供方设置并重新测试。"
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Revoke"
 msgstr "撤销"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Risk-increase permissions"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Robot"
@@ -3755,6 +3962,10 @@ msgstr ""
 msgid "Save"
 msgstr "保存"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Save account limits"
+msgstr ""
+
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Save backups"
 msgstr "保存备用模型"
@@ -3809,6 +4020,7 @@ msgstr ""
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 msgid "Saving…"
 msgstr "正在保存…"
 
@@ -3951,6 +4163,10 @@ msgstr "设置：用量"
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Setup help"
 msgstr "设置帮助"
+
+#: src/pages/Auth.tsx
+msgid "Setup key"
+msgstr ""
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Shape"
@@ -4139,6 +4355,10 @@ msgstr "正在开始"
 msgid "Starting…"
 msgstr "正在开始…"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Starts"
+msgstr ""
+
 #: src/pages/ActivityList.tsx
 msgid "Status"
 msgstr ""
@@ -4193,6 +4413,14 @@ msgstr ""
 msgid "Subscription required"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised orders"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised position"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Supports images"
@@ -4214,6 +4442,14 @@ msgstr "正在切换…"
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "System"
 msgstr "系统"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target behavior"
+msgstr ""
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Teach a task"
@@ -4274,6 +4510,10 @@ msgstr "API 未恢复。请刷新此页面。"
 #: src/lib/model-connection-preflight.ts
 msgid "The connection timed out."
 msgstr "连接超时。"
+
+#: src/components/TradingMandateCard.tsx
+msgid "The profit target is not guaranteed. Capital allocation is an accounting budget, not segregated funds."
+msgstr ""
 
 #: src/lib/model-connection-preflight.ts
 msgid "The provider is rate-limiting requests."
@@ -4412,6 +4652,22 @@ msgstr "工具源"
 msgid "Tools"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Total exposure limit"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Total reserved risk limit"
+msgstr ""
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Trading Agent"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Trading mission"
+msgstr ""
+
 #: src/components/call/CallCard.tsx
 msgid "Transcript"
 msgstr "文字记录"
@@ -4433,7 +4689,6 @@ msgid "Trial ends {day}"
 msgstr ""
 
 #: src/pages/ActivityList.tsx
-#: src/pages/Onboarding.tsx
 msgid "Try again"
 msgstr "重试"
 
@@ -4460,6 +4715,10 @@ msgstr "未分配"
 #: src/components/SoftwareUpdateSection.tsx
 msgid "Unavailable"
 msgstr "不可用"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Unfreeze account"
+msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Uninstall"
@@ -4675,13 +4934,13 @@ msgstr "你想让我先做什么？"
 msgid "What result will you demonstrate?"
 msgstr "你要示范什么结果？"
 
+#: src/pages/shell/bot-panel.tsx
+msgid "What should this Agent focus on?"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "What should this routine do each time it runs?"
 msgstr "每次运行时，这个例行任务应做什么？"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "What this bot is for"
-msgstr "这个 Bot 是做什么的"
 
 #: src/components/teach/SkillDraftCard.tsx
 msgid "What to return"

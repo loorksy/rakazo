@@ -417,3 +417,43 @@ export function brokerSdkNumber(input: string): number {
     throw new BrokerProviderError("INVALID_REQUEST");
   return number;
 }
+
+export function normalizePositionHistory(input: unknown, accountId: string, positionId: string) {
+  const raw = parse(
+    z.object({
+      synchronizing: z.boolean(),
+      deals: z
+        .array(
+          z.object({
+            id: text,
+            positionId: text,
+            time: z.union([z.date(), z.iso.datetime({ offset: true })]),
+            entryType: z.enum(["DEAL_ENTRY_IN", "DEAL_ENTRY_OUT", "DEAL_ENTRY_OUT_BY"]),
+            volume: numeric,
+            profit: signed,
+            commission: signed,
+            swap: signed,
+          }),
+        )
+        .max(1000),
+    }),
+    input,
+  );
+  if (raw.deals.some((deal) => deal.positionId !== positionId))
+    throw new BrokerProviderError("INVALID_RESPONSE");
+  return {
+    accountId,
+    positionId,
+    synchronized: !raw.synchronizing,
+    deals: raw.deals.map((deal) => ({
+      id: deal.id,
+      positionId,
+      time: new Date(deal.time).toISOString(),
+      entry: deal.entryType === "DEAL_ENTRY_IN" ? ("IN" as const) : ("OUT" as const),
+      volume: deal.volume,
+      profit: deal.profit,
+      commission: deal.commission,
+      swap: deal.swap,
+    })),
+  };
+}

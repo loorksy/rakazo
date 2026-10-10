@@ -26,10 +26,12 @@ import {
 } from "./broker-state.js";
 import type { ChartActor } from "./cloud-charts.js";
 import { FinancialExecution } from "./financial-execution.js";
+import { liveReadiness } from "./live-readiness.js";
 import { ProviderDispatcher } from "./provider-dispatch.js";
 import { ScriptedAutoReviewProvider } from "./scripted-auto-review.js";
 import { TradeProposals } from "./trade-proposals.js";
 import { TradingMissions } from "./trading-missions.js";
+import { TradingOwnerControls } from "./trading-owner-controls.js";
 
 const url = process.env.LIVE_TEST_DATABASE_URL;
 const suite = url ? describe.sequential : describe.skip;
@@ -340,7 +342,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
     return { actor, mandateId: id, planId: `plan-${id}` };
   }
 
-  async function ready(manualPosition = false) {
+  async function ready(manualPosition = false, manualOrder = false) {
     await db.prisma.deploymentSettings.update({
       where: { id: "default" },
       data: { tradingLiveEnabled: true },
@@ -422,6 +424,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
         accountMode: "HEDGING",
         platform: "mt5",
         tradingAllowed: true,
+        positionValuations: manualPosition ? [{ id: "owner-position", profit: "0" }] : [],
       },
       positions: manualPosition
         ? [
@@ -438,10 +441,38 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
             },
           ]
         : [],
-      orders: [],
+      orders: manualOrder
+        ? [
+            {
+              id: "owner-related-order",
+              accountId: "fixture-account",
+              symbol: "GOLD.a",
+              side: "BUY",
+              volume: "0.01",
+              orderType: "LIMIT",
+              price: "2690",
+              stopLimitPrice: null,
+              stopLoss: "2685",
+              takeProfit: "2710",
+              expiresAt: "2026-10-10T09:00:00.000Z",
+              clientId: null,
+            },
+          ]
+        : [],
     });
     await observeBrokerState(db.prisma, token, state, now);
     const execute = vi.fn(async (request: ExecutionRequest) => {
+      if (request.action.operation === "CANCEL_ORDER") {
+        const orderId = request.action.orderId;
+        const index = state.orders.findIndex((row) => row.id === orderId);
+        if (index < 0) throw new Error("Fixture exact order missing");
+        state.orders.splice(index, 1);
+        return {
+          status: "SUCCEEDED" as const,
+          providerReference: request.action.orderId,
+          code: "FIXTURE_ACCEPTED",
+        };
+      }
       if (request.action.operation !== "OPEN") {
         const action = request.action;
         if (action.operation !== "MODIFY_PROTECTION" && action.operation !== "CLOSE_POSITION")
@@ -493,7 +524,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
           commission: "0",
           observedAt: now.toISOString(),
         })),
-      orders: async () => [],
+      orders: async () => state.orders.map((row) => ({ ...row, observedAt: now.toISOString() })),
       symbols: async () => ["GOLD.a"],
       specification: async () => {
         throw new Error("Fixture unused");
@@ -711,8 +742,8 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
       )[0]?.calls,
     ).toBe(1);
   }, 25000);
-  async function supervised(patch: Partial<TradingMandateEnvelope> = {}) {
-    const fixture = await ready(true);
+  async function supervised(patch: Partial<TradingMandateEnvelope> = {}, manualOrder = false) {
+    const fixture = await ready(true, manualOrder);
     const scope = await claimed(
       "supervision-mandate",
       {
@@ -746,6 +777,9 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
       ...facts,
       proposedMargin: "0",
       openPositions: [{ id: "owner-position", symbol: "GOLD.a", side: "BUY", volume: "0.02" }],
+      pendingOrders: manualOrder
+        ? [{ id: "owner-related-order", symbol: "GOLD.a", side: "BUY", volume: "0.01" }]
+        : [],
     };
     await db.prisma.tradingMandate.update({ where: { id: mandate.id }, data: { observedAt: now } });
     return { ...fixture, scope };
@@ -980,4 +1014,284 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
     expect(await db.prisma.tradingPositionSupervision.count()).toBe(1);
     expect(await db.prisma.tradingDriftEvent.count()).toBe(1);
   });
+  it.each([
+    "OWNER_LIVE_DISABLED",
+    "ACCOUNT_UNVERIFIED",
+    "PROVIDER_CONNECTION_UNHEALTHY",
+    "CAPABILITY_UNAVAILABLE",
+    "SYMBOL_SPECIFICATION_UNVERIFIED",
+    "ACCOUNT_STATE_STALE",
+    "PRICE_STATE_STALE",
+    "RUNTIME_HEALTH_STALE",
+    "RISK_ENGINE_UNHEALTHY",
+    "EFFECT_SYSTEM_UNHEALTHY",
+    "EMERGENCY_STOP_UNHEALTHY",
+    "FINANCIAL_CONTAINMENT_UNVERIFIED",
+    "OBSERVABILITY_UNHEALTHY",
+    "UNRESOLVED_MANUAL_DRIFT",
+    "EXACT_LIVE_MANDATE_REQUIRED",
+  ])("backend denies %s regardless of an enabled UI", async (code) => {
+    const fixture = await ready();
+    const scope = await claimed("readiness-mandate");
+    if (code === "OWNER_LIVE_DISABLED")
+      await db.prisma.deploymentSettings.update({
+        where: { id: "default" },
+        data: { tradingLiveEnabled: false },
+      });
+    if (code === "ACCOUNT_UNVERIFIED")
+      await db.prisma.tradingConnection.update({
+        where: { id: "fixture-account" },
+        data: { verifiedAt: null },
+      });
+    if (code === "PROVIDER_CONNECTION_UNHEALTHY")
+      await db.prisma.brokerSessionLease.update({
+        where: { accountId: "fixture-account" },
+        data: { state: "DISCONNECTED" },
+      });
+    if (code === "CAPABILITY_UNAVAILABLE")
+      await db.prisma.tradingConnection.update({
+        where: { id: "fixture-account" },
+        data: { capabilities: {} },
+      });
+    if (code === "SYMBOL_SPECIFICATION_UNVERIFIED")
+      await db.prisma.brokerInstrument.update({ where: { id: "gold" }, data: { active: false } });
+    if (code === "ACCOUNT_STATE_STALE")
+      await db.prisma.tradingBrokerSnapshot.update({
+        where: { accountId: "fixture-account" },
+        data: { observedAt: new Date(now.getTime() - 20000) },
+      });
+    if (code === "PRICE_STATE_STALE")
+      facts = {
+        ...facts,
+        quote: { ...facts.quote, sourceTime: new Date(now.getTime() - 20000).toISOString() },
+      };
+    if (code === "RUNTIME_HEALTH_STALE")
+      await db.prisma.tradingRuntimeHealth.update({
+        where: { id: "default" },
+        data: { observedAt: new Date(now.getTime() - 20000) },
+      });
+    if (code === "RISK_ENGINE_UNHEALTHY")
+      await db.prisma.tradingRuntimeHealth.update({
+        where: { id: "default" },
+        data: { riskHealthy: false },
+      });
+    if (code === "EFFECT_SYSTEM_UNHEALTHY")
+      await db.prisma.tradingRuntimeHealth.update({
+        where: { id: "default" },
+        data: { effectsHealthy: false },
+      });
+    if (code === "EMERGENCY_STOP_UNHEALTHY")
+      await db.prisma.tradingRuntimeHealth.update({
+        where: { id: "default" },
+        data: { emergencyStopHealthy: false },
+      });
+    if (code === "FINANCIAL_CONTAINMENT_UNVERIFIED")
+      await db.prisma.tradingRuntimeHealth.update({
+        where: { id: "default" },
+        data: { containmentScopeFingerprint: "wrong-scope" },
+      });
+    if (code === "OBSERVABILITY_UNHEALTHY")
+      await db.prisma.tradingRuntimeHealth.update({
+        where: { id: "default" },
+        data: { jobLagMs: 30001 },
+      });
+    if (code === "UNRESOLVED_MANUAL_DRIFT")
+      await db.prisma.tradingDriftEvent.create({
+        data: {
+          ownerUserId: owner,
+          accountId: "fixture-account",
+          reason: "fixture",
+          evidence: { version: 1 },
+        },
+      });
+    if (code === "EXACT_LIVE_MANDATE_REQUIRED")
+      await db.prisma.tradingMandate.update({
+        where: { id: scope.mandateId },
+        data: { status: "PAUSED" },
+      });
+    const status = await db.prisma.$transaction((tx) =>
+      liveReadiness(tx, {
+        ownerUserId: owner,
+        botId: scope.actor.botId!,
+        mandateId: scope.mandateId,
+        action,
+        facts,
+        now,
+      }),
+    );
+    expect(status.ready).toBe(false);
+    expect(status.failures).toContain(code);
+    expect(fixture.execute).not.toHaveBeenCalled();
+  });
+  it("owner LIVE enablement is explicit, audited, and never available to peers", async () => {
+    const controls = new TradingOwnerControls(db.prisma, () => now);
+    expect(await controls.liveSettings(owner)).toEqual({ enabled: false });
+    await expect(controls.setLiveEnabled("peer", true)).rejects.toThrow();
+    expect(await controls.setLiveEnabled(owner, true)).toEqual({ enabled: true });
+    expect(
+      await db.prisma.financialJournal.count({ where: { event: "OWNER_LIVE_PRODUCT_ENABLEMENT" } }),
+    ).toBe(1);
+    const row = await prepare();
+    await expect(row.send()).rejects.toThrow("LIVE trading disabled");
+    expect(await db.prisma.tradingProviderExecution.count()).toBe(0);
+  });
+  it("owner drift reconciliation cancels old authority and requires a new exact supervision proposal", async () => {
+    const fixture = await supervised();
+    fixture.state.positions[0]!.stopLoss = "2697";
+    await observeBrokerState(db.prisma, fixture.token, fixture.state, now);
+    const snapshot = await db.prisma.tradingBrokerSnapshot.findUniqueOrThrow({
+      where: { accountId: "fixture-account" },
+    });
+    const controls = new TradingOwnerControls(db.prisma, () => now);
+    await expect(
+      controls.reconcileDrift(owner, "fixture-account", snapshot.revision - 1),
+    ).rejects.toThrow("Exact fresh");
+    expect(
+      await controls.reconcileDrift(owner, "fixture-account", snapshot.revision),
+    ).toMatchObject({ requiresNewMandate: true });
+    expect(
+      await db.prisma.tradingMandate.findUnique({ where: { id: fixture.scope.mandateId } }),
+    ).toMatchObject({ status: "CANCELLED" });
+    expect(await db.prisma.tradingDriftEvent.count({ where: { resolvedAt: null } })).toBe(0);
+    expect(fixture.state.positions[0]!.stopLoss).toBe("2697");
+    expect(fixture.execute).not.toHaveBeenCalled();
+    const next = await claimed(
+      "new-owner-supervision",
+      { supervisionPositionId: "owner-position", allowedOperations: ["MODIFY_PROTECTION"] },
+      "AWAITING_APPROVAL",
+    );
+    await db.prisma.$transaction((tx) =>
+      captureSupervision(tx, {
+        ownerUserId: owner,
+        botId: next.actor.botId!,
+        accountId: "fixture-account",
+        mandateId: next.mandateId,
+        positionId: "owner-position",
+        now,
+      }),
+    );
+    expect(await db.prisma.tradingPositionSupervision.count()).toBe(2);
+  });
+  it("exact synchronized provider deal history reconciles realized owner-position PnL without manual drift", async () => {
+    const fixture = await supervised();
+    const close: FinancialAction = {
+      version: 1,
+      mode: "LIVE",
+      provider: "metaapi",
+      accountId: "fixture-account",
+      instrumentId: "gold",
+      brokerSymbol: "GOLD.a",
+      operation: "CLOSE_POSITION",
+      positionId: "owner-position",
+      volume: null,
+    };
+    const row = await prepare(fixture.scope.mandateId, {}, close, fixture.scope);
+    await row.send();
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(
+      await db.prisma.tradingMandate.findUnique({ where: { id: row.mandateId } }),
+    ).toMatchObject({ observedAt: null });
+    fixture.state.account.balance = "9994";
+    const history = {
+      accountId: "fixture-account",
+      positionId: "owner-position",
+      synchronized: true,
+      deals: [
+        {
+          id: "owner-entry-deal",
+          positionId: "owner-position",
+          entry: "IN" as const,
+          time: new Date(now.getTime() - 1000).toISOString(),
+          volume: "0.02",
+          profit: "0",
+          commission: "0",
+          swap: "0",
+        },
+        {
+          id: "approved-exit-deal",
+          positionId: "owner-position",
+          entry: "OUT" as const,
+          time: now.toISOString(),
+          volume: "0.02",
+          profit: "-5",
+          commission: "-1",
+          swap: "0",
+        },
+      ],
+    };
+    expect(
+      await observeBrokerState(db.prisma, fixture.token, fixture.state, now, [history]),
+    ).toEqual([]);
+    expect(
+      await db.prisma.tradingMandate.findUnique({ where: { id: row.mandateId } }),
+    ).toMatchObject({ observedAt: now, missionPnl: expect.anything() });
+    expect(
+      (
+        await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: row.mandateId } })
+      ).missionPnl.toFixed(),
+    ).toBe("-6");
+    expect(
+      await db.prisma.financialJournal.count({ where: { event: "PROVIDER_POSITION_HISTORY" } }),
+    ).toBe(1);
+    expect(
+      await observeBrokerState(db.prisma, fixture.token, fixture.state, now, [
+        { ...history, deals: [...history.deals].reverse() },
+      ]),
+    ).toEqual([]);
+    expect(
+      await db.prisma.financialJournal.count({ where: { event: "PROVIDER_POSITION_HISTORY" } }),
+    ).toBe(1);
+    expect(
+      await observeBrokerState(db.prisma, fixture.token, fixture.state, now, [
+        { ...history, deals: history.deals.map((deal) => ({ ...deal, profit: "-100" })) },
+      ]),
+    ).toContain("PROVIDER_HISTORY_CONFLICT");
+  });
+  it.each(["CANCEL_PENDING", "FREEZE"] as const)(
+    "supervision permits exact related order cancellation only with %s emergency authority",
+    async (behavior) => {
+      const fixture = await supervised(
+        {
+          allowedOperations: ["MODIFY_PROTECTION", "CLOSE_POSITION", "CANCEL_ORDER"],
+          supervisedOrderIds: ["owner-related-order"],
+          emergencyBehavior: behavior,
+        },
+        true,
+      );
+      const mandate = await db.prisma.tradingMandate.findUniqueOrThrow({
+        where: { id: fixture.scope.mandateId },
+      });
+      await new TradingMissions(db.prisma, () => now).controlMandate(owner, {
+        id: mandate.id,
+        expectedRevision: mandate.revision,
+        action: "EMERGENCY_STOP",
+      });
+      const cancel: FinancialAction = {
+        version: 1,
+        mode: "LIVE",
+        provider: "metaapi",
+        accountId: "fixture-account",
+        instrumentId: "gold",
+        brokerSymbol: "GOLD.a",
+        operation: "CANCEL_ORDER",
+        orderId: "owner-related-order",
+      };
+      const row = await prepare(mandate.id, {}, cancel, fixture.scope);
+      if (behavior === "FREEZE") {
+        expect(row.preview.preview?.risk.decision).toBe("DENY");
+        await expect(row.send()).rejects.toThrow();
+        expect(fixture.execute).not.toHaveBeenCalled();
+      } else {
+        await row.send();
+        await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+        expect(fixture.execute).toHaveBeenCalledTimes(1);
+        expect(fixture.state.orders).toHaveLength(0);
+        expect(fixture.state.positions).toHaveLength(1);
+        expect(await db.prisma.tradingPositionSupervision.findFirst()).toMatchObject({
+          status: "ACTIVE",
+        });
+        expect(await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).toEqual([]);
+      }
+    },
+  );
 });

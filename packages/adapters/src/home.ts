@@ -332,7 +332,18 @@ async function copyDir(
     if (info.isDirectory()) await copyDir(from, to, root, visited);
     else if (info.isFile()) {
       const file = await readTraversalFile(root, from);
-      await writeFile(to, file.content, { mode: file.mode & 0o777 });
+      const output = await open(
+        to,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+        file.mode & 0o777,
+      );
+      try {
+        await output.writeFile(file.content);
+        // Restore the exact existing owner file mode, independent of the Worker's umask.
+        await output.chmod(file.mode & 0o777);
+      } finally {
+        await output.close();
+      }
     }
   }
 }

@@ -225,13 +225,22 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "एक्सेस टोकन (वैकल्पिक)"
 
+#: src/components/TradingMandateCard.tsx
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Account"
 msgstr "खाता"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Account access"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Account default"
 msgstr "खाता डिफ़ॉल्ट"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Account guardrails"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -242,6 +251,14 @@ msgstr "खाता आईडी"
 msgid "Account label"
 msgstr ""
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Account name"
+msgstr ""
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Account read"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Accounts"
 msgstr ""
@@ -249,6 +266,10 @@ msgstr ""
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Action confirmations"
 msgstr "कार्रवाई की पुष्टि"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Action rejected. Refresh and review the current mandate."
+msgstr ""
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
@@ -276,6 +297,7 @@ msgstr "सक्रिय मॉडल"
 msgid "Activity"
 msgstr "गतिविधि"
 
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/ModelBackupsSettings.tsx
 #: src/pages/PluginsOverlay.tsx
 #: src/pages/ScratchpadSection.tsx
@@ -426,6 +448,10 @@ msgstr ""
 msgid "All time"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allocation"
+msgstr ""
+
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Allow {0} actions without asking"
@@ -457,9 +483,21 @@ msgstr "खरीद कार्रवाइयों को बिना प�
 msgid "Allow writing"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed actions"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed instruments"
+msgstr ""
+
 #: src/components/AskCard.tsx
 msgid "Allowed once"
 msgstr "एक बार अनुमति दी गई"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Allowed order types"
+msgstr ""
 
 #: src/pages/Auth.tsx
 msgid "Already have an account?"
@@ -519,6 +557,10 @@ msgstr "API कुंजी"
 msgid "API key header"
 msgstr "API कुंजी हेडर"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "API token"
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Appearance"
 msgstr "रूप"
@@ -531,6 +573,10 @@ msgstr "अनुमोदन सीमाएं"
 #: src/pages/shell/message-cards.tsx
 msgid "Approve"
 msgstr "अनुमोदित करें"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Approve mandate"
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Approve this server to let your agent use its tools."
@@ -626,6 +672,10 @@ msgstr "प्रमाणीकरण विफल रहा।"
 #: src/pages/Onboarding.tsx
 msgid "Authorization code or callback URL"
 msgstr "ऑथराइज़ेशन कोड या कॉलबैक URL"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Authorization details"
+msgstr ""
 
 #: src/pages/shell/message-cards.tsx
 msgid "Authorization timed out. Please try again."
@@ -759,6 +809,14 @@ msgstr ""
 msgid "Brain label"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Breach behavior"
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Broker accounts"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Browse MCP servers"
 msgstr ""
@@ -790,9 +848,13 @@ msgstr "सर्वर तक नहीं पहुंचा जा सका�
 msgid "Cancel"
 msgstr "रद्द करें"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Cancel mandate"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
-msgid "Cancel new bot"
-msgstr "नया बॉट रद्द करें"
+msgid "Cancel new Agent"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx
 msgid "Cancel new group"
@@ -829,6 +891,14 @@ msgstr "बदला जा रहा है…"
 
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Channels"
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Chart changed or data is unavailable. Reopen to refresh."
+msgstr ""
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Chart data unavailable. Reopen to reconnect."
 msgstr ""
 
 #: src/pages/shell/message-cards.tsx
@@ -898,6 +968,10 @@ msgstr "बॉट का आकार और रंग चुनें, या �
 
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Choose a bot…"
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Choose a connected account and broker instrument."
 msgstr ""
 
 #: src/pages/Auth.tsx
@@ -1015,6 +1089,10 @@ msgstr "आवाज़ सेटिंग्स बंद करें"
 msgid "Cloud"
 msgstr "क्लाउड"
 
+#: src/pages/Shell.tsx
+msgid "Cloud chart"
+msgstr ""
+
 #: src/components/AskCard.tsx
 msgid "Code"
 msgstr "कोड"
@@ -1125,6 +1203,10 @@ msgstr "एक मॉडल कनेक्ट करें"
 msgid "Connect a provider to add backups."
 msgstr "बैकअप जोड़ने के लिए किसी प्रदाता को कनेक्ट करें।"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Connect account"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Connect API key"
 msgstr "API कुंजी कनेक्ट करें"
@@ -1233,6 +1315,10 @@ msgstr "कॉपी करें"
 
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Copy .env example"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Cost reserve per trade"
 msgstr ""
 
 #: src/pages/ScratchpadSection.tsx
@@ -1707,6 +1793,11 @@ msgstr "एक सेक्शन बनाएं और {0} को उसमे
 msgid "Create account"
 msgstr "खाता बनाएं"
 
+#: src/pages/Onboarding.tsx
+#: src/pages/shell/bot-panel.tsx
+msgid "Create Agent"
+msgstr ""
+
 #: src/pages/GroupPanel.tsx
 msgid "Create group"
 msgstr "समूह बनाएं"
@@ -1788,6 +1879,10 @@ msgstr ""
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Customize bot avatar"
 msgstr "बॉट अवतार अनुकूलित करें"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Daily loss limit"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Dark"
@@ -1897,16 +1992,13 @@ msgid "Denied"
 msgstr "अस्वीकृत"
 
 #: src/components/AskCard.tsx
+#: src/components/TradingMandateCard.tsx
 msgid "Deny"
 msgstr "अस्वीकार करें"
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Deployment default"
 msgstr "डिप्लॉयमेंट डिफ़ॉल्ट"
-
-#: src/pages/shell/bot-panel.tsx
-msgid "Describe what this bot does"
-msgstr "बताएं कि यह बॉट क्या करता है"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Description"
@@ -1924,6 +2016,10 @@ msgstr ""
 msgid "Direct MCP"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Disable LIVE"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Disabled tools"
 msgstr ""
@@ -1931,6 +2027,7 @@ msgstr ""
 #: src/pages/McpServersOverlay.tsx
 #: src/pages/MemorySettingsOverlay.tsx
 #: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Disconnect"
 msgstr "डिस्कनेक्ट करें"
@@ -2025,6 +2122,10 @@ msgstr "ड्राफ़्ट स्किल"
 msgid "Drag, drop, or paste an image"
 msgstr "छवि खींचें, छोड़ें या पेस्ट करें"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Draw"
+msgstr ""
+
 #: src/pages/BotContextMenu.tsx
 msgid "Duplicate"
 msgstr "डुप्लिकेट"
@@ -2052,6 +2153,14 @@ msgstr "इस ईमेल को पंजीकरण की अनुमत�
 #: src/lib/user-error.ts
 msgid "Email verification required"
 msgstr "ईमेल सत्यापन आवश्यक है"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Emergency stop"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Enable LIVE"
+msgstr ""
 
 #: src/pages/BillingSettingsPanel.tsx
 msgid "Ends {day}"
@@ -2125,6 +2234,10 @@ msgstr "हर महीने"
 msgid "Every week"
 msgstr "हर सप्ताह"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Execution also requires account readiness and an exact approved mandate."
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Executor token"
 msgstr "Executor टोकन"
@@ -2139,6 +2252,14 @@ msgstr "विस्तृत करें"
 msgid "Expand {0}"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Expires"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Expiry behavior"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Export"
 msgstr "एक्सपोर्ट करें"
@@ -2146,6 +2267,10 @@ msgstr "एक्सपोर्ट करें"
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "CRM से इस सप्ताह की सूची एक्सपोर्ट करें और उसे साझा फ़ोल्डर में डालें"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Exposure limit"
+msgstr ""
 
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -2238,6 +2363,10 @@ msgstr "MCP कनेक्शन पूरा हो रहा है…"
 
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Flag unexpected actions"
+msgstr ""
+
+#: src/pages/Onboarding.tsx
+msgid "Focus"
 msgstr ""
 
 #: src/pages/Auth.tsx
@@ -2408,6 +2537,10 @@ msgstr ""
 msgid "Inbox & email"
 msgstr ""
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Indicator"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Inherit default"
 msgstr "डिफ़ॉल्ट का पालन करें"
@@ -2462,6 +2595,10 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "इसकी बातचीत, फ़ाइलें और रूटीन स्थायी रूप से डिलीट कर दिए जाएंगे। इसके बनाए बॉट आपकी सूची में बने रहेंगे।"
+
+#: src/components/TradingJournal.tsx
+msgid "Journal"
+msgstr ""
 
 #: src/pages/Shell.tsx
 msgid "Jump to latest"
@@ -2532,10 +2669,15 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "LIVE availability"
+msgstr ""
+
 #: src/pages/Shell.tsx
 msgid "Load earlier messages"
 msgstr "पुराने संदेश लोड करें"
 
+#: src/components/TradingJournal.tsx
 #: src/pages/Artifacts.tsx
 msgid "Load more"
 msgstr ""
@@ -2559,6 +2701,10 @@ msgstr "इंटीग्रेशन लोड हो रहे हैं…"
 #: src/pages/MemorySettingsOverlay.tsx
 msgid "Loading memory settings…"
 msgstr "मेमोरी सेटिंग्स लोड हो रही हैं…"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Loading mission…"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Loading model catalog…"
@@ -2655,6 +2801,10 @@ msgstr ""
 msgid "Manual setup required"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Margin usage limit"
+msgstr ""
+
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Read"
 msgstr "पढ़ा हुआ चिह्नित करें"
@@ -2662,6 +2812,10 @@ msgstr "पढ़ा हुआ चिह्नित करें"
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Unread"
 msgstr "अपठित चिह्नित करें"
+
+#: src/pages/shell/bot-panel.tsx
+msgid "Markets and working instructions"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2681,6 +2835,10 @@ msgstr ""
 #: src/pages/Onboarding.tsx
 msgid "Maximum images per request"
 msgstr "प्रति अनुरोध अधिकतम इमेज"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Maximum loss"
+msgstr ""
 
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Maximum of 10 backup models."
@@ -2773,6 +2931,10 @@ msgstr "{peer} को संदेश भेजा"
 msgid "Messaging"
 msgstr ""
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "MetaApi account ID"
+msgstr ""
+
 #: src/lib/call-session.ts
 msgid "Microphone failed"
 msgstr "माइक्रोफ़ोन विफल"
@@ -2802,6 +2964,10 @@ msgstr "मिनट"
 #: src/pages/RoutineSchedule.tsx
 msgid "minutes"
 msgstr "मिनट"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Mission unavailable"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -2888,6 +3054,7 @@ msgstr "म्यूट करें"
 #: src/components/teach/SkillDraftCard.tsx
 #: src/pages/Auth.tsx
 #: src/pages/GroupPanel.tsx
+#: src/pages/Onboarding.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/bot-panel.tsx
@@ -2896,8 +3063,8 @@ msgid "Name"
 msgstr "नाम"
 
 #: src/pages/shell/bot-panel.tsx
-msgid "Name this bot"
-msgstr "इस बॉट को नाम दें"
+msgid "Name this Agent"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx
 msgid "Name this group"
@@ -2918,10 +3085,6 @@ msgstr "नियंत्रण लेना ज़रूरी"
 #: src/pages/Shell.tsx
 msgid "Needs you"
 msgstr ""
-
-#: src/pages/shell/bot-panel.tsx
-msgid "New bot"
-msgstr "नया बॉट"
 
 #: src/pages/GroupPanel.tsx
 msgid "New group"
@@ -2987,6 +3150,10 @@ msgstr ""
 
 #: src/pages/shell/bot-credentials.tsx
 msgid "No credentials saved for this bot."
+msgstr ""
+
+#: src/components/TradingJournal.tsx
+msgid "No financial events"
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -3160,6 +3327,10 @@ msgstr ""
 msgid "Open <0>{0}</0> to finish signing in."
 msgstr ""
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Open chart"
+msgstr ""
+
 #: src/components/ComputersUnavailableHint.tsx
 msgid "Open computer settings"
 msgstr ""
@@ -3175,6 +3346,10 @@ msgstr "पूरी विंडो में खोलें"
 #: src/pages/Shell.tsx
 msgid "Open navigation"
 msgstr "नेविगेशन खोलें"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Open risk limit"
+msgstr ""
 
 #: src/components/computer/TerminalApp.tsx
 msgid "Open shell"
@@ -3196,10 +3371,6 @@ msgstr ""
 #: src/pages/Shell.tsx
 msgid "Opened its thread."
 msgstr "इसका थ्रेड खोला।"
-
-#: src/pages/Onboarding.tsx
-msgid "Opening chat…"
-msgstr "चैट खुल रही है…"
 
 #: src/App.tsx
 msgid "Opening your Space…"
@@ -3290,8 +3461,20 @@ msgstr "अपनी API कुंजी पेस्ट करें"
 msgid "Paste your API key, then test again."
 msgstr "अपनी API कुंजी पेस्ट करें, फिर फिर से परीक्षण करें।"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Pause"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "Paused"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Pending order limit"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Per trade limit"
 msgstr ""
 
 #: src/pages/Shell.tsx
@@ -3318,6 +3501,10 @@ msgstr "प्ले हो रहा है…"
 #: src/pages/KnowledgeSection.tsx
 msgid "Plugin"
 msgstr "प्लगइन"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Position limit"
+msgstr ""
 
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
@@ -3377,6 +3564,10 @@ msgstr "प्रतिक्रिया दें"
 #: src/pages/Shell.tsx
 msgid "Reactions"
 msgstr "प्रतिक्रियाएँ"
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Read access through active mandate"
+msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Read replies aloud"
@@ -3476,6 +3667,10 @@ msgstr ""
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Refreshing…"
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Region (optional)"
 msgstr ""
 
 #: src/lib/user-error.ts
@@ -3622,6 +3817,10 @@ msgstr "कंप्यूटर रीसेट करें?"
 msgid "Reset password"
 msgstr "पासवर्ड रीसेट करें"
 
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Reset view"
+msgstr ""
+
 #: src/pages/Auth.tsx
 msgid "Reset your password"
 msgstr "अपना पासवर्ड रीसेट करें"
@@ -3654,6 +3853,10 @@ msgstr "अंतिम सहेजे गए वर्कस्पेस क�
 msgid "Restoring your workspace"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Resume"
+msgstr ""
+
 #: src/components/AccountAccess.tsx
 #: src/pages/Auth.tsx
 #: src/pages/ModelBackupsSettings.tsx
@@ -3684,6 +3887,10 @@ msgstr "प्रोवाइडर सेटिंग्स की समीक
 
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "Revoke"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Risk-increase permissions"
 msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
@@ -3755,6 +3962,10 @@ msgstr ""
 msgid "Save"
 msgstr "सहेजें"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Save account limits"
+msgstr ""
+
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Save backups"
 msgstr "बैकअप सहेजें"
@@ -3809,6 +4020,7 @@ msgstr ""
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
+#: src/pages/TradingConnectionsPanel.tsx
 msgid "Saving…"
 msgstr "सहेजा जा रहा है…"
 
@@ -3951,6 +4163,10 @@ msgstr "सेटिंग्स: उपयोग"
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Setup help"
 msgstr "सेटअप सहायता"
+
+#: src/pages/Auth.tsx
+msgid "Setup key"
+msgstr ""
 
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Shape"
@@ -4139,6 +4355,10 @@ msgstr "शुरू हो रहा है"
 msgid "Starting…"
 msgstr "शुरू हो रहा है…"
 
+#: src/components/TradingMandateCard.tsx
+msgid "Starts"
+msgstr ""
+
 #: src/pages/ActivityList.tsx
 msgid "Status"
 msgstr ""
@@ -4193,6 +4413,14 @@ msgstr ""
 msgid "Subscription required"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised orders"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Supervised position"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Supports images"
@@ -4214,6 +4442,14 @@ msgstr "बदला जा रहा है…"
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "System"
 msgstr "सिस्टम"
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Target behavior"
+msgstr ""
 
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Teach a task"
@@ -4274,6 +4510,10 @@ msgstr ""
 #: src/lib/model-connection-preflight.ts
 msgid "The connection timed out."
 msgstr "कनेक्शन का समय समाप्त हो गया।"
+
+#: src/components/TradingMandateCard.tsx
+msgid "The profit target is not guaranteed. Capital allocation is an accounting budget, not segregated funds."
+msgstr ""
 
 #: src/lib/model-connection-preflight.ts
 msgid "The provider is rate-limiting requests."
@@ -4412,6 +4652,22 @@ msgstr "टूल स्रोत"
 msgid "Tools"
 msgstr ""
 
+#: src/components/TradingMandateCard.tsx
+msgid "Total exposure limit"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Total reserved risk limit"
+msgstr ""
+
+#: src/components/chart/CloudChartView.tsx
+msgid "Trading Agent"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Trading mission"
+msgstr ""
+
 #: src/components/call/CallCard.tsx
 msgid "Transcript"
 msgstr "ट्रांसक्रिप्ट"
@@ -4433,7 +4689,6 @@ msgid "Trial ends {day}"
 msgstr ""
 
 #: src/pages/ActivityList.tsx
-#: src/pages/Onboarding.tsx
 msgid "Try again"
 msgstr "फिर से कोशिश करें"
 
@@ -4459,6 +4714,10 @@ msgstr "असाइन नहीं किया गया"
 
 #: src/components/SoftwareUpdateSection.tsx
 msgid "Unavailable"
+msgstr ""
+
+#: src/components/TradingMandateCard.tsx
+msgid "Unfreeze account"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
@@ -4675,13 +4934,13 @@ msgstr ""
 msgid "What result will you demonstrate?"
 msgstr "आप कौन-सा परिणाम दिखाकर बताएंगे?"
 
+#: src/pages/shell/bot-panel.tsx
+msgid "What should this Agent focus on?"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "What should this routine do each time it runs?"
 msgstr ""
-
-#: src/pages/shell/bot-panel.tsx
-msgid "What this bot is for"
-msgstr "यह बॉट किस लिए है"
 
 #: src/components/teach/SkillDraftCard.tsx
 msgid "What to return"

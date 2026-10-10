@@ -8,6 +8,7 @@ import {
 import { mandateActionAuthority } from "@rakazo/core";
 import { tradingMandateFingerprint } from "@rakazo/core/node/financial-action";
 import type { Prisma } from "@rakazo/db";
+import { getLogger } from "@rakazo/logging";
 
 const fresh = (value: Date | string | null | undefined, now: Date, age: number) => {
   if (!value) return false;
@@ -170,6 +171,14 @@ export async function liveReadiness(
     "UNRESOLVED_MANUAL_DRIFT",
   );
   const envelope = TradingMandateEnvelopeSchema.safeParse(mandate?.envelope);
+  if (action.operation === "OPEN") {
+    check(fresh(mandate?.observedAt, now, 15000), "MISSION_ACCOUNTING_STALE");
+    if (envelope.success && envelope.data.maxDailyLoss !== null)
+      check(
+        mandate?.approvedAt?.toISOString().slice(0, 10) === now.toISOString().slice(0, 10),
+        "DAILY_ACCOUNTING_BASELINE_REQUIRED",
+      );
+  }
   const goal = mandate ? await tx.tradingGoal.findUnique({ where: { id: mandate.goalId } }) : null;
   const definition = TradingGoalInputSchema.safeParse(goal?.definition);
   const authority =
@@ -210,5 +219,8 @@ export async function requireLiveReadiness(
   input: Parameters<typeof liveReadiness>[1],
 ) {
   const readiness = await liveReadiness(tx, input);
-  if (!readiness.ready) throw new Error(`LIVE trading disabled: ${readiness.failures.join(",")}`);
+  if (!readiness.ready) {
+    getLogger().warn("LIVE readiness denied", { failures: readiness.failures });
+    throw new Error(`LIVE trading disabled: ${readiness.failures.join(",")}`);
+  }
 }

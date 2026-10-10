@@ -29,6 +29,7 @@ export interface BrokerPosition {
   currentPrice: string;
   stopLoss: string | null;
   takeProfit: string | null;
+  /** Cumulative net position PnL, including realized partial closes and costs; fail reads if unavailable. */
   profit: string;
   swap: string;
   commission: string;
@@ -84,6 +85,21 @@ export interface BrokerReadSession {
   readonly accountId: string;
   /** Trusted Worker-only execution boundary; never returned by a read tool. */
   readonly execution?: ExecutionProvider;
+  positionHistory?(positionId: string): Promise<{
+    accountId: string;
+    positionId: string;
+    synchronized: boolean;
+    deals: Array<{
+      id: string;
+      positionId: string;
+      time: string;
+      entry: "IN" | "OUT";
+      volume: string;
+      profit: string;
+      commission: string;
+      swap: string;
+    }>;
+  }>;
   account(): Promise<BrokerAccountState>;
   positions(): Promise<BrokerPosition[]>;
   orders(): Promise<BrokerOrder[]>;

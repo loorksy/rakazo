@@ -31,6 +31,7 @@ import {
   withBrokerSessionFence,
 } from "@rakazo/db";
 import { z } from "zod";
+import { readBrokerHistory } from "./broker-history.js";
 import { observeBrokerState, readBrokerState } from "./broker-state.js";
 import { observeMarketWatches, recoverMarketWakes } from "./market-watches.js";
 import { BrokerProviderError, sanitizedBrokerError } from "./metaapi-normalize.js";
@@ -92,6 +93,30 @@ export class BrokerConnectionSupervisor {
     return {
       active: !!this.timer && !this.stopping && this.now().getTime() - this.lastTickAt < 5000,
       streams: this.slots.size,
+      quoteAgeMs: Math.max(
+        0,
+        ...[...this.slots.values()].flatMap((slot) =>
+          [...slot.quoteTimes.values()].map(
+            (quote) => this.now().getTime() - Date.parse(quote.time),
+          ),
+        ),
+      ),
+      chartDataLagMs: Math.max(
+        0,
+        ...[...this.slots.values()].flatMap((slot) =>
+          [...slot.history.values()].map((history) =>
+            Math.max(
+              0,
+              Math.max(
+                0,
+                ...history.candles.map(
+                  (candle) => this.now().getTime() - Date.parse(candle.fetchedAt),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     };
   }
   constructor(
@@ -275,6 +300,7 @@ export class BrokerConnectionSupervisor {
           token,
           await readBrokerState(slot.session),
           this.now(),
+          await readBrokerHistory(this.prisma, slot.session),
         );
         await new ProviderDispatcher(this.prisma, this.now).tick(token, slot.session);
       }
@@ -496,6 +522,7 @@ export class BrokerConnectionSupervisor {
           slot.token,
           await readBrokerState(session),
           this.now(),
+          await readBrokerHistory(this.prisma, session),
         );
       }
       const facts = await session.preflight(action);

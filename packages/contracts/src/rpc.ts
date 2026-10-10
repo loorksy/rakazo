@@ -207,6 +207,7 @@ export const appContract = {
         }),
       ),
     missions: oc.input(TradingMissionCommandSchema).output(TradingMissionResponseSchema),
+    liveSettings: oc.output(z.strictObject({ enabled: z.boolean() })),
     setLiveEnabled: oc
       .input(z.strictObject({ enabled: z.boolean() }))
       .output(z.strictObject({ enabled: z.boolean() })),

@@ -4,7 +4,17 @@ import { BrokerStateSchema } from "./broker-state.js";
 
 /** Human-only product enablement and conservative abandonment of ambiguous attribution. */
 export class TradingOwnerControls {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+  async liveSettings(ownerUserId: string) {
+    await requireTradingOwner(this.prisma, ownerUserId);
+    const settings = await this.prisma.deploymentSettings.findUniqueOrThrow({
+      where: { id: "default" },
+    });
+    return { enabled: settings.tradingLiveEnabled };
+  }
   async setLiveEnabled(ownerUserId: string, enabled: boolean) {
     await requireTradingOwner(this.prisma, ownerUserId);
     return this.prisma.$transaction(async (tx) => {
@@ -38,7 +48,7 @@ export class TradingOwnerControls {
         snapshot.revision !== expectedRevision ||
         snapshot.generation !== lease.generation ||
         lease.state !== "CONNECTED" ||
-        Date.now() - snapshot.observedAt.getTime() > 15000
+        this.now().getTime() - snapshot.observedAt.getTime() > 15000
       )
         throw new Error("Exact fresh reconciliation snapshot required");
       if (
@@ -63,7 +73,7 @@ export class TradingOwnerControls {
         where: { accountId, mode: "LIVE", status: "COMMITTED" },
         data: { status: "RELEASED" },
       });
-      const now = new Date();
+      const now = this.now();
       await tx.tradingDriftEvent.updateMany({
         where: { id: { in: drift.map((row) => row.id) }, resolvedAt: null },
         data: { resolvedAt: now },

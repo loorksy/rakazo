@@ -30,6 +30,7 @@ export * from "./featured-connectors.js";
 export * from "./financial-decimal.js";
 export * from "./financial-egress-policy.js";
 export * from "./financial-risk.js";
+export { financialRiskEngineHealthy } from "./financial-risk-health.js";
 export * from "./financial-tool-policy.js";
 export * from "./format-file-size.js";
 export * from "./group-mentions.js";

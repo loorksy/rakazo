@@ -7,6 +7,8 @@ import { afterEach, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   missions: vi.fn(),
+  liveSettings: vi.fn(async () => ({ enabled: false })),
+  setLiveEnabled: vi.fn(async () => ({ enabled: true })),
   accountGuardrails: vi.fn(),
   resolveMandate: vi.fn(),
   controlMandate: vi.fn(),
@@ -142,12 +144,15 @@ it("loads current authority and binds owner approval to the exact server fingerp
   expect(button("Pause")).toBeDefined();
   expect(button("Approve mandate")).toBeUndefined();
 });
-it("does not activate LIVE, even if the client reports enabled account guardrails", async () => {
+it("bounded LIVE mandate approval does not enable the LIVE product", async () => {
   fixtures("LIVE");
   await render();
-  expect(button("Approve mandate")?.disabled).toBe(true);
+  expect(button("Approve mandate")?.disabled).toBe(false);
   await act(async () => button("Approve mandate")?.click());
-  expect(api.resolveMandate).not.toHaveBeenCalled();
+  expect(api.resolveMandate).toHaveBeenCalledWith(
+    expect.objectContaining({ approve: true, fingerprint: mandate.fingerprint }),
+  );
+  expect(api.setLiveEnabled).not.toHaveBeenCalled();
 });
 it("does not grant authority from a read-only conversation", async () => {
   fixtures();

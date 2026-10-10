@@ -28,6 +28,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
   const [risk, setRisk] = useState("");
   const [exposure, setExposure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(false);
   const [error, setError] = useState(false);
   useEffect(() => {
     const abort = new AbortController();
@@ -42,6 +43,12 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
           { signal: abort.signal },
         );
         const limits = AccountRiskGuardrailsSchema.nullable().parse(rawLimits);
+        if (selected.envelope.mode === "LIVE") {
+          const product = (await rpc("trading/liveSettings", undefined, {
+            signal: abort.signal,
+          })) as { enabled: boolean };
+          setLiveEnabled(product.enabled === true);
+        }
         if (abort.signal.aborted) return;
         setDetail(current);
         setMandate(selected);
@@ -146,7 +153,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
           <Text selectable style={{ color: tokens.foreground, fontSize: 12 }}>
             {JSON.stringify(envelope, null, 2)}
           </Text>
-          {mandate.status === "AWAITING_APPROVAL" && envelope.mode === "SIMULATION" ? (
+          {mandate.status === "AWAITING_APPROVAL" ? (
             <>
               <Text style={{ color: tokens.foreground }}>{t("Total reserved risk limit")}</Text>
               <TextInput
@@ -177,7 +184,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
                 editable={!readOnly && !busy}
               />
               <NativeActionButton
-                label={t("Save simulation limits")}
+                label={t("Save account limits")}
                 disabled={readOnly || busy || guardrails?.frozen}
                 onPress={() =>
                   void action(async () => {
@@ -188,7 +195,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
                         : {
                             version: 1,
                             accountId: envelope.accountId,
-                            mode: "SIMULATION",
+                            mode: envelope.mode,
                             maxReservedRisk: risk,
                             maxExposure: exposure,
                             maxPendingExposure: exposure,
@@ -213,17 +220,44 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
           {t("Action rejected. Refresh and review the current mandate.")}
         </Text>
       ) : null}
+      {envelope.mode === "LIVE" && expanded ? (
+        <>
+          <Text style={{ color: tokens.mutedForeground }}>
+            {t("Execution also requires account readiness and an exact approved mandate.")}
+          </Text>
+          <NativeActionButton
+            label={liveEnabled ? t("Disable LIVE") : t("Enable LIVE")}
+            disabled={readOnly || busy}
+            onPress={() =>
+              Alert.alert(
+                liveEnabled ? t("Disable LIVE") : t("Enable LIVE"),
+                t("An exact approved mandate and account readiness are still required."),
+                [
+                  { text: t("Cancel"), style: "cancel" },
+                  {
+                    text: t("Confirm"),
+                    onPress: () =>
+                      void action(async () => {
+                        const result = (await rpc("trading/setLiveEnabled", {
+                          enabled: !liveEnabled,
+                        })) as { enabled: boolean };
+                        setLiveEnabled(result.enabled);
+                      }),
+                  },
+                ],
+              )
+            }
+          />
+          <Text>
+            {t("Emergency stop")}: {envelope.emergencyBehavior ?? "FREEZE"}
+          </Text>
+        </>
+      ) : null}
       {mandate.status === "AWAITING_APPROVAL" ? (
         <>
           <NativeActionButton
             label={t("Approve mandate")}
-            disabled={
-              readOnly ||
-              busy ||
-              envelope.mode !== "SIMULATION" ||
-              !guardrails?.autonomousEnabled ||
-              guardrails.frozen
-            }
+            disabled={readOnly || busy || !guardrails?.autonomousEnabled || guardrails.frozen}
             onPress={() =>
               Alert.alert(
                 t("Approve mandate"),
@@ -259,7 +293,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
           />
         </>
       ) : null}
-      {guardrails?.frozen && envelope.mode === "SIMULATION" ? (
+      {guardrails?.frozen ? (
         <NativeActionButton
           label={t("Unfreeze account")}
           disabled={readOnly || busy}
@@ -278,9 +312,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
       {mandate.status === "PAUSED" || mandate.status === "NEEDS_ATTENTION" ? (
         <NativeActionButton
           label={t("Resume")}
-          disabled={
-            readOnly || busy || mandate.envelope.mode === "LIVE" || guardrails?.frozen !== false
-          }
+          disabled={readOnly || busy || guardrails?.frozen !== false}
           prominence="secondary"
           onPress={() => void control("RESUME")}
         />

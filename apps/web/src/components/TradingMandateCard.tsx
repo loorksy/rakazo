@@ -28,6 +28,7 @@ export function TradingMandateCard({
   const [risk, setRisk] = useState("");
   const [exposure, setExposure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(false);
   const [error, setError] = useState(false);
   useEffect(() => {
     const abort = new AbortController();
@@ -44,7 +45,12 @@ export function TradingMandateCard({
           ),
           rpc.trading.connections.list(undefined, { signal: abort.signal }),
         ]);
+        const product =
+          selected.envelope.mode === "LIVE"
+            ? await rpc.trading.liveSettings(undefined, { signal: abort.signal })
+            : null;
         if (abort.signal.aborted) return;
+        setLiveEnabled(product?.enabled === true);
         setDetail(current);
         setMandate(selected);
         setGuardrails(limits);
@@ -223,10 +229,40 @@ export function TradingMandateCard({
               <Trans>Target behavior</Trans>
             </dt>
             <dd>{envelope.targetBehavior}</dd>
+            <dt>
+              <Trans>Emergency stop</Trans>
+            </dt>
+            <dd>{envelope.emergencyBehavior ?? "FREEZE"}</dd>
           </dl>
         </div>
       </details>
-      {pending && envelope.mode === "SIMULATION" ? (
+      {envelope.mode === "LIVE" ? (
+        <details>
+          <summary className="cursor-pointer">
+            <Trans>LIVE availability</Trans>
+          </summary>
+          <div className="space-y-2 pt-2">
+            <p className="text-muted-foreground">
+              <Trans>
+                Execution also requires account readiness and an exact approved mandate.
+              </Trans>
+            </p>
+            <Button
+              variant="outline"
+              disabled={busy || readOnly}
+              onClick={() =>
+                void action(async () => {
+                  const result = await rpc.trading.setLiveEnabled({ enabled: !liveEnabled });
+                  setLiveEnabled(result.enabled);
+                })
+              }
+            >
+              {liveEnabled ? <Trans>Disable LIVE</Trans> : <Trans>Enable LIVE</Trans>}
+            </Button>
+          </div>
+        </details>
+      ) : null}
+      {pending ? (
         <details>
           <summary className="cursor-pointer">
             <Trans>Account guardrails</Trans>
@@ -262,7 +298,7 @@ export function TradingMandateCard({
                       : {
                           version: 1,
                           accountId: envelope.accountId,
-                          mode: "SIMULATION",
+                          mode: envelope.mode,
                           maxReservedRisk: risk,
                           maxExposure: exposure,
                           maxPendingExposure: exposure,
@@ -278,7 +314,7 @@ export function TradingMandateCard({
                 })
               }
             >
-              <Trans>Save simulation limits</Trans>
+              <Trans>Save account limits</Trans>
             </Button>
           </div>
         </details>
@@ -292,13 +328,7 @@ export function TradingMandateCard({
         {pending ? (
           <>
             <Button
-              disabled={
-                busy ||
-                readOnly ||
-                envelope.mode !== "SIMULATION" ||
-                !guardrails?.autonomousEnabled ||
-                guardrails.frozen
-              }
+              disabled={busy || readOnly || !guardrails?.autonomousEnabled || guardrails.frozen}
               onClick={() =>
                 void action(async () =>
                   setMandate(
@@ -371,7 +401,7 @@ export function TradingMandateCard({
             </Button>
           </>
         )}
-        {guardrails?.frozen && envelope.mode === "SIMULATION" ? (
+        {guardrails?.frozen ? (
           <Button
             variant="outline"
             disabled={busy || readOnly}
@@ -389,9 +419,7 @@ export function TradingMandateCard({
         {mandate.status === "PAUSED" || mandate.status === "NEEDS_ATTENTION" ? (
           <Button
             variant="outline"
-            disabled={
-              busy || readOnly || mandate.envelope.mode === "LIVE" || guardrails?.frozen !== false
-            }
+            disabled={busy || readOnly || guardrails?.frozen !== false}
             onClick={() =>
               void action(async () =>
                 setMandate(

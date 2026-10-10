@@ -19,7 +19,7 @@ import { financialUnits } from "@rakazo/core";
 import { tradingMandateFingerprint } from "@rakazo/core/node/financial-action";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
-import { approveSupervision, captureSupervision } from "./broker-state.js";
+import { approveSupervision, BrokerStateSchema, captureSupervision } from "./broker-state.js";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
 import { saveMissionWakes, savePlanWakes } from "./trading-mission-wakes.js";
@@ -498,8 +498,34 @@ export class TradingMissions {
           Date.parse(objective.endsAt) <= now.getTime()
         )
           throw new Error("Expired authority cannot resume");
-        if (mandate.mode !== "SIMULATION")
-          throw new Error("LIVE readiness incomplete; live resume is disabled");
+        if (mandate.mode === "LIVE") {
+          const settings = await tx.deploymentSettings.findUniqueOrThrow({
+            where: { id: "default" },
+          });
+          const runtime = await tx.tradingRuntimeHealth.findUnique({ where: { id: "default" } });
+          const snapshot = await tx.tradingBrokerSnapshot.findUnique({
+            where: { accountId: mandate.accountId },
+          });
+          const lease = await tx.brokerSessionLease.findUnique({
+            where: { accountId: mandate.accountId },
+          });
+          if (
+            !settings.tradingLiveEnabled ||
+            !runtime?.containmentActive ||
+            now.getTime() - runtime.observedAt.getTime() > 15000 ||
+            !snapshot ||
+            now.getTime() - snapshot.observedAt.getTime() > 15000 ||
+            lease?.state !== "CONNECTED" ||
+            snapshot.generation !== lease.generation ||
+            (await tx.tradingDriftEvent.count({
+              where: { accountId: mandate.accountId, resolvedAt: null },
+            }))
+          )
+            throw new Error("LIVE readiness incomplete; reconcile account before resume");
+          const state = BrokerStateSchema.parse(snapshot);
+          if (state.account.accountMode !== "HEDGING")
+            throw new Error("Exact hedging attribution required");
+        }
         await this.agent(tx, ownerUserId, mandate.botId);
         if (
           !(await tx.tradingConnection.findFirst({
@@ -569,7 +595,7 @@ export class TradingMissions {
             mandate.observedAt.getTime() > now.getTime() + 2000)
         )
           throw new Error("Fresh exposure valuation required before resume");
-        if (own.length) {
+        if (own.length && mandate.mode === "SIMULATION") {
           const book = await tx.simulationBook.findUnique({
             where: { accountId: mandate.accountId },
           });

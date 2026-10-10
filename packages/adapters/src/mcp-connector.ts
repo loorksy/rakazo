@@ -141,7 +141,7 @@ export class McpConnector implements ConnectorProvider {
   }
 
   private async authorizedTools(context: AdapterContext): Promise<ConnectorTool[]> {
-    if (!context.botId) return [];
+    if (!context.botId || context.financialResearchOnly) return [];
     const assignments = await this.prisma.botMcpServer.findMany({
       where: {
         botId: context.botId,
@@ -240,6 +240,13 @@ export class McpConnector implements ConnectorProvider {
   }
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
+    if (context.financialResearchOnly) {
+      yield {
+        type: "error",
+        message: "STRUCTURED_FINANCIAL_EXECUTION_REQUIRED: MCP execution contract is unverified",
+      };
+      return;
+    }
     if (call.route?.connectorId !== "mcp") {
       yield { type: "error", message: `MCP route required for ${call.tool}` };
       return;

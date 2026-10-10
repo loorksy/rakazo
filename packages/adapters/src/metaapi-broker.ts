@@ -18,6 +18,7 @@ import {
   normalizeBrokerDecimal,
   normalizeCandles,
   normalizeOrders,
+  normalizePositionHistory,
   normalizePositions,
   normalizeQuote,
   normalizeSpecification,
@@ -34,6 +35,7 @@ export interface MetaApiRpcPort extends MetaApiExecutionPort {
   getSymbols(): Promise<unknown>;
   getSymbolSpecification(symbol: string): Promise<unknown>;
   getSymbolPrice(symbol: string, keepSubscription: boolean): Promise<unknown>;
+  getDealsByPosition?(positionId: string): Promise<unknown>;
   calculateMargin?(order: {
     symbol: string;
     type: "ORDER_TYPE_BUY" | "ORDER_TYPE_SELL";
@@ -281,6 +283,16 @@ class MetaApiReadSession implements BrokerReadSession {
         this.now().toISOString(),
       ),
     );
+  }
+  positionHistory(positionId: string) {
+    return this.read(async () => {
+      if (!this.rpc.getDealsByPosition) throw new BrokerProviderError("UNAVAILABLE");
+      return normalizePositionHistory(
+        await this.rpc.getDealsByPosition(positionId),
+        this.accountId,
+        positionId,
+      );
+    });
   }
   positions() {
     return this.read(async () =>
