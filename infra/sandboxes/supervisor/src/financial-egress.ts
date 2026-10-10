@@ -216,6 +216,10 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
           timeout: 15000,
         },
         (response) => {
+          response.on("error", () => {
+            if (!res.headersSent) res.writeHead(502);
+            res.end("RESEARCH_UPSTREAM_UNAVAILABLE");
+          });
           const forwarded = { ...response.headers };
           delete forwarded["set-cookie"];
           delete forwarded["proxy-authenticate"];
@@ -251,6 +255,7 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
     }
   });
   gateway.on("upgrade", (_req, socket) => socket.destroy());
+  gateway.on("clientError", (_error, socket) => socket.destroy());
   // Hijacked CONNECT sockets leave HTTP connection tracking; close them with everything else.
   const tunnels = new Set<Duplex>();
   const closeTracked = gateway.closeAllConnections.bind(gateway);
@@ -258,9 +263,14 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
     closeTracked();
     for (const tunnel of tunnels) tunnel.destroy();
   };
-  gateway.on("connect", (req, socket, head) => {
+  const trackTunnel = (socket: Duplex) => {
     tunnels.add(socket);
     socket.on("close", () => tunnels.delete(socket));
+    // A peer reset must not become an unhandled error and take the gateway down.
+    socket.on("error", () => socket.destroy());
+  };
+  gateway.on("connect", (req, socket, head) => {
+    trackTunnel(socket);
     (socket as Socket).setTimeout(TUNNEL_IDLE_MS, () => socket.destroy());
     void (async () => {
       try {
@@ -286,6 +296,8 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
           }
         });
         server.on("upgrade", (_req, upgraded) => upgraded.destroy());
+        server.on("error", () => socket.destroy());
+        server.on("clientError", (_error, client) => client.destroy());
         server.on("tlsClientError", () => socket.destroy());
         socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         if (head.length) socket.unshift(head);

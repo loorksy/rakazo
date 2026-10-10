@@ -113,6 +113,18 @@ describe("trusted research gateway financial containment", () => {
     });
     expect(response).toContain("403 Forbidden");
   });
+  it("keeps serving after a client resets a CONNECT tunnel", async () => {
+    await new Promise<void>((resolve) => {
+      const socket = net.connect(proxyPort, "127.0.0.1", () => {
+        socket.write("CONNECT research.fixture:443 HTTP/1.1\r\nHost: research.fixture\r\n\r\n");
+        socket.destroy();
+        resolve();
+      });
+      socket.on("error", () => resolve());
+    });
+    const result = await request(`http://research.fixture:${researchPort}/market-research`);
+    expect(result.status).toBe(200);
+  });
   it("inspects HTTPS inside CONNECT instead of providing an opaque financial tunnel", async () => {
     const ca = await readFile(path.join(root, "public/ca.crt"));
     const response = await new Promise<string>((resolve, reject) => {
