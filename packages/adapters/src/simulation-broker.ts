@@ -7,6 +7,7 @@ import {
   FinancialRiskFactsSchema,
   PositiveTradingDecimalSchema,
   SimulationBookStateSchema,
+  TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
 import {
@@ -14,6 +15,7 @@ import {
   applySimulationAction,
   financialDecimal,
   financialUnits,
+  mandateActionAuthority,
   valueSimulationBook,
 } from "@rakazo/core";
 import {
@@ -225,9 +227,19 @@ export class SimulationBroker {
         where: { accountId_mode: { accountId: context.accountId, mode: "SIMULATION" } },
       });
       const limits = guard ? AccountRiskGuardrailsSchema.parse(guard.limits) : null;
+      const goal = TradingGoalInputSchema.parse(
+        (await tx.tradingGoal.findUniqueOrThrow({ where: { id: mandate.goalId } })).definition,
+      );
+      const authority = mandateActionAuthority({
+        status: mandate.status,
+        envelope,
+        action,
+        startsAt: goal.startsAt,
+        endsAt: goal.endsAt,
+        now: this.now(),
+      });
       if (
-        mandate.status !== "ACTIVE" ||
-        mandate.expiresAt <= this.now() ||
+        !authority ||
         mandate.approvedByUserId !== actor.ownerUserId ||
         mandate.approvedFingerprint !== tradingMandateFingerprint(envelope) ||
         guard?.frozen ||
@@ -295,13 +307,14 @@ export class SimulationBroker {
           openNotional: sum("exposure"),
           positions: own.filter((row) => row.kind === "POSITION").length,
           pendingOrders: own.filter((row) => row.kind === "PENDING").length,
-          missionActive: true,
+          missionActive: authority === "ACTIVE",
           accountFrozen: false,
           unresolvedEffects: unresolved > 0,
         },
       });
       if (
         assessment.decision !== "ALLOW" ||
+        (authority === "FINISHING" && assessment.classification !== "REDUCES_RISK") ||
         reservation.risk.toFixed() !== assessment.incrementalRisk ||
         reservation.exposure.toFixed() !== assessment.notional ||
         reservation.margin.toFixed() !== assessment.margin

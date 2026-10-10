@@ -1,7 +1,7 @@
 import type { AdapterContext, AutoReviewProvider, AutoReviewResult } from "@rakazo/adapter-kit";
 import type { FinancialReviewContext } from "@rakazo/contracts";
 import { FinancialReviewContextSchema } from "@rakazo/contracts";
-import { redactSecrets } from "@rakazo/core";
+import { mandateActionAuthority, redactSecrets } from "@rakazo/core";
 import {
   financialActionFingerprint,
   tradingMandateFingerprint,
@@ -21,6 +21,16 @@ export async function reviewFinancialAction(input: {
   const financial = FinancialReviewContextSchema.parse(input.financial);
   const now = input.now ?? new Date();
   const age = now.getTime() - Date.parse(financial.observedAt);
+  const authority = financial.mandateState
+    ? mandateActionAuthority({
+        ...financial.mandateState,
+        envelope: financial.envelope,
+        action: financial.action,
+        now,
+      })
+    : Date.parse(financial.envelope.expiresAt) > now.getTime()
+      ? "ACTIVE"
+      : null;
   const deny = {
     decision: "deny" as const,
     model: "deterministic",
@@ -34,7 +44,10 @@ export async function reviewFinancialAction(input: {
     financial.action.mode !== financial.envelope.mode ||
     input.context.userId !== financial.envelope.ownerId ||
     input.context.botId !== financial.envelope.botId ||
-    Date.parse(financial.envelope.expiresAt) <= now.getTime() ||
+    !authority ||
+    (authority === "FINISHING" &&
+      financial.risk.decision === "ALLOW" &&
+      financial.risk.classification !== "REDUCES_RISK") ||
     age < -2000 ||
     age > 15000
   )

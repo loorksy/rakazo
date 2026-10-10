@@ -78,6 +78,13 @@ export const FinancialReviewContextSchema = z.strictObject({
   actionFingerprint: Hash,
   mandateId: Id,
   mandateFingerprint: Hash,
+  mandateState: z
+    .strictObject({
+      status: z.string().min(1).max(64),
+      startsAt: z.iso.datetime({ offset: true }),
+      endsAt: z.iso.datetime({ offset: true }),
+    })
+    .optional(),
   envelope: TradingMandateEnvelopeSchema,
   planVersion: z.number().int().positive(),
   risk: FinancialRiskAssessmentSchema,

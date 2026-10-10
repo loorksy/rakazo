@@ -10,6 +10,7 @@ import {
   TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
+import { mandateActionAuthority } from "@rakazo/core";
 import {
   canonicalFinancialAction,
   financialActionFingerprint,
@@ -78,32 +79,49 @@ export class FinancialEffects {
       throw new Error("Stale financial effect ownership");
     return { effect, context, execution };
   }
-  private async authority(tx: Prisma.TransactionClient, context: FinancialContext) {
+  private async authority(
+    tx: Prisma.TransactionClient,
+    context: FinancialContext,
+    action: ReturnType<typeof canonicalFinancialAction>,
+  ) {
     const mandate = await tx.tradingMandate.findUniqueOrThrow({
       where: { id: context.authorizationId },
     });
     const envelope = TradingMandateEnvelopeSchema.parse(mandate.envelope);
-    const goal = TradingGoalInputSchema.parse(
-      (await tx.tradingGoal.findUniqueOrThrow({ where: { id: context.goalId } })).definition,
-    );
+    const goalRecord = await tx.tradingGoal.findUniqueOrThrow({ where: { id: context.goalId } });
+    const goal = TradingGoalInputSchema.parse(goalRecord.definition);
     const guard = await tx.accountRiskGuardrail.findUnique({
       where: { accountId_mode: { accountId: context.accountId, mode: context.mode } },
     });
     const limits = guard ? AccountRiskGuardrailsSchema.parse(guard.limits) : null;
+    const authority = mandateActionAuthority({
+      status: mandate.status,
+      envelope,
+      action,
+      startsAt: goal.startsAt,
+      endsAt: goal.endsAt,
+      now: this.now(),
+    });
     if (
-      mandate.status !== "ACTIVE" ||
+      !authority ||
       mandate.ownerUserId !== context.ownerUserId ||
       mandate.botId !== context.botId ||
       mandate.accountId !== context.accountId ||
       mandate.mode !== context.mode ||
       mandate.goalId !== context.goalId ||
+      goalRecord.ownerUserId !== context.ownerUserId ||
+      goalRecord.botId !== context.botId ||
+      goalRecord.accountId !== context.accountId ||
+      goalRecord.mode !== context.mode ||
+      mandate.expiresAt.getTime() !== Date.parse(envelope.expiresAt) ||
       mandate.approvedByUserId !== context.ownerUserId ||
       !mandate.approvedAt ||
       mandate.approvedFingerprint !== tradingMandateFingerprint(envelope) ||
       mandate.fingerprint !== mandate.approvedFingerprint ||
-      Date.parse(goal.startsAt) > this.now().getTime() ||
-      Date.parse(goal.endsAt) <= this.now().getTime() ||
-      mandate.expiresAt <= this.now() ||
+      envelope.ownerId !== context.ownerUserId ||
+      envelope.botId !== context.botId ||
+      envelope.accountId !== context.accountId ||
+      envelope.mode !== context.mode ||
       !limits?.autonomousEnabled ||
       limits.frozen ||
       guard?.frozen ||
@@ -121,7 +139,7 @@ export class FinancialEffects {
       throw new Error("Verified owner account required");
     // LIVE has no readiness grant yet; no credential/session can imply operator authorization.
     if (context.mode !== "SIMULATION") throw new Error("LIVE readiness incomplete");
-    return { mandate, envelope };
+    return { mandate, envelope, authority, goal };
   }
   private journal(
     tx: Prisma.TransactionClient,
@@ -210,7 +228,11 @@ export class FinancialEffects {
         financialActionFingerprint(preview.action) !== proposal.actionFingerprint
       )
         throw new Error("Fresh allowed exact preview required");
-      const { mandate } = await this.authority(tx, context);
+      const { mandate, authority } = await this.authority(
+        tx,
+        context,
+        canonicalFinancialAction(proposal.action),
+      );
       if (prior) {
         if (prior.financialRunFence > execution.generation)
           throw new Error("Stale financial claim");
@@ -241,12 +263,17 @@ export class FinancialEffects {
           financialRunFence: execution.generation,
           financialHolder: execution.holder,
           financialExpiresAt: new Date(
-            Math.min(mandate.expiresAt.getTime(), this.now().getTime() + 600000),
+            Math.min(
+              authority === "FINISHING" ? Infinity : mandate.expiresAt.getTime(),
+              this.now().getTime() + 600000,
+            ),
           ),
         },
       });
       await this.journal(tx, effect, context, "PROPOSED", {
         previewId,
+        authorityPhase: authority,
+        mandateStatus: mandate.status,
         clientId: context.clientId,
       });
       return effect;
@@ -274,7 +301,11 @@ export class FinancialEffects {
       if (effect.reviewDecision === "ask" || effect.reviewDecision === "error")
         throw new Error("Owner review required for prior escalation");
       if (effect.reviewDecision !== null) throw new Error("Financial review already recorded");
-      const { mandate, envelope } = await this.authority(tx, context);
+      const { mandate, envelope, goal } = await this.authority(
+        tx,
+        context,
+        canonicalFinancialAction(effect.request),
+      );
       const proposal = await tx.tradeProposal.findUniqueOrThrow({
         where: { id: context.proposalId },
       });
@@ -290,6 +321,7 @@ export class FinancialEffects {
         actionFingerprint: context.actionFingerprint,
         mandateId: mandate.id,
         mandateFingerprint: mandate.fingerprint,
+        mandateState: { status: mandate.status, startsAt: goal.startsAt, endsAt: goal.endsAt },
         envelope,
         planVersion: context.planVersion,
         risk: FinancialRiskAssessmentSchema.parse(preview.risk),
@@ -309,7 +341,7 @@ export class FinancialEffects {
     });
     return this.prisma.$transaction(async (tx) => {
       const { effect, context } = await this.owned(tx, actor, id, initialContext.accountId);
-      await this.authority(tx, context);
+      await this.authority(tx, context, canonicalFinancialAction(effect.request));
       if (
         effect.status !== "intended" ||
         effect.reviewDecision !== null ||
@@ -347,7 +379,7 @@ export class FinancialEffects {
     const initialContext = contextOf(initial);
     return this.prisma.$transaction(async (tx) => {
       const { effect, context } = await this.owned(tx, actor, id, initialContext.accountId);
-      await this.authority(tx, context);
+      await this.authority(tx, context, canonicalFinancialAction(effect.request));
       const humanApproved =
         effect.financialApprovedByUserId === actor.ownerUserId && !!effect.financialApprovedAt;
       if (

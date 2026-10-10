@@ -376,7 +376,7 @@ suite("owner-only durable trading goals/plans/mandates", () => {
     await expect(readTradingJournal(db.prisma, "peer-human", { limit: 30 })).rejects.toThrow();
     await db.prisma.brokerInstrument.deleteMany({ where: { accountId: "account" } });
     await db.prisma.tradingConnection.delete({ where: { id: "account" } });
-    expect((await readTradingJournal(db.prisma, owner, query)).entries[0].id).toBe("j-b");
+    expect((await readTradingJournal(db.prisma, owner, query)).entries[0]?.id).toBe("j-b");
     expect(
       (await readTradingJournal(db.prisma, owner, { mode: "LIVE", limit: 30 })).entries.map(
         (row) => row.id,
@@ -655,9 +655,11 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       rows: Awaited<ReturnType<typeof simulatedPrepared>>,
       managedAction: FinancialAction,
       brokerFacts = facts,
+      clock = () => now,
     ) {
-      const preflight = () => rows.simulator.preflight(actor, brokerFacts);
-      const service = new TradeProposals(db.prisma, () => now, preflight);
+      const simulator = new SimulationBroker(db.prisma, clock);
+      const preflight = () => simulator.preflight(actor, brokerFacts);
+      const service = new TradeProposals(db.prisma, clock, preflight);
       const proposal = TradeProposalViewSchema.parse(
         await service.command(
           actor,
@@ -684,7 +686,7 @@ suite("owner-only durable trading goals/plans/mandates", () => {
         previewed,
         facts: await preflight(),
         execute: () =>
-          new FinancialExecution(db.prisma, () => now, preflight).execute(
+          new FinancialExecution(db.prisma, clock, preflight).execute(
             actor,
             { proposalId: proposal.id, previewId: previewed.preview?.id ?? "missing" },
             new ScriptedAutoReviewProvider(),
@@ -1351,6 +1353,157 @@ const db=createDb(process.env.MISSION_TEST_DATABASE_URL); const quote=JSON.parse
         ).status,
       ).toBe("RELEASED");
     });
+    it.each(["TARGET_REACHED", "RISK_STOPPED"])(
+      "finishes only full attributed close under preauthorized %s behavior",
+      async (status) => {
+        const rows = await acceptedExposure(action, {
+          ...managementScope,
+          targetBehavior: "CLOSE_ATTRIBUTED_EXPOSURE",
+          breachBehavior: "CLOSE_ATTRIBUTED_EXPOSURE",
+        });
+        await db.prisma.tradingMandate.update({ where: { id: rows.active.id }, data: { status } });
+        const fingerprint = rows.active.fingerprint;
+        const closing = await managementProposal(rows, {
+          ...managementIdentity,
+          operation: "CLOSE_POSITION",
+          positionId: `sim_${rows.effect.id}`,
+          volume: null,
+        });
+        expect(closing.previewed.preview?.risk).toMatchObject({
+          decision: "ALLOW",
+          classification: "REDUCES_RISK",
+        });
+        const outcome = await closing.execute();
+        expect(outcome.status).toBe("SUCCEEDED");
+        expect(await closing.execute()).toEqual(outcome);
+        expect(
+          await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }),
+        ).toMatchObject({ status, fingerprint });
+        expect(
+          SimulationBookStateSchema.parse(
+            (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+              .state,
+          ).positions,
+        ).toEqual([]);
+        expect(
+          (
+            await db.prisma.tradingRiskReservation.findUniqueOrThrow({
+              where: { effectId: rows.effect.id },
+            })
+          ).status,
+        ).toBe("RELEASED");
+      },
+    );
+    it("expired authority finishes only its preauthorized close through review/effect/reconciliation", async () => {
+      const rows = await acceptedExposure(action, {
+        ...managementScope,
+        expiryBehavior: "CLOSE_ATTRIBUTED_EXPOSURE",
+      });
+      const at = new Date(Date.parse(goal.endsAt) + 1000);
+      await db.prisma.tradingMandate.update({
+        where: { id: rows.active.id },
+        data: { status: "EXPIRED" },
+      });
+      await db.prisma.brokerInstrument.update({ where: { id: "gold" }, data: { verifiedAt: at } });
+      const fresh = {
+        ...facts,
+        observedAt: at.toISOString(),
+        specificationObservedAt: at.toISOString(),
+        quote: { ...facts.quote, sourceTime: at.toISOString(), receivedAt: at.toISOString() },
+      };
+      const closing = await managementProposal(
+        rows,
+        {
+          ...managementIdentity,
+          operation: "CLOSE_POSITION",
+          positionId: `sim_${rows.effect.id}`,
+          volume: null,
+        },
+        fresh,
+        () => at,
+      );
+      expect(closing.previewed.preview?.risk.decision).toBe("ALLOW");
+      const result = await closing.execute();
+      expect(result.status).toBe("SUCCEEDED");
+      expect(await closing.execute()).toEqual(result);
+      const effect = await db.prisma.externalEffect.findFirstOrThrow({
+        where: { id: result.effectId },
+      });
+      expect(effect.financialExpiresAt!.getTime()).toBeGreaterThan(at.getTime());
+      expect(
+        (
+          await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } })
+        ).expiresAt.toISOString(),
+      ).toBe(new Date(goal.endsAt).toISOString());
+      expect(
+        await db.prisma.financialJournal.count({
+          where: { effectId: effect.id, event: "REVIEWED" },
+        }),
+      ).toBe(1);
+    });
+    it("target cancellation reaches only the exact pending order and does not reactivate the mandate", async () => {
+      const rows = await acceptedExposure(
+        { ...action, orderType: "LIMIT", price: "2699", expiresAt: "2026-10-09T12:00:00Z" },
+        { ...managementScope, targetBehavior: "CANCEL_PENDING" },
+      );
+      await db.prisma.tradingMandate.update({
+        where: { id: rows.active.id },
+        data: { status: "TARGET_REACHED" },
+      });
+      const cancellation = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "CANCEL_ORDER",
+        orderId: `sim_${rows.effect.id}`,
+      });
+      expect((await cancellation.execute()).status).toBe("SUCCEEDED");
+      expect(
+        SimulationBookStateSchema.parse(
+          (await db.prisma.simulationBook.findUniqueOrThrow({ where: { accountId: "account" } }))
+            .state,
+        ).orders,
+      ).toEqual([]);
+      expect(
+        (await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: rows.active.id } }))
+          .status,
+      ).toBe("TARGET_REACHED");
+    });
+    it.each(["PAUSED", "CANCELLED", "TARGET_REACHED"])(
+      "does not invent finishing authority for %s with FREEZE",
+      async (status) => {
+        const rows = await acceptedExposure();
+        await db.prisma.tradingMandate.update({ where: { id: rows.active.id }, data: { status } });
+        const closing = await managementProposal(rows, {
+          ...managementIdentity,
+          operation: "CLOSE_POSITION",
+          positionId: `sim_${rows.effect.id}`,
+          volume: null,
+        });
+        expect(closing.previewed.preview?.risk.decision).toBe("DENY");
+        await expect(closing.execute()).rejects.toThrow("Fresh allowed exact preview");
+        expect(await db.prisma.simulationExecution.count()).toBe(1);
+      },
+    );
+    it("owner freeze after finishing preview still blocks dispatch", async () => {
+      const rows = await acceptedExposure(action, {
+        ...managementScope,
+        targetBehavior: "CLOSE_ATTRIBUTED_EXPOSURE",
+      });
+      await db.prisma.tradingMandate.update({
+        where: { id: rows.active.id },
+        data: { status: "TARGET_REACHED" },
+      });
+      const closing = await managementProposal(rows, {
+        ...managementIdentity,
+        operation: "CLOSE_POSITION",
+        positionId: `sim_${rows.effect.id}`,
+        volume: null,
+      });
+      expect(closing.previewed.preview?.risk.decision).toBe("ALLOW");
+      await db.prisma.accountRiskGuardrail.updateMany({ data: { frozen: true } });
+      await expect(closing.execute()).rejects.toThrow("Current bounded financial authority");
+      expect(await db.prisma.simulationExecution.count()).toBe(1);
+    });
+
     it("tightens protection and partially/full closes without duplicating exposure reservations", async () => {
       const rows = await acceptedExposure({ ...action, volume: "0.02" });
       const positionId = `sim_${rows.effect.id}`;

@@ -9,7 +9,12 @@ import {
   TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
-import { accountRiskCapacity, financialDecimal, financialUnits } from "@rakazo/core";
+import {
+  accountRiskCapacity,
+  financialDecimal,
+  financialUnits,
+  mandateActionAuthority,
+} from "@rakazo/core";
 import {
   canonicalFinancialAction,
   financialActionFingerprint,
@@ -309,11 +314,21 @@ export class TradeProposals {
         mandate.observedAt.getTime() > this.now().getTime() + 2000
       )
         risk = { decision: "DENY", code: "STALE_MISSION_ACCOUNTING" };
+      const authority = mandateActionAuthority({
+        status: mandate.status,
+        envelope,
+        action,
+        startsAt: goal.startsAt,
+        endsAt: goal.endsAt,
+        now: this.now(),
+      });
+      if (!authority) risk = { decision: "DENY", code: "GOAL_WINDOW_INACTIVE" };
       if (
-        Date.parse(goal.startsAt) > this.now().getTime() ||
-        Date.parse(goal.endsAt) <= this.now().getTime()
+        authority === "FINISHING" &&
+        risk.decision === "ALLOW" &&
+        risk.classification !== "REDUCES_RISK"
       )
-        risk = { decision: "DENY", code: "GOAL_WINDOW_INACTIVE" };
+        risk = { decision: "DENY", code: "FINISHING_REDUCTION_REQUIRED" };
       if (risk.decision === "ALLOW" && limits) {
         const code = accountRiskCapacity({
           action,

@@ -215,7 +215,7 @@ export async function wakeTradingMission(
       ownerUserId: mandate.ownerUserId,
       botId: mandate.botId,
       key: wake.wakeKey,
-      prompt: `Trading mission ${wake.kind.toLowerCase()}. Mandate ${mandate.id}; goal ${mandate.goalId}. Read current goal, plan and backend authorization before analysis. Profit is aspirational; choose no trade when appropriate. Do not bypass deterministic risk, review or effect reconciliation. Expiry stops new risk. This wake is not financial authorization.`,
+      prompt: `Trading mission ${wake.kind.toLowerCase()}. Mandate ${mandate.id}; goal ${mandate.goalId}. Read current goal, plan and backend authorization before analysis. Profit is aspirational; choose no trade when appropriate. Do not bypass deterministic risk, review or effect reconciliation. Expiry stops new risk. Approved finishing behaviors: expiry ${envelope.expiryBehavior}, target ${envelope.targetBehavior}, breach ${envelope.breachBehavior}. Read current backend state and carry out only its exact pre-authorized cancellations or full attributed closes through structured proposal, risk, review and effect tools when permitted. FREEZE requires no new mutation. A finishing action never reactivates authority. This wake is not financial authorization.`,
     });
     await tx.tradingMissionWake.update({
       where: { id },

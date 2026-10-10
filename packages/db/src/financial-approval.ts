@@ -1,5 +1,11 @@
 import type { FinancialEffectContext } from "@rakazo/contracts";
-import { FinancialEffectContextSchema, TradingMandateEnvelopeSchema } from "@rakazo/contracts";
+import {
+  FinancialActionSchema,
+  FinancialEffectContextSchema,
+  TradingGoalInputSchema,
+  TradingMandateEnvelopeSchema,
+} from "@rakazo/contracts";
+import { mandateActionAuthority } from "@rakazo/core";
 import {
   financialActionFingerprint,
   tradingMandateFingerprint,
@@ -75,13 +81,40 @@ export async function validateFinancialApproval(
     mandate.botId !== input.botId ||
     mandate.accountId !== context.accountId ||
     mandate.mode !== context.mode ||
+    mandate.goalId !== context.goalId ||
+    mandate.expiresAt.getTime() !== Date.parse(envelope.data.expiresAt) ||
+    envelope.data.ownerId !== input.userId ||
+    envelope.data.botId !== input.botId ||
+    envelope.data.accountId !== context.accountId ||
+    envelope.data.mode !== context.mode ||
     mandate.approvedByUserId !== input.userId ||
     !mandate.approvedAt ||
     mandate.fingerprint !== tradingMandateFingerprint(envelope.data) ||
     mandate.approvedFingerprint !== mandate.fingerprint
   )
     return null;
-  if (input.answer === "allow" && (mandate.status !== "ACTIVE" || mandate.expiresAt <= now))
-    return null;
+  if (input.answer === "allow") {
+    const goal = await tx.tradingGoal.findUnique({ where: { id: mandate.goalId } });
+    const definition = TradingGoalInputSchema.safeParse(goal?.definition);
+    const action = FinancialActionSchema.safeParse(effect.request);
+    if (
+      !goal ||
+      !definition.success ||
+      !action.success ||
+      goal.ownerUserId !== input.userId ||
+      goal.botId !== input.botId ||
+      goal.accountId !== context.accountId ||
+      goal.mode !== context.mode ||
+      !mandateActionAuthority({
+        status: mandate.status,
+        envelope: envelope.data,
+        action: action.data,
+        startsAt: definition.data.startsAt,
+        endsAt: definition.data.endsAt,
+        now,
+      })
+    )
+      return null;
+  }
   return context;
 }

@@ -18,15 +18,14 @@ Owner chart creation can attach a chart to any eligible Agent. The legacy MAIN
 scope migrates to PRIVATE without widening access.
 
 All 117 forward migrations apply to a fresh fixture database. Expanded PostgreSQL
-coverage passes: 84 mission/account cases, 28 chart cases, 8 shared-account risk
+coverage passes: 92 mission/account cases, 28 chart cases, 8 shared-account risk
 cases and 6 owner admission cases. The risk race uses distinct Agent IDs and
 separate mandates. Focused identity, support-review, executor, onboarding and chart
 UI suites pass. Web, API, Worker, adapters, database and mobile type checks and the
 web production build pass. No broker mutation or private broker credential is used.
 
 The full transformation is still unfinished. LIVE provider dispatch/readiness,
-real owner-position supervision/manual drift and
-pre-authorized non-FREEZE finishing effects require further implementation.
+real owner-position supervision/manual drift require further implementation.
 Support review restores ordinary Computer use but is not a verified hostile-code
 containment guarantee. These results must not be reported as full completion.
 
@@ -270,3 +269,19 @@ with the corrected journal fixture and access case then verified separately).
 Twenty-eight affected web/settings/card tests pass. Chromium captures the exact
 Agent/account grant request and renders the immutable event without widened
 financial authority. Changed-package type checks and production web build pass.
+
+## Pre-authorized terminal finishing checkpoint
+
+Eligible Agents may now prepare/review/reserve/dispatch exact attributed simulator
+cancellations or full closes after expiry, risk stop or target stop only when that
+behavior exists in the unchanged owner-approved envelope. The shared authority
+predicate is used in previews, mandatory independent review, owner effect approvals,
+account-locked risk admission and simulator acceptance. FREEZE, pause/cancellation,
+account freeze, arbitrary targets and new exposure remain denied. The original
+fingerprint/window do not change; finishing does not reactivate a mandate. Existing
+mission wakes carry the exact current finishing instruction, rather than new authority.
+
+The full 92-case PostgreSQL mission gate passes after exact envelope/goal binding
+review. Shared risk/authority/reviewer tests pass, and the eight atomic account-ledger
+cases pass. Database/adapters/core/API/Worker type checks pass.
+Controlled LIVE dispatch and real manual-position supervision remain unfinished.

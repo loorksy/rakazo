@@ -6,7 +6,12 @@ import {
   TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
-import { accountRiskCapacity, financialDecimal, financialUnits } from "@rakazo/core";
+import {
+  accountRiskCapacity,
+  financialDecimal,
+  financialUnits,
+  mandateActionAuthority,
+} from "@rakazo/core";
 import {
   canonicalFinancialAction,
   financialActionFingerprint,
@@ -84,7 +89,6 @@ export class AccountRiskLedger {
       mandate.fingerprint !== fingerprint ||
       mandate.approvedFingerprint !== fingerprint ||
       mandate.approvedByUserId !== actor.ownerUserId ||
-      mandate.status !== "ACTIVE" ||
       !mandate.approvedAt ||
       envelope.ownerId !== actor.ownerUserId ||
       envelope.botId !== actor.botId ||
@@ -104,11 +108,6 @@ export class AccountRiskLedger {
       throw new Error("Verified goal ownership required");
     const goalDefinition = TradingGoalInputSchema.parse(goal.definition);
     if (
-      Date.parse(goalDefinition.startsAt) > this.now().getTime() ||
-      Date.parse(goalDefinition.endsAt) <= this.now().getTime()
-    )
-      throw new Error("Goal time window is not active");
-    if (
       await tx.tradingMissionWake.count({
         where: { mandateId: mandate.id, status: "NEEDS_ATTENTION" },
       })
@@ -119,6 +118,20 @@ export class AccountRiskLedger {
     const context = FinancialEffectContextSchema.parse(effect.financialContext);
     const action = canonicalFinancialAction(effect.request);
     const actionFingerprint = financialActionFingerprint(action);
+    const authority = mandateActionAuthority({
+      status: mandate.status,
+      envelope,
+      action,
+      startsAt: goalDefinition.startsAt,
+      endsAt: goalDefinition.endsAt,
+      now: this.now(),
+    });
+    if (!authority)
+      throw new Error(
+        mandate.status === "ACTIVE"
+          ? "Goal time window is not active"
+          : "Exact user-approved active mandate required",
+      );
     const instrument = await tx.brokerInstrument.findFirst({
       where: {
         id: action.instrumentId,
@@ -246,11 +259,13 @@ export class AccountRiskLedger {
         positions: own.filter((row) => row.kind === "POSITION").length,
         pendingOrders: own.filter((row) => row.kind === "PENDING").length,
         unresolvedEffects: unresolved > 0,
-        missionActive: true,
+        missionActive: authority === "ACTIVE",
         accountFrozen: false,
       },
     });
     if (assessment.decision !== "ALLOW") throw new Error(`Risk denied: ${assessment.code}`);
+    if (authority === "FINISHING" && assessment.classification !== "REDUCES_RISK")
+      throw new Error("Finishing must strictly reduce attributed risk");
     const capacity = accountRiskCapacity({
       action,
       mandateId: mandate.id,
@@ -295,6 +310,7 @@ export class AccountRiskLedger {
           mandateId,
           actionFingerprint,
           assessment,
+          authorityPhase: authority,
           accountRiskBefore: financialDecimal(sum(reservations, "risk")),
           accountRiskAfter: financialDecimal(
             sum(reservations, "risk") + financialUnits(assessment.incrementalRisk),

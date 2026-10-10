@@ -114,6 +114,70 @@ describe("independent financial Auto Review", () => {
       );
     },
   );
+  it("independently reviews only exact expiry finishing reductions under unchanged fingerprints", async () => {
+    const at = new Date("2026-10-10T10:01:00Z");
+    const finishing: FinancialReviewContext = {
+      ...base,
+      action: {
+        version: 1,
+        mode: "SIMULATION",
+        provider: "metaapi",
+        accountId: "account",
+        instrumentId: "gold",
+        brokerSymbol: "GOLD.a",
+        operation: "CANCEL_ORDER",
+        orderId: "exact-order",
+      },
+      envelope: {
+        ...base.envelope,
+        allowedOperations: ["CANCEL_ORDER", "OPEN"],
+        expiryBehavior: "CANCEL_PENDING",
+      },
+      mandateState: {
+        status: "EXPIRED",
+        startsAt: now.toISOString(),
+        endsAt: base.envelope.expiresAt,
+      },
+      observedAt: at.toISOString(),
+      risk: {
+        decision: "ALLOW",
+        calculationVersion: "stop-loss-v1",
+        riskBefore: "6.1",
+        riskAfter: "0",
+        incrementalRisk: "0",
+        notional: "0",
+        margin: "0",
+        classification: "REDUCES_RISK",
+      },
+    };
+    finishing.actionFingerprint = financialActionFingerprint(finishing.action);
+    finishing.mandateFingerprint = tradingMandateFingerprint(finishing.envelope);
+    const reviewer = provider({ decision: "pass", model: "fixture" });
+    expect(
+      await reviewFinancialAction({ financial: finishing, provider: reviewer, context, now: at }),
+    ).toMatchObject({ decision: "pass" });
+    expect(reviewer.review).toHaveBeenCalledTimes(1);
+    const opening = {
+      ...finishing,
+      action: base.action,
+      actionFingerprint: base.actionFingerprint,
+    };
+    expect(
+      await reviewFinancialAction({ financial: opening, provider: reviewer, context, now: at }),
+    ).toMatchObject({ decision: "deny" });
+    expect(
+      await reviewFinancialAction({
+        financial: {
+          ...finishing,
+          mandateState: { ...finishing.mandateState!, status: "CANCELLED" },
+        },
+        provider: reviewer,
+        context,
+        now: at,
+      }),
+    ).toMatchObject({ decision: "deny" });
+    expect(reviewer.review).toHaveBeenCalledTimes(1);
+  });
   it("cannot override deterministic risk denial", async () => {
     const reviewer = provider({ decision: "pass", model: "fixture" });
     expect(
