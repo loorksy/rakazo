@@ -34,3 +34,11 @@ executor are unchanged at this stage.
 | Cloud Chart contracts/controller and DB migration | Durable account-scoped visual workspace | Run fencing, object revisions, private/shared ownership | Additive resource behind existing tools/RPC | MEDIUM |
 | Web Shell contextual panel | Chart primary, Computer secondary | User viewing choice never changed by Bot activity | Existing right-panel architecture | MEDIUM |
 | Pinned KLineChart Pro dependency and ESM lifecycle patch | Isolated interactive chart projection | Backend datafeed; no arbitrary chart code or browser authority | Vendor accessor/disposer | MEDIUM |
+
+## Continuation on `trading`
+
+| `packages/db/prisma/schema.prisma`, deployment-config migration | Owner allowlisted runtime settings and playbook toggles | Revision check, immutable audit, no bootstrap secrets | Additive tables | MEDIUM |
+| `apps/api/src/index.ts`, `apps/worker/src/index.ts` | Apply those settings before logger and job-runner startup | Live keys refresh; restart-scoped keys wait for a new process | Existing composition roots | MEDIUM |
+| `packages/contracts/src/builtin-tools.ts`, executor | `trading_playbook` retrieval | Read-only context; creates no mandate | Existing tool list | LOW |
+| `infra/sandboxes/supervisor` research gateway | Public anonymous research instead of a fixed origin list | Still blocks broker hosts, private networks, credentials and bodies | Supervisor image | MEDIUM |
+| `packages/core/src/financial-egress-policy.ts` | Shared containment revision and research predicate | Agents cannot widen it | Core policy | MEDIUM |

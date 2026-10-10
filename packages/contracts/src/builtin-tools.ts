@@ -12,6 +12,7 @@ export const BUILTIN_TOOL_NAMES = [
   "chart_inspect",
   "market_watch",
   "broker_read",
+  "trading_playbook",
   "computer_observe",
   "computer_act",
   "browser_navigate",

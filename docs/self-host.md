@@ -123,6 +123,13 @@ traffic from the match and nothing else. A computer provisioned before the flag 
 is replaced on its next provision — resuming it on an unnamed bridge would bypass the
 restriction.
 
+A trading deployment that admits LIVE uses `SANDBOX_COMPUTER_EGRESS=financial`
+instead. Computers then have no direct route; anonymous public GET/HEAD goes
+through the research gateway, and broker execution hosts, private networks and
+credentials stay blocked. The owner settings screen reports that mode and cannot
+change it to `open`. Recreate the supervisor after changing the value. New
+computers pick up the mode; existing ones are replaced on their next provision.
+
 To disable restricted egress, set `SANDBOX_COMPUTER_EGRESS=open`, recreate the
 supervisor, and run `sudo bash infra/compose/restrict-computer-egress.sh --remove`.
 The flag alone does not uninstall the host rules, which keep matching the still-named

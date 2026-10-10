@@ -242,6 +242,42 @@ export const TradingConnectionInputSchema = z.strictObject({
   token: z.string().min(1).max(16384),
 });
 export type TradingConnectionView = z.infer<typeof TradingConnectionViewSchema>;
+/** Owner projection of what blocks LIVE admission. Health is attested by trusted runtime only. */
+export const TradingLiveStatusSchema = z.strictObject({
+  enabled: z.boolean(),
+  runtime: z.strictObject({
+    fresh: z.boolean(),
+    containment: z.boolean(),
+    risk: z.boolean(),
+    effects: z.boolean(),
+    emergencyStop: z.boolean(),
+    observability: z.boolean(),
+    schema: z.boolean(),
+    observedAt: Timestamp.nullable(),
+  }),
+  accounts: z.array(
+    z.strictObject({
+      accountId: Reference,
+      label: z.string().max(80),
+      environment: BrokerEnvironmentSchema.nullable(),
+      connected: z.boolean(),
+      snapshotRevision: z.number().int().positive().nullable(),
+      snapshotFresh: z.boolean(),
+      drift: z.array(
+        z.strictObject({ id: Reference, reason: z.string().max(512), createdAt: Timestamp }),
+      ),
+      uncertainEffects: z.array(
+        z.strictObject({
+          effectId: Reference,
+          status: z.enum(["SENT", "UNCERTAIN"]),
+          sentAt: Timestamp.nullable(),
+          abandonable: z.boolean(),
+        }),
+      ),
+    }),
+  ),
+});
+export type TradingLiveStatus = z.infer<typeof TradingLiveStatusSchema>;
 export const BrokerLiveEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("quote"), quote: BrokerQuoteSchema }),
   z.strictObject({

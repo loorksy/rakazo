@@ -9,12 +9,15 @@ The installed ESM declarations contain extensionless module references that do
 not resolve under NodeNext. `metaapi-sdk.d.ts` describes the audited narrow Node
 port explicitly rather than accepting implicit `any` exports.
 
-The current port provides authenticated read sessions only: account, positions,
-orders, exact broker symbols/specifications, pricing, historical candles and
-stream subscriptions. Credentials are resolved by a trusted callback and never
-returned. The adapter does not deploy or modify provider accounts. It refuses
-disconnected accounts, region mismatch, malformed provider data and unbounded
-history requests. Read capability does not imply execution authority.
+The port provides authenticated reads: account, positions, orders, exact broker
+symbols/specifications, pricing, historical candles, deal history and stream
+subscriptions. A separate host-only execution adapter can submit a market or
+pending entry, a protection change, a partial or full close, and a pending
+cancel. The dispatcher, not a model tool, calls it, and only after LIVE admission.
+Reads do not imply that authority. Credentials are resolved by a trusted callback
+and never returned. The adapter does not deploy or modify provider accounts. It
+refuses disconnected accounts, region mismatch, malformed provider data and
+unbounded history requests.
 
 Financial values are normalized to bounded decimal strings. Negative P&L is
 preserved. Quote times and candle opening times are explicit UTC timestamps;
@@ -50,9 +53,10 @@ worker cannot regain authority merely by rereading current state. Shutdown abort
 in-flight connects and closes subscriptions, RPC and streaming sockets.
 
 API and agent tools enqueue only strict normalized read requests; the lease owner
-fulfills them. Interrupted reads may restart after takeover; no mutation endpoint is
-exposed. Reconnect attempts use bounded exponential backoff, and rate-limit responses
-hold subsequent reads briefly. `trading_accounts` discovers safe account metadata;
+fulfills them. Interrupted reads may restart after takeover. LIVE mutations are a
+separate durable dispatch on the same fenced session: one send claim, then
+reconciliation, never a second send. Reconnect attempts use bounded exponential
+backoff, and rate-limit responses hold subsequent reads briefly. `trading_accounts` discovers safe account metadata;
 `broker_read` discovers exact account-scoped instruments and retrieves evidence.
 
 Quotes use the existing authenticated RPC/PostgreSQL fan-out transport. UI subscription

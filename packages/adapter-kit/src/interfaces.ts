@@ -89,9 +89,13 @@ import type {
 export interface SandboxProvider {
   describe(): AdapterDescriptor<SandboxCapabilities>;
   /** Trusted host readiness probe. A declared capability or model review is not evidence. */
-  financialContainment?(
-    context: AdapterContext,
-  ): Promise<{ active: boolean; revision: string | null; checkedAt: string }>;
+  financialContainment?(context: AdapterContext): Promise<{
+    active: boolean;
+    revision: string | null;
+    checkedAt: string;
+    /** Configured Computer egress mode, reported for status only. */
+    mode?: "open" | "restricted" | "financial" | null;
+  }>;
   /** Optional live browser on the same leased screen as observe/act. */
   pageBrowser?(
     computer: ComputerRef,

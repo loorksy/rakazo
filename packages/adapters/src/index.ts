@@ -56,6 +56,12 @@ export * from "./current-time.js";
 export * from "./cursor-cloud-agent.js";
 export * from "./daytona-emulator.js";
 export * from "./daytona-sandbox.js";
+export {
+  DeploymentConfigConflictError,
+  DeploymentConfigService,
+  DeploymentRuntime,
+  startDeploymentRuntime,
+} from "./deployment-config.js";
 export * from "./deployment-model.js";
 export * from "./desktop-sandbox.js";
 export * from "./destination-emulator.js";

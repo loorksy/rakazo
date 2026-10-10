@@ -777,6 +777,8 @@ export const DE_MESSAGES: Record<string, string> = {
   "API token": "API-Token",
   "Account name": "Kontoname",
   "Broker accounts": "Brokerkonten",
+  "Last healthy": "Zuletzt gesund",
+  Verify: "Prüfen",
   Chart: "Chart",
   "Connect account": "Konto verbinden",
   "MetaApi account ID": "MetaApi-Konto-ID",

@@ -46,8 +46,9 @@ Financial material identity/request/idempotency keys are database-immutable once
 set; financial effect deletion is rejected. Dedicated versioned financial journal
 snapshots are immutable and have no conversation or Bot cascade. Journal mode is
 SIMULATION or LIVE; caches and high-frequency market telemetry are not journal
-entries. Financial claim/approval/provider-reference fields are reserved for the
-upcoming trusted execution lifecycle. No broker mutation port is exposed yet.
+entries. Financial claim, approval and provider-reference fields are the trusted LIVE
+execution lifecycle. The mutation port is host-only and stays disabled until
+LIVE admission passes.
 
 Deterministic policy tests include real executor catalog and direct dispatch,
 always-allow and reviewer non-invocation. PostgreSQL tests verify actual deletion,

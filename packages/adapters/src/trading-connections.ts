@@ -121,6 +121,31 @@ export class TradingConnections {
     if (!count.count) throw new BrokerProviderError("INVALID_REQUEST");
     return { ok: true as const };
   }
+  /** Owner check that the Worker can read the account. Returns no credential and no positions. */
+  async verify(ownerUserId: string, accountId: string, signal?: AbortSignal) {
+    await requireTradingOwner(this.prisma, ownerUserId);
+    const account = z
+      .object({
+        environment: z.enum(["DEMO", "REAL"]).optional(),
+        currency: z.string().max(8).optional(),
+        tradingAllowed: z.boolean().optional(),
+      })
+      .parse(
+        await requestBrokerRead(
+          this.prisma,
+          ownerUserId,
+          { operation: "account", accountId },
+          signal,
+        ),
+      );
+    return {
+      accountId,
+      environment: account.environment ?? null,
+      currency: account.currency ?? null,
+      tradingAllowed: account.tradingAllowed ?? null,
+      connected: true as const,
+    };
+  }
 }
 
 /** API/tools enqueue normalized read commands; only the existing Worker owns SDK sessions. */

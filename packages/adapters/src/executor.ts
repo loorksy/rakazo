@@ -93,6 +93,7 @@ import {
   renderBotDirectory,
   resolveActionApprovalDetail,
   sandboxCommandTimeoutMs,
+  selectPlaybook,
   type ToolCallStreak,
   TRADING_AGENT_OPERATING_CONTRACT,
   toolRequiresApproval,
@@ -133,6 +134,7 @@ import {
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { parse as parseShellCommand } from "shell-quote";
+import { z } from "zod";
 import {
   connectAgent,
   messageConnectedAgent,
@@ -254,6 +256,7 @@ import {
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
+import { readDeploymentConfig } from "./deployment-config.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { FinancialExecution } from "./financial-execution.js";
 import { reviewTradingSupport } from "./financial-support-review.js";
@@ -5472,6 +5475,36 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     : "Chart operation unavailable",
               });
             }
+          }
+          if (name === "trading_playbook") {
+            const parsed = z
+              .object({
+                symbol: z.string().trim().min(1).max(32),
+                timeframe: z.string().trim().max(8).optional(),
+                intent: z.enum(["ANALYZE", "RECOMMEND", "MONITOR", "MANAGE"]).optional(),
+                news: z.enum(["NONE", "PRE", "RELEASE", "POST", "UNSCHEDULED"]).optional(),
+              })
+              .safeParse(args);
+            if (!parsed.success) return finish({ error: "A broker symbol is required" });
+            const config = await readDeploymentConfig(deps.prisma).catch(() => null);
+            const selected = selectPlaybook({
+              ...parsed.data,
+              disabledGroups: config?.playbookDisabledGroups,
+            });
+            return finish({
+              version: selected.version,
+              exposure: selected.exposure,
+              macro: selected.macro,
+              authority: "NONE",
+              rules: selected.rules.map((item) => ({
+                id: item.id,
+                category: item.category,
+                scope: item.scope,
+                classification: item.classification,
+                parameters: item.parameters,
+                guidance: item.guidance,
+              })),
+            });
           }
           if (name === "trading_accounts" || name === "broker_read") {
             try {

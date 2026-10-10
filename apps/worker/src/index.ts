@@ -1,5 +1,9 @@
 import type { JobPublisher, JobWorkerHost } from "@rakazo/adapter-kit";
-import { ComposioConnector, IntegrationProviderSettings } from "@rakazo/adapters";
+import {
+  ComposioConnector,
+  IntegrationProviderSettings,
+  startDeploymentRuntime,
+} from "@rakazo/adapters";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { createWorkerSecretStore } from "./secret-store.js";
 
@@ -65,7 +69,10 @@ import { SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
 import { MarkdownMemoryStore } from "@rakazo/memory";
 
+// Owner settings apply before the logger and job runner read their environment.
+const deployment = await startDeploymentRuntime("worker");
 const logger = createRootLogger(SERVICE_NAMES.worker);
+if (deployment.error) logger.warn(deployment.error);
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -306,6 +313,7 @@ async function main() {
       await mcp.close();
       await prisma.$disconnect().catch(() => undefined);
       await pool.end().catch(() => undefined);
+      await deployment.close();
     } finally {
       await logger.flush({ timeoutMs: 2_000 });
     }

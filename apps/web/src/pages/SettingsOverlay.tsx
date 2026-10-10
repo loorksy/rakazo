@@ -2,12 +2,15 @@ import { useLingui } from "@lingui/react/macro";
 import type { AvatarStyle, SpaceMemoryConfig } from "@rakazo/contracts";
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import {
+  Activity,
   Brain,
   CloudDownload,
   Cpu,
   CreditCard,
   Gauge,
+  LineChart,
   Monitor,
+  Server,
   Settings,
   Volume2,
   XIcon,
@@ -24,6 +27,7 @@ import {
 import { BillingSettingsPanel } from "./BillingSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
+import { DeploymentSettingsPanel, TradingSettingsPanel } from "./OwnerSettingsPanels";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
 
 export type SettingsSection =
@@ -34,7 +38,10 @@ export type SettingsSection =
   | "usage"
   | "computer"
   | "billing"
-  | "updates";
+  | "updates"
+  | "trading"
+  | "deployment"
+  | "observability";
 
 type NavItem = {
   id: SettingsSection;
@@ -141,6 +148,13 @@ export function SettingsOverlay({
     { id: "usage", label: t`Usage`, icon: Gauge },
     ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
     ...(billingEnabled ? [{ id: "billing" as const, label: t`Billing`, icon: CreditCard }] : []),
+    ...(isDeploymentOwner
+      ? [
+          { id: "trading" as const, label: t`Trading`, icon: LineChart },
+          { id: "deployment" as const, label: t`Deployment`, icon: Server },
+          { id: "observability" as const, label: t`Observability`, icon: Activity },
+        ]
+      : []),
     { id: "updates", label: t`Updates`, icon: CloudDownload },
   ];
 
@@ -278,6 +292,13 @@ export function SettingsOverlay({
               {section === "billing" && billingEnabled ? <BillingSettingsPanel /> : null}
               {section === "updates" ? (
                 <UpdatesSettingsPanel isDeploymentOwner={isDeploymentOwner} />
+              ) : null}
+              {section === "trading" && isDeploymentOwner ? <TradingSettingsPanel /> : null}
+              {section === "deployment" && isDeploymentOwner ? (
+                <DeploymentSettingsPanel part="runtime" />
+              ) : null}
+              {section === "observability" && isDeploymentOwner ? (
+                <DeploymentSettingsPanel part="observability" />
               ) : null}
               {section === "models" ? (
                 <ModelSettingsOverlay embedded onClose={requestClose} />

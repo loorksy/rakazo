@@ -1,5 +1,7 @@
 # Current product correction
 
+The current report is `trading-product-report.md`. The checkpoints below are history.
+
 The current product is one owner's professional multi-Agent trading system.
 There is no mandatory Main Agent, predefined Agent taxonomy or generic/trading
 Agent split. Historical checkpoints below describe the earlier implementation;

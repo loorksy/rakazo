@@ -20,6 +20,7 @@ export function TradingConnections() {
   const [region, setRegion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   async function refresh() {
     setAccounts(await rpc<TradingConnectionView[]>("trading/connections/list"));
   }
@@ -53,6 +54,23 @@ export function TradingConnections() {
       setBusy(false);
     }
   }
+  async function verify(accountId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await rpc<{ environment: string | null; currency: string | null }>(
+        "trading/connections/verify",
+        { accountId },
+        { timeoutMs: 30000 },
+      );
+      setStatus(`${result.environment ?? ""} ${result.currency ?? ""}`.trim());
+      await refresh();
+    } catch (failure) {
+      setError(errorText(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function revoke(accountId: string) {
     setBusy(true);
     setError(null);
@@ -77,6 +95,14 @@ export function TradingConnections() {
                 <Text style={styles.label}>
                   {row.label} · {row.state} {row.environment ?? ""}
                 </Text>
+                <Text style={styles.label}>
+                  {t("Last healthy")} {row.lastHealthyAt ?? "—"}
+                </Text>
+                <NativeActionButton
+                  label={t("Verify")}
+                  disabled={busy}
+                  onPress={() => void verify(row.id)}
+                />
                 <NativeActionButton
                   label={t("Disconnect")}
                   disabled={busy}
@@ -126,6 +152,7 @@ export function TradingConnections() {
             disabled={busy || !label || !account || !token}
             onPress={() => void save()}
           />
+          {status ? <Text style={styles.label}>{status}</Text> : null}
           {error ? (
             <Text accessibilityRole="alert" style={styles.error}>
               {error}

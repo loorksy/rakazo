@@ -120,6 +120,8 @@ import {
   TradingConnections,
   TradingMissions,
   TradingOwnerControls,
+  DeploymentConfigConflictError,
+  DeploymentConfigService,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -762,6 +764,7 @@ export function createRouter(deps: RouterDeps) {
   });
   const agentSkills = createAgentSkillsService(deps.prisma);
   const tradingConnections = new TradingConnections(deps.prisma, deps.secrets);
+  const deploymentConfig = new DeploymentConfigService(deps.prisma, deps.secrets);
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -781,6 +784,15 @@ export function createRouter(deps: RouterDeps) {
           context.actor.userId,
           input.accountId,
           input.expectedRevision,
+        ),
+      ),
+      liveStatus: authed.trading.liveStatus.handler(({ context }) =>
+        new TradingOwnerControls(deps.prisma).liveStatus(context.actor.userId),
+      ),
+      abandonEffect: authed.trading.abandonEffect.handler(({ context, input }) =>
+        new TradingOwnerControls(deps.prisma).abandonUncertainEffect(
+          context.actor.userId,
+          input.effectId,
         ),
       ),
       accountAccess: authed.trading.accountAccess.handler(({ context, input }) =>
@@ -887,7 +899,23 @@ export function createRouter(deps: RouterDeps) {
         revoke: authed.trading.connections.revoke.handler(({ context, input }) =>
           tradingConnections.revoke(context.actor.userId, input.accountId),
         ),
+        verify: authed.trading.connections.verify.handler(({ context, input }) =>
+          tradingConnections.verify(context.actor.userId, input.accountId, context.signal),
+        ),
       },
+      playbook: authed.trading.playbook.handler(async ({ context }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        return deploymentConfig.playbook();
+      }),
+      setPlaybook: authed.trading.setPlaybook.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        try {
+          return await deploymentConfig.setPlaybook(context.actor.userId, input);
+        } catch (error) {
+          if (error instanceof DeploymentConfigConflictError) throw new ORPCError("CONFLICT");
+          throw error;
+        }
+      }),
       read: authed.trading.read.handler(({ context, input }) =>
         requestBrokerRead(deps.prisma, context.actor.userId, input, context.signal),
       ),
@@ -1161,6 +1189,28 @@ export function createRouter(deps: RouterDeps) {
       };
     }),
     deployment: {
+      config: authed.deployment.config.handler(async ({ context }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        return deploymentConfig.view();
+      }),
+      updateConfig: authed.deployment.updateConfig.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        try {
+          return await deploymentConfig.update(context.actor.userId, input);
+        } catch (error) {
+          if (error instanceof DeploymentConfigConflictError) throw new ORPCError("CONFLICT");
+          throw error;
+        }
+      }),
+      setSecret: authed.deployment.setSecret.handler(async ({ context, input }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        try {
+          return await deploymentConfig.setSecret(context.actor.userId, input);
+        } catch (error) {
+          if (error instanceof DeploymentConfigConflictError) throw new ORPCError("CONFLICT");
+          throw error;
+        }
+      }),
       get: authed.deployment.get.handler(async ({ context }) => {
         if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
         return deploymentDto(deps.prisma, deps.env.sandboxProvider);

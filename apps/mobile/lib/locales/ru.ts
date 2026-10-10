@@ -781,6 +781,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "API token": "Токен API",
   "Account name": "Название счёта",
   "Broker accounts": "Брокерские счета",
+  "Last healthy": "Последняя связь",
+  Verify: "Проверить",
   Chart: "График",
   "Connect account": "Подключить счёт",
   "MetaApi account ID": "ID счёта MetaApi",

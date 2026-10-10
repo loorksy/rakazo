@@ -398,6 +398,45 @@ model DeploymentSettings {
   @@map("deployment_settings")
 }
 
+/// Owner-adjustable allowlisted settings; one row, revision-checked, audited.
+model DeploymentConfig {
+  id              String   @id @default("default")
+  revision        Int      @default(0)
+  runtime         Json     @default("{}")
+  playbook        Json     @default("{\"disabledGroups\":[]}")
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("deployment_config")
+}
+
+/// Immutable owner change records; secret values are never written here.
+model DeploymentConfigAudit {
+  id          String   @id @default(cuid())
+  revision    Int
+  actorUserId String
+  changes     Json
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt], map: "deployment_config_audit_created")
+  @@map("deployment_config_audit")
+}
+
+/// Start-time configuration actually applied by each running API/Worker process.
+model ServiceRuntimeReport {
+  instanceId  String   @id
+  service     String
+  startedAt   DateTime
+  heartbeatAt DateTime
+  revision    Int
+  applied     Json
+  gitSha      String?
+
+  @@index([service, heartbeatAt], map: "service_runtime_reports_service_heartbeat")
+  @@map("service_runtime_reports")
+}
+
 model UserModelCredential {
   id          String                 @id @default(cuid())
   userId      String
@@ -1921,6 +1960,7 @@ model TradingRuntimeHealth {
   containmentRevision String?
   containmentScopeFingerprint String?
   containmentActive Boolean @default(false)
+  containmentMode String?
   riskHealthy Boolean @default(false)
   effectsHealthy Boolean @default(false)
   emergencyStopHealthy Boolean @default(false)

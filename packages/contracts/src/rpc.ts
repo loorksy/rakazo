@@ -16,6 +16,13 @@ import {
 import { ChartRenderResponseSchema } from "./chart-inspection.js";
 import { ChartCommandSchema, ChartEventSchema, ChartResponseSchema } from "./cloud-chart.js";
 import {
+  DeploymentConfigUpdateSchema,
+  DeploymentConfigViewSchema,
+  DeploymentSecretUpdateSchema,
+  PlaybookGroupUpdateSchema,
+  PlaybookSettingsViewSchema,
+} from "./deployment-config.js";
+import {
   ActionApprovalRuleSchema,
   ActionAutoReviewSettingsSchema,
   AgentSecretInputSchema,
@@ -108,6 +115,7 @@ import {
   BrokerReadCommandSchema,
   TradingConnectionInputSchema,
   TradingConnectionViewSchema,
+  TradingLiveStatusSchema,
 } from "./trading.js";
 import {
   TradingAccountAccessViewSchema,
@@ -220,6 +228,14 @@ export const appContract = {
           requiresNewMandate: z.literal(true),
         }),
       ),
+    liveStatus: oc.output(TradingLiveStatusSchema),
+    abandonEffect: oc.input(z.strictObject({ effectId: Id })).output(
+      z.strictObject({
+        effectId: Id,
+        accountId: Id,
+        requiresReconciliation: z.literal(true),
+      }),
+    ),
     resolveMandate: oc.input(MandateResolutionSchema).output(TradingMandateViewSchema),
     controlMandate: oc.input(MandateControlSchema).output(TradingMandateViewSchema),
     accountGuardrails: oc
@@ -238,7 +254,18 @@ export const appContract = {
       list: oc.output(z.array(TradingConnectionViewSchema)),
       save: oc.input(TradingConnectionInputSchema).output(z.object({ id: Id })),
       revoke: oc.input(z.object({ accountId: Id })).output(z.object({ ok: z.literal(true) })),
+      verify: oc.input(z.object({ accountId: Id })).output(
+        z.strictObject({
+          accountId: Id,
+          environment: z.enum(["DEMO", "REAL"]).nullable(),
+          currency: z.string().nullable(),
+          tradingAllowed: z.boolean().nullable(),
+          connected: z.literal(true),
+        }),
+      ),
     },
+    playbook: oc.output(PlaybookSettingsViewSchema),
+    setPlaybook: oc.input(PlaybookGroupUpdateSchema).output(PlaybookSettingsViewSchema),
     read: oc.input(BrokerReadCommandSchema).output(z.json()),
     subscribe: oc
       .input(z.object({ accountId: Id, instrumentIds: z.array(Id).max(16) }))
@@ -279,6 +306,10 @@ export const appContract = {
   },
   bootstrap: oc.input(z.object({ botId: Id.optional() })).output(AppBootstrapSchema),
   deployment: {
+    /** Owner-only allowlisted runtime settings; bootstrap identity secrets report presence only. */
+    config: oc.output(DeploymentConfigViewSchema),
+    updateConfig: oc.input(DeploymentConfigUpdateSchema).output(DeploymentConfigViewSchema),
+    setSecret: oc.input(DeploymentSecretUpdateSchema).output(DeploymentConfigViewSchema),
     get: oc.output(DeploymentSettingsSchema),
     update: oc
       .input(

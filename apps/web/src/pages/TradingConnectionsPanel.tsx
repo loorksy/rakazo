@@ -18,6 +18,7 @@ export function TradingConnectionsPanel() {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verified, setVerified] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -54,6 +55,22 @@ export function TradingConnectionsPanel() {
       setBusy(false);
     }
   }
+  async function verify(accountId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await rpc.trading.connections.verify({ accountId });
+      setAccounts(await rpc.trading.connections.list());
+      setError(null);
+      setVerified(
+        `${result.environment ?? ""} ${result.currency ?? ""}`.trim() || result.accountId,
+      );
+    } catch (failure) {
+      setError(errorText(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function revoke(accountId: string) {
     setBusy(true);
     setError(null);
@@ -84,17 +101,46 @@ export function TradingConnectionsPanel() {
                 <div>
                   <p>{row.label}</p>
                   <p className="text-xs text-muted-foreground">
-                    {row.state} {row.environment ?? ""}
+                    {row.state}
+                    {row.environment ? ` · ${row.environment}` : ""}
+                    {row.failureCode ? ` · ${row.failureCode}` : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    <Trans>Last healthy</Trans>{" "}
+                    {row.lastHealthyAt ? new Date(row.lastHealthyAt).toLocaleString() : "—"}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => void revoke(row.id)}
-                >
-                  <Trans>Disconnect</Trans>
-                </Button>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void verify(row.id)}
+                  >
+                    <Trans>Verify</Trans>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setLabel(row.label);
+                      setAccount(row.providerAccountId);
+                      setRegion(row.region ?? "");
+                      setToken("");
+                    }}
+                  >
+                    <Trans>Rotate token</Trans>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void revoke(row.id)}
+                  >
+                    <Trans>Disconnect</Trans>
+                  </Button>
+                </div>
               </div>
             ))}
           <TradingJournal />
@@ -157,6 +203,7 @@ export function TradingConnectionsPanel() {
               {busy ? t`Saving…` : t`Connect account`}
             </Button>
           </form>
+          {verified ? <p className="text-sm text-muted-foreground">{verified}</p> : null}
           {error ? (
             <p role="alert" className="text-sm text-destructive">
               {error}

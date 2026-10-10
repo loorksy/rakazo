@@ -143,7 +143,11 @@ export class DockerSandboxProvider implements SandboxProvider {
       active: boolean;
       revision: string | null;
       checkedAt: string;
+      mode?: string;
     }>(response, context.signal);
+    const mode = (["open", "restricted", "financial"] as const).find(
+      (value) => value === evidence.mode,
+    ) ?? null;
     const age = Date.now() - Date.parse(evidence.checkedAt);
     if (
       evidence.active !== true ||
@@ -152,8 +156,8 @@ export class DockerSandboxProvider implements SandboxProvider {
       age < -2000 ||
       age > 5000
     )
-      return { active: false, revision: null, checkedAt: new Date().toISOString() };
-    return { active: true, revision: evidence.revision, checkedAt: evidence.checkedAt };
+      return { active: false, revision: null, checkedAt: new Date().toISOString(), mode };
+    return { active: true, revision: evidence.revision, checkedAt: evidence.checkedAt, mode };
   }
 
   private headers(context: AdapterContext, botId?: string) {

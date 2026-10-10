@@ -5,7 +5,12 @@ import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({ list: vi.fn(), save: vi.fn(), revoke: vi.fn() }));
+const api = vi.hoisted(() => ({
+  list: vi.fn(),
+  save: vi.fn(),
+  revoke: vi.fn(),
+  verify: vi.fn(),
+}));
 vi.mock("../lib/rpc", () => ({ rpc: { trading: { connections: api } } }));
 vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children: ReactNode }) => children,
@@ -101,7 +106,8 @@ describe("broker connection settings", () => {
     const button = [...host.querySelectorAll("button")].find(
       (item) => item.textContent === "Disconnect",
     );
-    expect(host.textContent).toContain("CONNECTED DEMO");
+    expect(host.textContent).toContain("CONNECTED");
+    expect(host.textContent).toContain("DEMO");
     await act(async () => button?.click());
     expect(api.revoke).toHaveBeenCalledWith({ accountId: "fixture-account" });
   });

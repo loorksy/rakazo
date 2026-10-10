@@ -206,6 +206,22 @@ export const builtinAgentTools: ConnectorTool[] = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
+    name: "trading_playbook",
+    description:
+      "Retrieve the shared trading playbook for one instrument, timeframe and task. Gold-only guidance is returned only for gold. The result is analysis context: it does not create a mandate, move a stop or place an order. Safety, the mandate and the risk engine outrank every heuristic, and WAIT is a valid result.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        symbol: { type: "string", description: "Broker symbol, for example EURUSD or XAUUSD." },
+        timeframe: { type: "string", description: "Chart timeframe such as M15, H1 or D1." },
+        intent: { type: "string", enum: ["ANALYZE", "RECOMMEND", "MONITOR", "MANAGE"] },
+        news: { type: "string", enum: ["NONE", "PRE", "RELEASE", "POST", "UNSCHEDULED"] },
+      },
+      required: ["symbol"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "broker_read",
     description:
       "Read broker-native account, positions, pending orders, capabilities, instruments, specifications, pricing or candles. First list trading_accounts, then discover exact account-scoped instrument IDs using operation instruments. Use those IDs; do not guess broker symbol suffixes. History is paged (limit 1–1000); timeframe uses MetaTrader units such as 15m, 1h, 4h, 1d. This tool cannot execute or modify trades.",

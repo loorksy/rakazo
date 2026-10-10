@@ -757,6 +757,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "API token": "API 令牌",
   "Account name": "账户名称",
   "Broker accounts": "经纪商账户",
+  "Last healthy": "最近正常",
+  Verify: "验证",
   Chart: "图表",
   "Connect account": "连接账户",
   "MetaApi account ID": "MetaApi 账户 ID",

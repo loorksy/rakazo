@@ -142,6 +142,7 @@ export class TradingRuntimeHealthProbe {
     await this.logger.flush({ timeoutMs: 1000 });
     const data = {
       containmentActive,
+      containmentMode: evidence?.mode ?? null,
       containmentRevision: containmentActive ? FINANCIAL_CONTAINMENT_REVISION : null,
       containmentScopeFingerprint: createHash("sha256")
         .update(JSON.stringify(computers))

@@ -8,6 +8,7 @@ export * from "./chart-indicator.js";
 export * from "./chart-inspection.js";
 export * from "./cloud-chart.js";
 export * from "./cloudflare-ai-gateway.js";
+export * from "./deployment-config.js";
 export * from "./desktop.js";
 export * from "./domain.js";
 export * from "./events.js";

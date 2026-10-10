@@ -162,6 +162,7 @@ app.get("/financial-containment", async (c) => {
     active,
     revision: active ? FINANCIAL_EGRESS_REVISION : null,
     checkedAt: new Date().toISOString(),
+    mode: computerEgressMode,
   });
 });
 

@@ -46,6 +46,7 @@ const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "trading_mission",
   "trade_prepare",
   "broker_read",
+  "trading_playbook",
   "browser_snapshot",
   "cloud_agent_status",
   "computer_observe",

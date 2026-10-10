@@ -1,3 +1,4 @@
+import { TradingLiveStatusSchema } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
 import { BrokerStateSchema } from "./broker-state.js";
@@ -148,7 +149,7 @@ export class TradingOwnerControls {
     const now = this.now();
     const fresh = (value: Date | null | undefined, age: number) =>
       !!value && now.getTime() - value.getTime() <= age;
-    return {
+    return TradingLiveStatusSchema.parse({
       enabled: settings.tradingLiveEnabled,
       runtime: {
         fresh: fresh(runtime?.observedAt, 15000),
@@ -192,7 +193,7 @@ export class TradingOwnerControls {
             })),
         };
       }),
-    };
+    });
   }
   async reconcileDrift(ownerUserId: string, accountId: string, expectedRevision: number) {
     await requireTradingOwner(this.prisma, ownerUserId);

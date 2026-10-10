@@ -4,12 +4,16 @@ import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 loadRootEnv();
 
 import { serve } from "@hono/node-server";
+import { startDeploymentRuntime } from "@rakazo/adapters";
 import { SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
 import { createApp } from "./app.js";
 import { loadEnv } from "./env.js";
 
+// Owner settings apply before the logger and app read their environment.
+const deployment = await startDeploymentRuntime("api");
 const logger = createRootLogger(SERVICE_NAMES.api);
+if (deployment.error) logger.warn(deployment.error);
 
 try {
   const env = loadEnv();
@@ -39,6 +43,7 @@ try {
     await closed;
     clearTimeout(grace);
     await stop();
+    await deployment.close();
     await logger.flush({ timeoutMs: 2_000 });
   };
   process.once("SIGTERM", () => void shutdown());
