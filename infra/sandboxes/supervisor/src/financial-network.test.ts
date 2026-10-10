@@ -13,7 +13,7 @@ function fixture() {
       },
       Cmd: ["./node_modules/.bin/tsx", "src/financial-egress-entry.ts"],
       WorkingDir: "/app/infra/sandboxes/supervisor",
-      Env: ["PATH=/usr/bin", "NODE_VERSION=22"],
+      Env: ["PATH=/usr/bin", "NODE_VERSION=22", "GIT_SHA=0123456789abcdef"],
     },
     HostConfig: {
       Privileged: false,

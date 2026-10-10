@@ -36,7 +36,7 @@ export function trustedResearchGateway(
     ) &&
     // Image runtime metadata is allowed; inherited service credentials are not.
     (info.Config.Env ?? []).every((entry) =>
-      /^(PATH|NODE_VERSION|YARN_VERSION|PNPM_HOME|COREPACK_HOME|NODE_ENV)=/.test(entry),
+      /^(PATH|NODE_VERSION|YARN_VERSION|PNPM_HOME|COREPACK_HOME|NODE_ENV|GIT_SHA)=/.test(entry),
     )
   );
 }
