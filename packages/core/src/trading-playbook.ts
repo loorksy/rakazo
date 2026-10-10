@@ -77,36 +77,143 @@ const METALS: Record<string, { currencies: string[]; themes: string[] }> = {
   SILVER: { currencies: ["XAG", "USD"], themes: ["silver", "metals"] },
 };
 
-/** Broker symbol is authoritative; this only classifies it for knowledge retrieval. */
-export function instrumentExposure(symbol: string): InstrumentExposure {
-  const root = symbol.split(/[^A-Za-z0-9]/)[0]?.toUpperCase() ?? "";
-  const metal = Object.entries(METALS).find(([name]) => root === name || root.startsWith(name));
-  if (metal) {
+const PAIR_CODES = ["USD", "EUR", "GBP", "JPY", "CHF", "AUD", "NZD", "CAD", "CNH", "XAU", "XAG"];
+/** Short broker decorations around a pair. Not a list of tradable symbols. */
+const AFFIXES = new Set([
+  "",
+  "M",
+  "I",
+  "R",
+  "S",
+  "X",
+  "Z",
+  "FX",
+  "SB",
+  "PRO",
+  "RAW",
+  "ECN",
+  "CASH",
+  "SPOT",
+  "MICRO",
+  "MINI",
+]);
+
+function normalizeCurrency(value: string | null | undefined): string | null {
+  const code = value?.trim().toUpperCase() ?? "";
+  if (code === "GOLD") return "XAU";
+  if (code === "SILVER") return "XAG";
+  return /^[A-Z]{3}$/.test(code) ? code : null;
+}
+
+function fromPair(root: string, base: string, quote: string): InstrumentExposure {
+  const metal = METALS[base] ?? (base === "XAU" || base === "XAG" ? METALS[base] : undefined);
+  if (metal || base === "XAU" || base === "XAG") {
+    const currencies = base === "XAG" || base === "SILVER" ? ["XAG", quote] : ["XAU", quote];
     return {
       root,
       instrumentClass: "METAL",
-      currencies: metal[1].currencies,
-      themes: metal[1].themes,
-    };
-  }
-  if (/^[A-Z]{6}$/.test(root)) {
-    const base = root.slice(0, 3);
-    const quote = root.slice(3, 6);
-    return {
-      root,
-      instrumentClass: "FX",
-      currencies: [base, quote],
+      currencies,
       themes: [
-        ...(CURRENCY_CONTEXT[base]?.themes ?? []),
-        ...(CURRENCY_CONTEXT[quote]?.themes ?? []),
+        ...new Set([
+          ...(metal?.themes ?? ["safe-haven"]),
+          ...(CURRENCY_CONTEXT[quote]?.themes ?? []),
+        ]),
       ],
     };
   }
-  return { root, instrumentClass: "OTHER", currencies: [], themes: [] };
+  return {
+    root,
+    instrumentClass: "FX",
+    currencies: [base, quote],
+    themes: [...(CURRENCY_CONTEXT[base]?.themes ?? []), ...(CURRENCY_CONTEXT[quote]?.themes ?? [])],
+  };
 }
 
-export function macroExposure(symbol: string) {
-  const exposure = instrumentExposure(symbol);
+/**
+ * Knowledge classification only. The broker symbol passed to execution is never rewritten.
+ * A verified base/quote from the broker specification wins. Otherwise a known pair is read
+ * from inside a short prefix or suffix; an ambiguous string stays unclassified.
+ */
+export function instrumentExposure(
+  symbol: string,
+  specification?: { baseCurrency?: string | null; quoteCurrency?: string | null },
+): InstrumentExposure {
+  const root = symbol.split(/[^A-Za-z0-9]/)[0]?.toUpperCase() ?? "";
+  const specifiedBase = normalizeCurrency(specification?.baseCurrency);
+  const specifiedQuote = normalizeCurrency(specification?.quoteCurrency);
+  if (specifiedBase && specifiedQuote)
+    return fromPair(root || symbol.toUpperCase(), specifiedBase, specifiedQuote);
+  const letters = symbol.toUpperCase().replace(/[^A-Z]/g, "");
+  const matches: Array<{ base: string; quote: string; affix: string }> = [];
+  for (let index = 0; index + 6 <= letters.length; index++) {
+    const base = letters.slice(index, index + 3);
+    const quote = letters.slice(index + 3, index + 6);
+    if (!PAIR_CODES.includes(base) || !PAIR_CODES.includes(quote) || base === quote) continue;
+    const affix = `${letters.slice(0, index)} ${letters.slice(index + 6)}`;
+    const [prefix, suffix] = affix.split(" ");
+    if (AFFIXES.has(prefix ?? "") && AFFIXES.has(suffix ?? ""))
+      matches.push({ base, quote, affix });
+  }
+  if (letters.startsWith("GOLD") && AFFIXES.has(letters.slice(4)))
+    return fromPair(root || letters, "XAU", "USD");
+  if (letters.startsWith("SILVER") && AFFIXES.has(letters.slice(6)))
+    return fromPair(root || letters, "XAG", "USD");
+  const unique = [
+    ...new Map(matches.map((match) => [`${match.base}${match.quote}`, match])).values(),
+  ];
+  if (unique.length === 1) return fromPair(root || letters, unique[0]!.base, unique[0]!.quote);
+  return { root: root || letters, instrumentClass: "OTHER", currencies: [], themes: [] };
+}
+
+const NEWS_PRE_MS = 15 * 60 * 1000;
+const NEWS_RELEASE_MS = 60 * 1000;
+const NEWS_POST_MS = 30 * 60 * 1000;
+const NEWS_RANK: Record<PlaybookNews, number> = {
+  NONE: 0,
+  ANY: 0,
+  UNSCHEDULED: 0,
+  POST: 1,
+  PRE: 2,
+  RELEASE: 3,
+};
+
+export interface ScheduledEventPhase {
+  occursAt: string;
+  impact: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+  currency: string;
+}
+
+/** High-impact events for these currencies only. No event list means no phase, never a guessed one. */
+export function newsPhaseForCurrencies(
+  events: ScheduledEventPhase[],
+  currencies: string[],
+  now: Date,
+): PlaybookNews {
+  const wanted = new Set(currencies);
+  let phase: PlaybookNews = "NONE";
+  for (const event of events) {
+    if (event.impact !== "HIGH" || !wanted.has(event.currency)) continue;
+    const at = Date.parse(event.occursAt);
+    if (!Number.isFinite(at)) continue;
+    const delta = now.getTime() - at;
+    const next: PlaybookNews =
+      delta >= -NEWS_PRE_MS && delta < 0
+        ? "PRE"
+        : delta >= 0 && delta <= NEWS_RELEASE_MS
+          ? "RELEASE"
+          : delta > NEWS_RELEASE_MS && delta <= NEWS_POST_MS
+            ? "POST"
+            : "NONE";
+    if (NEWS_RANK[next] > NEWS_RANK[phase]) phase = next;
+  }
+  return phase;
+}
+
+export function macroExposure(
+  symbol: string,
+  specification?: { baseCurrency?: string | null; quoteCurrency?: string | null },
+) {
+  const exposure = instrumentExposure(symbol, specification);
   return exposure.currencies.map((currency) => ({
     currency,
     ...(CURRENCY_CONTEXT[currency] ?? {
@@ -495,6 +602,9 @@ export const PLAYBOOK_GROUPS = [
 
 export interface PlaybookQuery {
   symbol?: string;
+  /** Verified broker specification. Used for classification, never as an order symbol. */
+  baseCurrency?: string | null;
+  quoteCurrency?: string | null;
   timeframe?: string;
   intent?: PlaybookIntent;
   /** PRE, RELEASE, POST, UNSCHEDULED, or NONE when no event is in view. */
@@ -512,7 +622,12 @@ export interface PlaybookSelection {
 
 /** Relevant slice only. Gold-only rules stay out unless the instrument is gold. */
 export function selectPlaybook(query: PlaybookQuery): PlaybookSelection {
-  const exposure = query.symbol ? instrumentExposure(query.symbol) : null;
+  const exposure = query.symbol
+    ? instrumentExposure(query.symbol, {
+        baseCurrency: query.baseCurrency,
+        quoteCurrency: query.quoteCurrency,
+      })
+    : null;
   const disabled = new Set(query.disabledGroups ?? []);
   const news = query.news ?? "NONE";
   const matched = TRADING_PLAYBOOK.filter((item) => {

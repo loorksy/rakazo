@@ -78,6 +78,7 @@ import {
   formatSkillsCatalogInstruction,
   humanizeToolName,
   inferAttachmentMimeType,
+  instrumentExposure,
   isCallClientNonce,
   isMessagingChannelRun,
   isOneShotRoutineCrons,
@@ -85,6 +86,7 @@ import {
   messagingChannelId,
   messagingChannelPrivacyBlock,
   messagingDmSurfaceNote,
+  newsPhaseForCurrencies,
   nextCronDateAcross,
   nextFence,
   planActionGate,
@@ -258,6 +260,7 @@ import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safe
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { readDeploymentConfig } from "./deployment-config.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
+import { readScheduledEvents } from "./economic-calendar.js";
 import { FinancialExecution } from "./financial-execution.js";
 import { reviewTradingSupport } from "./financial-support-review.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
@@ -5487,14 +5490,55 @@ export function createRunExecutor(deps: ExecutorDeps) {
               .safeParse(args);
             if (!parsed.success) return finish({ error: "A broker symbol is required" });
             const config = await readDeploymentConfig(deps.prisma).catch(() => null);
+            const listed = await deps.prisma.brokerInstrument.findMany({
+              where: { brokerSymbol: parsed.data.symbol, active: true },
+              select: { specification: true },
+              take: 2,
+            });
+            const specification = listed.length === 1 ? listed[0]?.specification : null;
+            const currencies =
+              specification && typeof specification === "object"
+                ? {
+                    baseCurrency:
+                      "baseCurrency" in specification
+                        ? String(specification.baseCurrency ?? "")
+                        : null,
+                    quoteCurrency:
+                      "quoteCurrency" in specification
+                        ? String(specification.quoteCurrency ?? "")
+                        : null,
+                  }
+                : undefined;
+            const classified = instrumentExposure(parsed.data.symbol, currencies);
+            const now = new Date();
+            const events = await readScheduledEvents(deps.prisma, classified.currencies, now).catch(
+              () => [],
+            );
+            const phase = newsPhaseForCurrencies(
+              events.flatMap((event) =>
+                event.impact === "HIGH" ||
+                event.impact === "MEDIUM" ||
+                event.impact === "LOW" ||
+                event.impact === "UNKNOWN"
+                  ? [{ occursAt: event.occursAt, impact: event.impact, currency: event.currency }]
+                  : [],
+              ),
+              classified.currencies,
+              now,
+            );
             const selected = selectPlaybook({
               ...parsed.data,
+              baseCurrency: currencies?.baseCurrency,
+              quoteCurrency: currencies?.quoteCurrency,
+              news: phase === "NONE" ? parsed.data.news : phase,
               disabledGroups: config?.playbookDisabledGroups,
             });
             return finish({
               version: selected.version,
               exposure: selected.exposure,
               macro: selected.macro,
+              newsPhase: phase,
+              events,
               authority: "NONE",
               rules: selected.rules.map((item) => ({
                 id: item.id,

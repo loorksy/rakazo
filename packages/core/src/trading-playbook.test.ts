@@ -7,6 +7,7 @@ import {
   instrumentExposure,
   macroExposure,
   newsCandleEvidence,
+  newsPhaseForCurrencies,
   PLAYBOOK_GROUPS,
   rangeMultiple,
   resolvePlaybookAction,
@@ -34,6 +35,40 @@ describe("trading playbook retrieval", () => {
     expect(macroExposure("XAUUSD").map((row) => row.currency)).toEqual(["XAU", "USD"]);
   });
 
+  it.each(["EURUSD", "EURUSDm", "EURUSD.pro", "EURUSD-ECN", "mEURUSD"])(
+    "classifies %s as euro-dollar without using it as an execution symbol",
+    (symbol) => {
+      expect(instrumentExposure(symbol)).toMatchObject({
+        instrumentClass: "FX",
+        currencies: ["EUR", "USD"],
+        root: symbol.split(/[^A-Za-z0-9]/)[0]?.toUpperCase(),
+      });
+      expect(selectPlaybook({ symbol }).rules.some((rule) => rule.scope === "XAUUSD")).toBe(false);
+    },
+  );
+  it.each(["GBPJPY", "GBPJPYraw"])("classifies %s as sterling-yen", (symbol) => {
+    expect(instrumentExposure(symbol).currencies).toEqual(["GBP", "JPY"]);
+    expect(macroExposure(symbol).map((row) => row.bank)).toEqual([
+      "Bank of England",
+      "Bank of Japan",
+    ]);
+  });
+  it.each(["XAUUSD", "XAUUSDm", "XAUUSD.pro", "mXAUUSD", "GOLD.m"])(
+    "keeps %s on the gold playbook",
+    (symbol) => {
+      const selected = selectPlaybook({ symbol, intent: "ANALYZE" });
+      expect(selected.exposure?.instrumentClass).toBe("METAL");
+      expect(selected.exposure?.currencies).toEqual(["XAU", "USD"]);
+      expect(selected.rules.map((rule) => rule.id)).toContain("XAU.SAFE_HAVEN");
+    },
+  );
+  it("uses broker specification currencies and does not guess an ambiguous symbol", () => {
+    expect(
+      instrumentExposure("BROKER-ALIAS", { baseCurrency: "GBP", quoteCurrency: "JPY" }).currencies,
+    ).toEqual(["GBP", "JPY"]);
+    expect(instrumentExposure("EURUSDEUR").instrumentClass).toBe("OTHER");
+    expect(instrumentExposure("EURUSDEUR").currencies).toEqual([]);
+  });
   it("does not give EURUSD any gold-only rule", () => {
     const selected = selectPlaybook({ symbol: "EURUSD", intent: "ANALYZE" });
     expect(selected.rules.some((rule) => rule.scope === "XAUUSD")).toBe(false);
@@ -143,6 +178,39 @@ describe("trading playbook retrieval", () => {
         disabledGroups: ["news-protocol"],
       }).rules.map((rule) => rule.id),
     ).toContain("NEWS.FREEZE");
+  });
+});
+
+describe("scheduled news phase", () => {
+  const at = (minutes: number) =>
+    new Date(Date.parse("2026-10-09T12:30:00.000Z") + minutes * 60000);
+  const event = (currency: string) => ({
+    occursAt: "2026-10-09T12:30:00.000Z",
+    impact: "HIGH" as const,
+    currency,
+  });
+  it("maps the currency pair and leaves other currencies alone", () => {
+    expect(newsPhaseForCurrencies([event("USD"), event("EUR")], ["EUR", "USD"], at(-10))).toBe(
+      "PRE",
+    );
+    expect(newsPhaseForCurrencies([event("USD")], ["GBP", "JPY"], at(-10))).toBe("NONE");
+    expect(newsPhaseForCurrencies([event("USD")], ["XAU", "USD"], at(0))).toBe("RELEASE");
+    expect(newsPhaseForCurrencies([event("USD")], ["EUR", "USD"], at(10))).toBe("POST");
+    expect(newsPhaseForCurrencies([], ["EUR", "USD"], at(-10))).toBe("NONE");
+    expect(
+      newsPhaseForCurrencies([{ ...event("USD"), impact: "LOW" }], ["EUR", "USD"], at(-10)),
+    ).toBe("NONE");
+  });
+  it("lets that phase override an entry heuristic", () => {
+    expect(
+      resolvePlaybookAction({
+        riskDecision: "ALLOW",
+        hasMandate: true,
+        emergencyStop: false,
+        newsFreeze: newsPhaseForCurrencies([event("EUR")], ["EUR", "USD"], at(-5)) !== "NONE",
+        heuristic: "ENTER",
+      }).precedence,
+    ).toBe("NEWS_PROTECTION");
   });
 });
 

@@ -1913,6 +1913,27 @@ model TradingPositionHistory {
   @@map("trading_position_histories")
 }
 
+/// Rebuildable provider calendar. Missing rows are not a claim that the calendar is empty.
+model EconomicCalendarEvent {
+  id        String   @id
+  provider  String
+  eventKey  String
+  title     String
+  currency  String
+  country   String?
+  impact    String
+  occursAt  DateTime
+  actual    String?
+  forecast  String?
+  previous  String?
+  revision  String?
+  fetchedAt DateTime
+
+  @@unique([provider, eventKey])
+  @@index([occursAt], map: "economic_calendar_events_time")
+  @@map("economic_calendar_events")
+}
+
 // Rebuildable state; durable supervision/drift records copy evidence they require.
 model TradingBrokerSnapshot {
   accountId String @id

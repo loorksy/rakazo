@@ -13,6 +13,7 @@ import {
   accountRiskCapacity,
   financialDecimal,
   financialUnits,
+  instrumentExposure,
   mandateActionAuthority,
 } from "@rakazo/core";
 import {
@@ -23,6 +24,7 @@ import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
+import { scheduledNewsPhase } from "./economic-calendar.js";
 import { financialPreflight } from "./financial-preflight.js";
 import { attributedFinancialAssessment, financialTarget } from "./financial-target.js";
 
@@ -300,6 +302,11 @@ export class TradeProposals {
       });
       if ((latest?.version ?? 0) >= 128) throw new Error("Preview capacity reached");
       const target = await financialTarget(tx, actor.ownerUserId, mandate.id, action, facts);
+      const newsPhase = await scheduledNewsPhase(
+        tx,
+        instrumentExposure(action.brokerSymbol).currencies,
+        this.now(),
+      );
       let { assessment: risk } = attributedFinancialAssessment({
         action,
         envelope,
@@ -314,6 +321,12 @@ export class TradeProposals {
         mandate.observedAt.getTime() > this.now().getTime() + 2000
       )
         risk = { decision: "DENY", code: "STALE_MISSION_ACCOUNTING" };
+      if (
+        (newsPhase === "PRE" || newsPhase === "RELEASE") &&
+        action.operation === "OPEN" &&
+        risk.decision === "ALLOW"
+      )
+        risk = { decision: "DENY", code: "NEWS_PROTECTION" };
       const authority = mandateActionAuthority({
         status: mandate.status,
         envelope,

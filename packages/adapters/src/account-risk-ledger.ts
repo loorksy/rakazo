@@ -10,6 +10,7 @@ import {
   accountRiskCapacity,
   financialDecimal,
   financialUnits,
+  instrumentExposure,
   mandateActionAuthority,
 } from "@rakazo/core";
 import {
@@ -21,6 +22,7 @@ import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
+import { scheduledNewsPhase } from "./economic-calendar.js";
 import { attributedFinancialAssessment, financialTarget } from "./financial-target.js";
 import { requireLiveReadiness } from "./live-readiness.js";
 
@@ -242,6 +244,15 @@ export class AccountRiskLedger {
         ],
       },
     });
+    if (action.operation === "OPEN") {
+      const phase = await scheduledNewsPhase(
+        tx,
+        instrumentExposure(action.brokerSymbol).currencies,
+        this.now(),
+      );
+      if (phase === "PRE" || phase === "RELEASE")
+        throw new Error("News protection: new risk is frozen around a high-impact release");
+    }
     const target = await financialTarget(tx, actor.ownerUserId, mandate.id, action, facts);
     const { assessment } = attributedFinancialAssessment({
       action,

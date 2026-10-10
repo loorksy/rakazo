@@ -1,6 +1,7 @@
 import type { JobPublisher, JobWorkerHost } from "@rakazo/adapter-kit";
 import {
   ComposioConnector,
+  EconomicCalendarPoller,
   IntegrationProviderSettings,
   startDeploymentRuntime,
 } from "@rakazo/adapters";
@@ -274,6 +275,8 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, databaseCapacityBackoffMs(attempt)));
     }
   }
+  const calendar = new EconomicCalendarPoller(prisma, logger);
+  calendar.start();
   const tradingHealth = new TradingRuntimeHealthProbe(
     prisma,
     sandbox,
@@ -302,6 +305,7 @@ async function main() {
     if (stopping) return;
     stopping = true;
     try {
+      calendar.close();
       await tradingHealth.close();
       await reconciler.stop();
       await brokerSupervisor.close();

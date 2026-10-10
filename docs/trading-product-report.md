@@ -85,4 +85,6 @@ These fixture results are not a production broker certification.
 | `SANDBOX_COMPUTER_EGRESS` | process environment | no | supervisor; the UI cannot set it to `open` |
 
 `ECONOMIC_CALENDAR_PROVIDER` (`fmp` or `finnhub`) and `ECONOMIC_CALENDAR_API_KEY` are
-optional. The playbook does not invent calendar rows when they are unset.
+optional. The Worker polls a bounded window into a cache. Agents see those events
+for the instrument's currencies, and the pre-release and release minute freeze new
+entries. An unset or failed feed adds no events.
