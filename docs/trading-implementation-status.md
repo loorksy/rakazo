@@ -18,14 +18,14 @@ Owner chart creation can attach a chart to any eligible Agent. The legacy MAIN
 scope migrates to PRIVATE without widening access.
 
 All 117 forward migrations apply to a fresh fixture database. Expanded PostgreSQL
-coverage passes: 75 mission/account cases, 28 chart cases, 8 shared-account risk
+coverage passes: 83 mission/account cases, 28 chart cases, 8 shared-account risk
 cases and 6 owner admission cases. The risk race uses distinct Agent IDs and
 separate mandates. Focused identity, support-review, executor, onboarding and chart
 UI suites pass. Web, API, Worker, adapters, database and mobile type checks and the
 web production build pass. No broker mutation or private broker credential is used.
 
 The full transformation is still unfinished. LIVE provider dispatch/readiness,
-real owner-position supervision/manual drift, explicit mission resume and
+real owner-position supervision/manual drift and
 pre-authorized non-FREEZE finishing effects require further implementation.
 Support review restores ordinary Computer use but is not a verified hostile-code
 containment guarantee. These results must not be reported as full completion.
@@ -247,3 +247,12 @@ run sequentially on the dedicated fixture database. Focused risk/reviewer/schedu
 pass 153 tests; seven central executor/security suites pass 241. Database, adapters,
 core, API and Worker TypeScript checks pass, along with scoped Biome and whitespace
 checks. All 115 forward migrations apply without reset or checksum/TLS bypass.
+
+
+## Owner resume checkpoint
+
+Owner-only resume now preserves exact approved authority and schedules a durable
+current reevaluation through the existing Worker. The expanded mission gate covers
+current book valuation, frozen accounts, expiry, sticky targets/risk stops, revision
+replay and started effects. Resume and separate account unfreeze controls are
+available on Web/Electron and native mobile. LIVE resume remains unavailable.

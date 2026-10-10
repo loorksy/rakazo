@@ -69,7 +69,7 @@ const mandate = {
 };
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
-function fixtures(mode = "SIMULATION") {
+function fixtures(mode = "SIMULATION", status = "AWAITING_APPROVAL") {
   api.missions.mockResolvedValue({
     goal: {
       id: "goal",
@@ -90,7 +90,7 @@ function fixtures(mode = "SIMULATION") {
       },
     },
     plans: [],
-    mandates: [{ ...mandate, envelope: { ...envelope, mode } }],
+    mandates: [{ ...mandate, status, envelope: { ...envelope, mode } }],
   });
   api.accountGuardrails.mockResolvedValue({
     version: 1,
@@ -169,4 +169,30 @@ it("never approves before separately configured owner account guardrails", async
   await render();
   expect(button("Approve mandate")?.disabled).toBe(true);
   expect(api.setAccountGuardrails).not.toHaveBeenCalled();
+});
+
+it("resumes only the exact paused mandate revision without sending an enlarged envelope", async () => {
+  fixtures("SIMULATION", "PAUSED");
+  api.controlMandate.mockResolvedValue({ ...mandate, status: "ACTIVE", revision: 8 });
+  await render();
+  expect(button("Resume")?.disabled).toBe(false);
+  await act(async () => button("Resume")?.click());
+  expect(api.controlMandate).toHaveBeenCalledWith({
+    id: "mandate",
+    expectedRevision: 7,
+    action: "RESUME",
+  });
+  expect(button("Resume")).toBeUndefined();
+});
+it("keeps resume disabled until the owner separately unfreezes the account", async () => {
+  fixtures("SIMULATION", "PAUSED");
+  api.accountGuardrails.mockResolvedValue({ ...(await api.accountGuardrails()), frozen: true });
+  await render();
+  expect(button("Resume")?.disabled).toBe(true);
+});
+
+it("never offers resume for a sticky risk-stop outcome", async () => {
+  fixtures("SIMULATION", "RISK_STOPPED");
+  await render();
+  expect(button("Resume")).toBeUndefined();
 });

@@ -370,6 +370,42 @@ export function TradingMandateCard({
             </Button>
           </>
         )}
+        {guardrails?.frozen && envelope.mode === "SIMULATION" ? (
+          <Button
+            variant="outline"
+            disabled={busy || readOnly}
+            onClick={() =>
+              void action(async () =>
+                setGuardrails(
+                  await rpc.trading.setAccountGuardrails({ ...guardrails, frozen: false }),
+                ),
+              )
+            }
+          >
+            <Trans>Unfreeze account</Trans>
+          </Button>
+        ) : null}
+        {mandate.status === "PAUSED" || mandate.status === "NEEDS_ATTENTION" ? (
+          <Button
+            variant="outline"
+            disabled={
+              busy || readOnly || mandate.envelope.mode === "LIVE" || guardrails?.frozen !== false
+            }
+            onClick={() =>
+              void action(async () =>
+                setMandate(
+                  await rpc.trading.controlMandate({
+                    id: mandate.id,
+                    expectedRevision: mandate.revision,
+                    action: "RESUME",
+                  }),
+                ),
+              )
+            }
+          >
+            <Trans>Resume</Trans>
+          </Button>
+        ) : null}
         {mandate.status === "ACTIVE" ||
         mandate.status === "APPROVED_WAITING" ||
         mandate.status === "PAUSED" ? (

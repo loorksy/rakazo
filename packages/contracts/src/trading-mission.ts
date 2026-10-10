@@ -76,7 +76,7 @@ export const MandateResolutionSchema = z.strictObject({
 export const MandateControlSchema = z.strictObject({
   id: Id,
   expectedRevision: z.number().int().positive(),
-  action: z.enum(["PAUSE", "CANCEL", "EMERGENCY_STOP"]),
+  action: z.enum(["PAUSE", "CANCEL", "EMERGENCY_STOP", "RESUME"]),
 });
 
 export const TradingGoalViewSchema = z.strictObject({

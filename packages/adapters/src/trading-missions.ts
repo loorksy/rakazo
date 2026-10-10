@@ -15,6 +15,7 @@ import {
   TradingMissionCommandSchema,
   TradingPlanInputSchema,
 } from "@rakazo/contracts";
+import { financialUnits } from "@rakazo/core";
 import { tradingMandateFingerprint } from "@rakazo/core/node/financial-action";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
@@ -457,6 +458,151 @@ export class TradingMissions {
         throw new Error("Mandate revision conflict");
       if (!["ACTIVE", "APPROVED_WAITING", "PAUSED", "NEEDS_ATTENTION"].includes(mandate.status))
         throw new Error("Mandate cannot change from its current state");
+      if (command.action === "RESUME") {
+        if (!["PAUSED", "NEEDS_ATTENTION"].includes(mandate.status))
+          throw new Error("Only a paused or attention-required mandate may resume");
+        const envelope = TradingMandateEnvelopeSchema.parse(mandate.envelope);
+        const fingerprint = tradingMandateFingerprint(envelope);
+        if (
+          mandate.fingerprint !== fingerprint ||
+          mandate.approvedFingerprint !== fingerprint ||
+          mandate.approvedByUserId !== ownerUserId ||
+          !mandate.approvedAt ||
+          envelope.botId !== mandate.botId ||
+          envelope.ownerId !== ownerUserId ||
+          envelope.accountId !== mandate.accountId ||
+          envelope.mode !== mandate.mode
+        )
+          throw new Error("Exact original owner authority required");
+        const now = this.now();
+        const goal = await tx.tradingGoal.findUniqueOrThrow({ where: { id: mandate.goalId } });
+        const objective = TradingGoalInputSchema.parse(goal.definition);
+        if (
+          goal.ownerUserId !== ownerUserId ||
+          goal.botId !== mandate.botId ||
+          goal.accountId !== mandate.accountId ||
+          goal.mode !== mandate.mode
+        )
+          throw new Error("Goal authority mismatch");
+        if (
+          mandate.expiresAt <= now ||
+          Date.parse(envelope.expiresAt) <= now.getTime() ||
+          Date.parse(objective.endsAt) <= now.getTime()
+        )
+          throw new Error("Expired authority cannot resume");
+        if (mandate.mode !== "SIMULATION")
+          throw new Error("LIVE readiness incomplete; live resume is disabled");
+        await this.agent(tx, ownerUserId, mandate.botId);
+        if (
+          !(await tx.tradingConnection.findFirst({
+            where: { id: mandate.accountId, ownerUserId, revokedAt: null },
+          }))
+        )
+          throw new Error("Account unavailable");
+        const guard = await tx.accountRiskGuardrail.findUniqueOrThrow({
+          where: { accountId_mode: { accountId: mandate.accountId, mode: mandate.mode } },
+        });
+        const limits = AccountRiskGuardrailsSchema.parse(guard.limits);
+        if (
+          guard.ownerUserId !== ownerUserId ||
+          limits.accountId !== mandate.accountId ||
+          limits.mode !== mandate.mode ||
+          limits.revision !== guard.revision ||
+          guard.frozen ||
+          limits.frozen ||
+          !limits.autonomousEnabled
+        )
+          throw new Error("Account frozen or autonomous authority disabled");
+        if (
+          (await tx.tradingMandate.count({
+            where: { accountId: mandate.accountId, mode: mandate.mode, status: "ACTIVE" },
+          })) >= limits.maxActiveMandates
+        )
+          throw new Error("Account active mandate limit reached");
+        if (
+          await tx.externalEffect.count({
+            where: {
+              status: { in: ["executing", "uncertain", "reconciling"] },
+              AND: [
+                { financialContext: { path: ["accountId"], equals: mandate.accountId } },
+                { financialContext: { path: ["mode"], equals: mandate.mode } },
+              ],
+            },
+          })
+        )
+          throw new Error("Reconcile uncertain account effects before resuming");
+        const reservations = await tx.tradingRiskReservation.findMany({
+          where: {
+            accountId: mandate.accountId,
+            mode: mandate.mode,
+            status: { in: ["RESERVED", "COMMITTED"] },
+          },
+        });
+        const sum = (rows: typeof reservations, field: "risk" | "exposure") =>
+          rows.reduce((total, row) => total + financialUnits(row[field].toFixed()), 0n);
+        const own = reservations.filter((row) => row.mandateId === mandate.id);
+        const loss = financialUnits(mandate.missionPnl.toFixed());
+        const daily = financialUnits(mandate.dailyPnl.toFixed());
+        if (
+          sum(reservations, "risk") > financialUnits(limits.maxReservedRisk) ||
+          sum(reservations, "exposure") > financialUnits(limits.maxExposure) ||
+          sum(own, "risk") > financialUnits(envelope.maxOpenRisk) ||
+          (loss < 0n ? -loss : 0n) + sum(own, "risk") >= financialUnits(envelope.maxMissionLoss) ||
+          (envelope.maxDailyLoss !== null &&
+            (daily < 0n ? -daily : 0n) + sum(own, "risk") >=
+              financialUnits(envelope.maxDailyLoss)) ||
+          (objective.targetProfit !== null && loss >= financialUnits(objective.targetProfit))
+        )
+          throw new Error("Existing risk or target state prevents resume");
+        if (
+          own.length &&
+          (!mandate.observedAt ||
+            now.getTime() - mandate.observedAt.getTime() > 15000 ||
+            mandate.observedAt.getTime() > now.getTime() + 2000)
+        )
+          throw new Error("Fresh exposure valuation required before resume");
+        if (own.length) {
+          const book = await tx.simulationBook.findUnique({
+            where: { accountId: mandate.accountId },
+          });
+          const observed = mandate.observedState;
+          if (
+            !book ||
+            book.ownerUserId !== ownerUserId ||
+            !observed ||
+            typeof observed !== "object" ||
+            Array.isArray(observed) ||
+            observed.bookRevision !== book.revision
+          )
+            throw new Error("Refresh exposure valuation for the current book before resume");
+        }
+        const waiting = Date.parse(objective.startsAt) > now.getTime();
+        const next = await tx.tradingMandate.update({
+          where: { id: mandate.id },
+          data: { status: waiting ? "APPROVED_WAITING" : "ACTIVE", revision: { increment: 1 } },
+        });
+        await tx.tradingGoal.update({ where: { id: goal.id }, data: { status: next.status } });
+        await tx.tradingMissionWake.create({
+          data: {
+            mandateId: mandate.id,
+            wakeKey: `mandate:${mandate.id}:resume:${next.revision}`,
+            kind: waiting ? "START" : "ACCOUNT_EVENT",
+            dueAt: waiting ? new Date(objective.startsAt) : now,
+          },
+        });
+        await tx.financialJournal.create({
+          data: {
+            ownerUserId,
+            accountId: mandate.accountId,
+            mode: mandate.mode,
+            goalId: mandate.goalId,
+            mandateId: mandate.id,
+            event: "MANDATE_RESUMED",
+            entry: { version: 1, fingerprint, revision: next.revision, expandsAuthority: false },
+          },
+        });
+        return projectMandate(next);
+      }
       if (command.action === "EMERGENCY_STOP") {
         const row = await tx.accountRiskGuardrail.findUniqueOrThrow({
           where: { accountId_mode: { accountId: mandate.accountId, mode: mandate.mode } },

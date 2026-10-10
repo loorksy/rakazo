@@ -788,9 +788,15 @@ export function createRouter(deps: RouterDeps) {
           await enqueueMissionWakes(deps.prisma, deps.jobs, result.id).catch(() => undefined);
         return result;
       }),
-      controlMandate: authed.trading.controlMandate.handler(({ context, input }) =>
-        new TradingMissions(deps.prisma).controlMandate(context.actor.userId, input),
-      ),
+      controlMandate: authed.trading.controlMandate.handler(async ({ context, input }) => {
+        const result = await new TradingMissions(deps.prisma).controlMandate(
+          context.actor.userId,
+          input,
+        );
+        if (input.action === "RESUME")
+          await enqueueMissionWakes(deps.prisma, deps.jobs, result.id).catch(() => undefined);
+        return result;
+      }),
       accountGuardrails: authed.trading.accountGuardrails.handler(({ context, input }) =>
         new TradingMissions(deps.prisma).accountGuardrails(
           context.actor.userId,

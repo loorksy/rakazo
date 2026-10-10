@@ -67,3 +67,22 @@ An overdue expiry prevents new risk before its notification Run is submitted. Th
 checkpoint marks expiry and notifies; it does not claim broker finishing effects
 have run. An actual SIGKILL test covers commit-before-enqueue and recovery through
 the existing Run reconciler.
+
+
+## Owner-only resume
+
+The owner may resume a PAUSED or NEEDS_ATTENTION simulation mandate through the
+protected control RPC. Resume preserves the original envelope, fingerprint,
+Agent/account identity and expiry. The account lock serializes it with other
+Agent admissions. Frozen/disabled guardrails, excess active mandate capacity,
+uncertain account effects, expiry, breached risk/target state and stale exposure
+valuation prevent resume. Current book revision must match the trusted observation
+when attributed exposure remains. RISK_STOPPED, TARGET_REACHED, CANCELLED and
+EXPIRED outcomes cannot be reset by this operation. LIVE resume remains disabled.
+
+A successful resume journals one immutable event and creates one durable wake
+bound to the new mandate revision. Future goals retain their exact START deadline;
+current goals get a reevaluation, with no broker action or simulator fill replay.
+The existing job reconciler repairs a commit-before-enqueue interruption.
+Web/Electron and native mobile expose Resume and a separate Unfreeze account action;
+resume never silently unfreezes an account or widens financial authority.

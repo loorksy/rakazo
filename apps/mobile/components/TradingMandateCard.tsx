@@ -88,7 +88,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
       ),
     );
   }
-  async function control(command: "PAUSE" | "CANCEL" | "EMERGENCY_STOP") {
+  async function control(command: "PAUSE" | "CANCEL" | "EMERGENCY_STOP" | "RESUME") {
     const current = mandate;
     if (!current) return;
     await action(async () =>
@@ -257,6 +257,32 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
             onPress={() => void control("EMERGENCY_STOP")}
           />
         </>
+      ) : null}
+      {guardrails?.frozen && envelope.mode === "SIMULATION" ? (
+        <NativeActionButton
+          label={t("Unfreeze account")}
+          disabled={readOnly || busy}
+          prominence="secondary"
+          onPress={() =>
+            void action(async () =>
+              setGuardrails(
+                AccountRiskGuardrailsSchema.parse(
+                  await rpc("trading/setAccountGuardrails", { ...guardrails, frozen: false }),
+                ),
+              ),
+            )
+          }
+        />
+      ) : null}
+      {mandate.status === "PAUSED" || mandate.status === "NEEDS_ATTENTION" ? (
+        <NativeActionButton
+          label={t("Resume")}
+          disabled={
+            readOnly || busy || mandate.envelope.mode === "LIVE" || guardrails?.frozen !== false
+          }
+          prominence="secondary"
+          onPress={() => void control("RESUME")}
+        />
       ) : null}
       {mandate.status === "ACTIVE" ||
       mandate.status === "APPROVED_WAITING" ||

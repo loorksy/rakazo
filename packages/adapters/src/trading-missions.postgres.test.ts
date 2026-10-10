@@ -508,6 +508,57 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       await rows.effects.settle(actor, rows.effect.id, outcome);
       return rows;
     }
+    it("resume blocks while an account effect has started and awaits reconciliation", async () => {
+      const rows = await simulatedPrepared();
+      await rows.effects.begin(actor, rows.effect.id, rows.simulatedFacts);
+      const paused = await missions.controlMandate(owner, {
+        id: rows.active.id,
+        expectedRevision: rows.active.revision,
+        action: "PAUSE",
+      });
+      await expect(
+        missions.controlMandate(owner, {
+          id: paused.id,
+          expectedRevision: paused.revision,
+          action: "RESUME",
+        }),
+      ).rejects.toThrow("Reconcile");
+      expect(await db.prisma.financialJournal.count({ where: { event: "MANDATE_RESUMED" } })).toBe(
+        0,
+      );
+    });
+    it("owner resume requires current attributed exposure valuation and never replays a fill", async () => {
+      const rows = await acceptedExposure();
+      const paused = await missions.controlMandate(owner, {
+        id: rows.active.id,
+        expectedRevision: rows.active.revision,
+        action: "PAUSE",
+      });
+      await expect(
+        missions.controlMandate(owner, {
+          id: paused.id,
+          expectedRevision: paused.revision,
+          action: "RESUME",
+        }),
+      ).rejects.toThrow("valuation");
+      await rows.simulator.preflight(actor, facts);
+      const resumed = await missions.controlMandate(owner, {
+        id: paused.id,
+        expectedRevision: paused.revision,
+        action: "RESUME",
+      });
+      expect(resumed).toMatchObject({
+        status: "ACTIVE",
+        fingerprint: rows.active.fingerprint,
+        envelope: rows.active.envelope,
+      });
+      expect(await db.prisma.simulationExecution.count()).toBe(1);
+      expect(
+        await db.prisma.tradingMissionWake.count({
+          where: { wakeKey: `mandate:${paused.id}:resume:${resumed.revision}` },
+        }),
+      ).toBe(1);
+    });
     async function managementProposal(
       rows: Awaited<ReturnType<typeof simulatedPrepared>>,
       managedAction: FinancialAction,
@@ -2948,6 +2999,88 @@ const db=createDb(process.env.MISSION_TEST_DATABASE_URL); const quote=JSON.parse
     expect(await missions.command(human, { operation: "get", goalId: created.id })).toMatchObject({
       mandates: [{ id: mandate.id, status: "ACTIVE" }],
     });
+  });
+  it("owner resume preserves exact authority, rejects stale revisions and queues one current reevaluation", async () => {
+    const { active } = await activated();
+    const paused = await missions.controlMandate(owner, {
+      id: active.id,
+      expectedRevision: active.revision,
+      action: "PAUSE",
+    });
+    await expect(
+      missions.controlMandate("peer", {
+        id: paused.id,
+        expectedRevision: paused.revision,
+        action: "RESUME",
+      }),
+    ).rejects.toThrow();
+    const resumed = await missions.controlMandate(owner, {
+      id: paused.id,
+      expectedRevision: paused.revision,
+      action: "RESUME",
+    });
+    expect(resumed).toMatchObject({
+      status: "ACTIVE",
+      fingerprint: active.fingerprint,
+      envelope: active.envelope,
+      expiresAt: active.expiresAt,
+    });
+    await expect(
+      missions.controlMandate(owner, {
+        id: paused.id,
+        expectedRevision: paused.revision,
+        action: "RESUME",
+      }),
+    ).rejects.toThrow("revision");
+    expect(
+      await db.prisma.financialJournal.count({
+        where: { mandateId: active.id, event: "MANDATE_RESUMED" },
+      }),
+    ).toBe(1);
+    expect(
+      await db.prisma.tradingMissionWake.count({
+        where: {
+          mandateId: active.id,
+          wakeKey: `mandate:${active.id}:resume:${resumed.revision}`,
+          kind: "ACCOUNT_EVENT",
+        },
+      }),
+    ).toBe(1);
+  });
+  it("resume cannot override frozen accounts, expired authority or sticky terminal outcomes", async () => {
+    const { active } = await activated();
+    const stopped = await missions.controlMandate(owner, {
+      id: active.id,
+      expectedRevision: active.revision,
+      action: "EMERGENCY_STOP",
+    });
+    await expect(
+      missions.controlMandate(owner, {
+        id: stopped.id,
+        expectedRevision: stopped.revision,
+        action: "RESUME",
+      }),
+    ).rejects.toThrow("frozen");
+    await missions.setAccountGuardrails(owner, { ...limits, revision: 2, frozen: false });
+    await expect(
+      new TradingMissions(db.prisma, () => new Date(goal.endsAt)).controlMandate(owner, {
+        id: stopped.id,
+        expectedRevision: stopped.revision,
+        action: "RESUME",
+      }),
+    ).rejects.toThrow("Expired");
+    await db.prisma.tradingMandate.update({
+      where: { id: stopped.id },
+      data: { status: "TARGET_REACHED" },
+    });
+    await expect(
+      missions.controlMandate(owner, {
+        id: stopped.id,
+        expectedRevision: stopped.revision,
+        action: "RESUME",
+      }),
+    ).rejects.toThrow("current state");
+    expect(await db.prisma.financialJournal.count({ where: { event: "MANDATE_RESUMED" } })).toBe(0);
   });
   it("owner stop freezes the account atomically and preserves revision consistency", async () => {
     const { active } = await activated();
