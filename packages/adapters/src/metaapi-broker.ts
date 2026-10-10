@@ -8,6 +8,8 @@ import {
 } from "@rakazo/contracts";
 import MetaApi, { SynchronizationListener } from "metaapi.cloud-sdk/esm-node";
 import { z } from "zod";
+import type { MetaApiExecutionPort } from "./metaapi-execution.js";
+import { MetaApiExecutionAdapter } from "./metaapi-execution.js";
 import {
   BrokerProviderError,
   brokerSdkNumber,
@@ -22,8 +24,8 @@ import {
   sanitizedBrokerError,
 } from "./metaapi-normalize.js";
 
-/** Narrow injectable SDK port: mutation methods are deliberately absent. */
-export interface MetaApiRpcPort {
+/** Native SDK stays inside the trusted Worker. Read tools receive normalized read results only. */
+export interface MetaApiRpcPort extends MetaApiExecutionPort {
   connect(): Promise<unknown>;
   waitSynchronized(timeoutSeconds?: number): Promise<unknown>;
   getAccountInformation(): Promise<unknown>;
@@ -228,6 +230,7 @@ export class MetaApiBrokerProvider implements BrokerProvider {
 }
 
 class MetaApiReadSession implements BrokerReadSession {
+  readonly execution: MetaApiExecutionAdapter;
   private closed = false;
   private stream: MetaApiStreamPort | undefined;
   private readonly subscriptions = new Map<string, { instrumentId: string; references: number }>();
@@ -239,7 +242,9 @@ class MetaApiReadSession implements BrokerReadSession {
     private readonly accountPort: MetaApiAccountPort,
     private readonly rpc: MetaApiRpcPort,
     private readonly now: () => Date,
-  ) {}
+  ) {
+    this.execution = new MetaApiExecutionAdapter(accountId, rpc);
+  }
   private async read<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closed) throw new BrokerProviderError("DISCONNECTED");
     try {
@@ -451,14 +456,23 @@ class MetaApiReadSession implements BrokerReadSession {
       positionsRead: true,
       ordersRead: true,
       symbolSpecifications: true,
-      operations: [],
-      orderTypes: [],
-      partialClose: false,
-      protectiveStops: false,
+      operations: [
+        ...(this.rpc.createMarketBuyOrder && this.rpc.createMarketSellOrder ? ["OPEN"] : []),
+        ...(this.rpc.modifyPosition ? ["MODIFY_PROTECTION"] : []),
+        ...(this.rpc.closePosition ? ["CLOSE_POSITION"] : []),
+        ...(this.rpc.cancelOrder ? ["CANCEL_ORDER"] : []),
+      ],
+      orderTypes: [
+        ...(this.rpc.createMarketBuyOrder && this.rpc.createMarketSellOrder ? ["MARKET"] : []),
+        ...(this.rpc.createLimitBuyOrder && this.rpc.createLimitSellOrder ? ["LIMIT"] : []),
+        ...(this.rpc.createStopBuyOrder && this.rpc.createStopSellOrder ? ["STOP"] : []),
+      ],
+      partialClose: state.accountMode === "HEDGING" && !!this.rpc.closePositionPartially,
+      protectiveStops: !!this.rpc.modifyPosition,
       nativeOco: false,
-      clientReferences: false,
+      clientReferences: !!this.rpc.createMarketBuyOrder && !!this.rpc.createMarketSellOrder,
       verifiedAt: state.observedAt,
-      revision: "metaapi-read:v1",
+      revision: "metaapi-execution:v1",
     });
   }
   async subscribe(

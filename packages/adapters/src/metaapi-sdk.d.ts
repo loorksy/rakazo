@@ -1,6 +1,6 @@
 /**
  * 29.3.3's ESM declaration entry imports extensionless modules under NodeNext.
- * Its exports otherwise degrade to implicit any. This audited, read-only port
+ * Its exports otherwise degrade to implicit any. This audited, narrow host port
  * describes the native Node entry without copying or modifying vendor code.
  */
 declare module "metaapi.cloud-sdk/esm-node" {

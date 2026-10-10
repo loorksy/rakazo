@@ -82,6 +82,8 @@ export type BrokerEvent =
 /** Only trusted host code creates sessions. Raw SDK credentials/objects never cross this port. */
 export interface BrokerReadSession {
   readonly accountId: string;
+  /** Trusted Worker-only execution boundary; never returned by a read tool. */
+  readonly execution?: ExecutionProvider;
   account(): Promise<BrokerAccountState>;
   positions(): Promise<BrokerPosition[]>;
   orders(): Promise<BrokerOrder[]>;
@@ -114,4 +116,22 @@ export interface BrokerProvider {
     resolveCredential: () => Promise<string>;
     signal?: AbortSignal;
   }): Promise<BrokerReadSession>;
+}
+
+/** Host-only port. A durable dispatcher, never model tools, supplies this request. */
+export interface ExecutionRequest {
+  effectId: string;
+  clientId: string;
+  action: FinancialAction;
+  startedAt: string;
+}
+export interface ExecutionResult {
+  status: "SUCCEEDED" | "FAILED" | "UNCERTAIN";
+  providerReference: string | null;
+  code: string | null;
+}
+export interface ExecutionProvider {
+  execute(request: ExecutionRequest): Promise<ExecutionResult>;
+  /** Read-only recovery. Absence from a snapshot is never proof of non-acceptance. */
+  reconcile(request: ExecutionRequest): Promise<ExecutionResult>;
 }
