@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   DeploymentConfigView,
+  DeploymentRuntimeKey,
   PlaybookSettingsView,
   TradingLiveStatus,
 } from "@rakazo/contracts";
@@ -9,18 +10,6 @@ import { useEffect, useId, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { errorText } from "../lib/user-error";
 import { TradingConnectionsPanel } from "./TradingConnectionsPanel";
-
-const RUNTIME_LABELS = {
-  computerMemory: "Computer memory",
-  computerCpus: "Computer CPUs",
-  computerPidsLimit: "Process limit",
-  sandboxIdleMs: "Idle timeout (ms)",
-  maxToolCallsPerTurn: "Tool-call limit",
-  graphileWorkerConcurrency: "Worker concurrency",
-  logLevel: "Log level",
-  axiomDataset: "Axiom dataset",
-  economicCalendarProvider: "Calendar provider",
-} as const;
 
 /** Owner trading section: broker accounts, live admission and the shared playbook. */
 export function TradingSettingsPanel() {
@@ -73,6 +62,30 @@ export function TradingSettingsPanel() {
       setBusy(false);
     }
   }
+  function playbookGroupTitle(id: string) {
+    switch (id) {
+      case "entry-timing":
+        return t`Entry timing`;
+      case "retest":
+        return t`Retests`;
+      case "trendline":
+        return t`Trendlines`;
+      case "candle":
+        return t`Candles`;
+      case "targets":
+        return t`Targets`;
+      case "execution":
+        return t`Execution discipline`;
+      case "news-protocol":
+        return t`News protection`;
+      case "news-candle":
+        return t`News-candle detection`;
+      case "xauusd-behavior":
+        return t`Gold-specific behavior`;
+      default:
+        return id;
+    }
+  }
   return (
     <div className="space-y-8">
       <TradingConnectionsPanel />
@@ -108,19 +121,41 @@ export function TradingSettingsPanel() {
         </section>
       ) : null}
       {playbook ? (
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium">
-            <Trans>Trading knowledge</Trans> {playbook.version}
-          </h3>
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-medium">
+              <Trans>Trading knowledge</Trans> {playbook.version}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              <Trans>
+                Rules are selected contextually. They are not all sent on every Agent turn.
+              </Trans>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              <Trans>Hard safety rules cannot be disabled.</Trans>
+            </p>
+          </div>
           {playbook.groups.map((group) => (
-            <label key={group.id} className="flex items-center justify-between gap-3 text-sm">
+            <label key={group.id} className="flex items-start justify-between gap-3 text-sm">
               <span>
-                {group.label} · {group.rules}
+                <span className="block">{playbookGroupTitle(group.id)}</span>
+                <span className="text-muted-foreground">
+                  <Trans>{group.rules} contextual trading rules</Trans>
+                  {group.id === "xauusd-behavior" ? (
+                    <>
+                      {" · "}
+                      <Trans>Only applied to gold instruments</Trans>
+                    </>
+                  ) : null}
+                  {" · "}
+                  {group.enabled ? <Trans>Enabled</Trans> : <Trans>Disabled</Trans>}
+                </span>
               </span>
               <input
                 type="checkbox"
                 checked={group.enabled}
                 disabled={busy}
+                aria-label={playbookGroupTitle(group.id)}
                 onChange={() => void toggleGroup(group.id)}
               />
             </label>
@@ -143,6 +178,8 @@ export function DeploymentSettingsPanel({ part }: { part: "runtime" | "observabi
   const [view, setView] = useState<DeploymentConfigView | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [token, setToken] = useState("");
+  const [calendarKey, setCalendarKey] = useState("");
+  const [calendarState, setCalendarState] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -200,14 +237,110 @@ export function DeploymentSettingsPanel({ part }: { part: "runtime" | "observabi
           key: "observability.axiomToken",
           value: token.trim(),
         });
+      if (part === "runtime" && calendarKey.trim())
+        next = await rpc.deployment.setSecret({
+          expectedRevision: next.revision,
+          key: "economicCalendar.apiKey",
+          value: calendarKey.trim(),
+        });
       setView(next);
       setToken("");
+      setCalendarKey("");
     } catch (failure) {
       setError(errorText(failure));
     } finally {
       setBusy(false);
     }
   }
+  function settingCopy(key: DeploymentRuntimeKey) {
+    switch (key) {
+      case "computerMemory":
+        return {
+          title: t`Computer memory`,
+          detail: t`Maximum memory available to each Agent Computer.`,
+          applies: t`Applies to new Computers`,
+        };
+      case "computerCpus":
+        return {
+          title: t`Computer processors`,
+          detail: t`Processor limit for each Agent Computer.`,
+          applies: t`Applies to new Computers`,
+        };
+      case "computerPidsLimit":
+        return {
+          title: t`Computer process limit`,
+          detail: t`Maximum processes inside each Agent Computer.`,
+          applies: t`Applies to new Computers`,
+        };
+      case "sandboxIdleMs":
+        return {
+          title: t`Computer idle timeout`,
+          detail: t`How long an idle Computer stays running, in milliseconds.`,
+          applies: t`Applies immediately`,
+        };
+      case "maxToolCallsPerTurn":
+        return {
+          title: t`Tool-call limit`,
+          detail: t`Maximum tool calls in one Agent turn. Empty leaves the limit off.`,
+          applies: t`Applies immediately`,
+        };
+      case "graphileWorkerConcurrency":
+        return {
+          title: t`Worker concurrency`,
+          detail: t`Number of background jobs the Worker may process at once.`,
+          applies: t`Restart required`,
+        };
+      case "logLevel":
+        return {
+          title: t`Log level`,
+          detail: t`How much the API and Worker write to their logs.`,
+          applies: t`Restart required`,
+        };
+      case "axiomDataset":
+        return {
+          title: t`Axiom dataset`,
+          detail: t`Dataset name for optional log shipping.`,
+          applies: t`Restart required`,
+        };
+      case "economicCalendarProvider":
+        return {
+          title: t`Calendar provider`,
+          detail: t`Used for scheduled economic events and Trading Agent news context.`,
+          applies: t`Applies immediately`,
+        };
+      default: {
+        const unhandled: never = key;
+        return { title: unhandled, detail: unhandled, applies: unhandled };
+      }
+    }
+  }
+  function currentValue(row: DeploymentConfigView["settings"][number]) {
+    if (row.key === "economicCalendarProvider") {
+      if (row.effective === "fmp") return t`Financial Modeling Prep`;
+      if (row.effective === "finnhub") return t`Finnhub`;
+      return t`Disabled`;
+    }
+    if (row.effective === null || row.effective === "") return t`Default`;
+    return String(row.effective);
+  }
+  const bootstrapTitle = (name: string) => {
+    switch (name) {
+      case "DATABASE_URL":
+        return t`Database URL`;
+      case "POSTGRES_PASSWORD":
+        return t`Postgres password`;
+      case "BETTER_AUTH_SECRET":
+        return t`Authentication secret`;
+      case "ENCRYPTION_KEY":
+        return t`Encryption key`;
+      case "SANDBOX_SUPERVISOR_TOKEN":
+        return t`Sandbox supervisor token`;
+      case "SCREEN_PROXY_SECRET":
+        return t`Screen proxy secret`;
+      default:
+        return name;
+    }
+  };
   const settings =
     view?.settings.filter((row) =>
       part === "observability"
@@ -230,9 +363,13 @@ export function DeploymentSettingsPanel({ part }: { part: "runtime" | "observabi
             {view.containment.mode ?? "—"}
             {view.containment.verified ? ` · ${t`verified`}` : ""}
           </p>
+          <p className="text-muted-foreground">
+            <Trans>These deployment checks are read-only. Values are never shown.</Trans>
+          </p>
           {view.bootstrap.map((row) => (
-            <p key={row.name} className="text-muted-foreground">
-              {row.name} ·{" "}
+            <p key={row.name}>
+              {bootstrapTitle(row.name)}
+              {" — "}
               {row.status === "CONFIGURED"
                 ? t`Configured`
                 : row.status === "MISSING"
@@ -244,26 +381,95 @@ export function DeploymentSettingsPanel({ part }: { part: "runtime" | "observabi
           ))}
         </section>
       ) : null}
-      {settings.map((row) => (
-        <Field key={row.key}>
-          <FieldLabel htmlFor={`${prefix}-${row.key}`}>{RUNTIME_LABELS[row.key]}</FieldLabel>
-          <Input
-            id={`${prefix}-${row.key}`}
-            value={drafts[row.key] ?? ""}
-            onChange={(event) =>
-              setDrafts((current) => ({ ...current, [row.key]: event.target.value }))
-            }
-          />
-          <p className="text-xs text-muted-foreground">
-            {row.env}
-            {row.restartRequired.length
-              ? ` · ${t`Restart required`}`
-              : row.apply === "NEW_COMPUTERS"
-                ? ` · ${t`New computers`}`
-                : ""}
+      {settings.map((row) => {
+        const copy = settingCopy(row.key);
+        return (
+          <Field key={row.key}>
+            <FieldLabel htmlFor={`${prefix}-${row.key}`}>{copy.title}</FieldLabel>
+            <p className="text-sm text-muted-foreground">{copy.detail}</p>
+            <p className="text-sm">
+              <Trans>Current</Trans>: {currentValue(row)}
+            </p>
+            {row.key === "economicCalendarProvider" ? (
+              <select
+                id={`${prefix}-${row.key}`}
+                aria-label={copy.title}
+                className="w-full rounded-lg border border-border bg-card px-2 py-1 text-sm"
+                value={drafts[row.key] ?? ""}
+                onChange={(event) =>
+                  setDrafts((state) => ({ ...state, [row.key]: event.target.value }))
+                }
+              >
+                <option value="">{t`Disabled`}</option>
+                <option value="fmp">{t`Financial Modeling Prep`}</option>
+                <option value="finnhub">{t`Finnhub`}</option>
+              </select>
+            ) : (
+              <Input
+                id={`${prefix}-${row.key}`}
+                value={drafts[row.key] ?? ""}
+                placeholder={currentValue(row)}
+                onChange={(event) =>
+                  setDrafts((state) => ({ ...state, [row.key]: event.target.value }))
+                }
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              <Trans>Environment key</Trans>: {row.env}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {row.restartRequired.length ? <Trans>Restart required</Trans> : copy.applies}
+            </p>
+          </Field>
+        );
+      })}
+      {part === "runtime" && drafts.economicCalendarProvider ? (
+        <Field>
+          <FieldLabel htmlFor={`${prefix}-calendar`}>
+            <Trans>Calendar API key</Trans>
+          </FieldLabel>
+          <p className="text-sm text-muted-foreground">
+            <Trans>Used for scheduled economic events and Trading Agent news context.</Trans>
           </p>
+          <p className="text-xs text-muted-foreground">
+            <Trans>Write-only. The saved key is never shown again.</Trans>
+          </p>
+          <Input
+            id={`${prefix}-calendar`}
+            type="password"
+            autoComplete="off"
+            value={calendarKey}
+            placeholder={
+              view?.secrets.find((row) => row.key === "economicCalendar.apiKey")?.configured
+                ? t`Configured`
+                : ""
+            }
+            onChange={(event) => setCalendarKey(event.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() =>
+              void rpc.deployment
+                .calendarStatus()
+                .then((status) =>
+                  setCalendarState(
+                    status.status === "OK"
+                      ? t`Calendar connected`
+                      : status.status === "UNAVAILABLE"
+                        ? t`Calendar unavailable`
+                        : t`Calendar disabled`,
+                  ),
+                )
+                .catch((failure) => setError(errorText(failure)))
+            }
+          >
+            <Trans>Test calendar</Trans>
+          </Button>
+          {calendarState ? <p className="text-sm text-muted-foreground">{calendarState}</p> : null}
         </Field>
-      ))}
+      ) : null}
       {part === "observability" ? (
         <Field>
           <FieldLabel htmlFor={`${prefix}-axiom`}>

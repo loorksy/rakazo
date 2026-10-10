@@ -3766,7 +3766,14 @@ export function ShellPage() {
             ) : null}
             {panel === "chart" && active ? (
               <div className="h-[calc(100%_-_3rem)] min-h-96">
-                <CloudChartPanel key={active.id} botId={active.id} />
+                <CloudChartPanel
+                  key={active.id}
+                  botId={active.id}
+                  onConnectAccount={() => {
+                    setSettingsSection("trading");
+                    setSettingsOpen(true);
+                  }}
+                />
               </div>
             ) : null}
             {panel === "computer" && active ? (

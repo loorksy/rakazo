@@ -10,7 +10,7 @@ import { errorText } from "../lib/user-error";
 export function TradingConnectionsPanel() {
   const { t } = useLingui();
   const prefix = useId();
-  const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [accounts, setAccounts] = useState<TradingConnectionView[]>([]);
   const [label, setLabel] = useState("");
   const [account, setAccount] = useState("");
@@ -20,7 +20,6 @@ export function TradingConnectionsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [verified, setVerified] = useState<string | null>(null);
   useEffect(() => {
-    if (!open) return;
     let active = true;
     void rpc.trading.connections
       .list()
@@ -29,11 +28,14 @@ export function TradingConnectionsPanel() {
       })
       .catch((failure) => {
         if (active) setError(errorText(failure));
+      })
+      .finally(() => {
+        if (active) setLoaded(true);
       });
     return () => {
       active = false;
     };
-  }, [open]);
+  }, []);
   async function save() {
     if (busy) return;
     setBusy(true);
@@ -83,66 +85,76 @@ export function TradingConnectionsPanel() {
       setBusy(false);
     }
   }
+  const active = accounts.filter((row) => !row.revokedAt);
+  const connected = active.filter((row) => row.state === "CONNECTED").length;
   return (
-    <details
-      className="border-t border-border pt-4"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary className="cursor-pointer text-sm font-medium">
-        <Trans>Broker accounts</Trans>
-      </summary>
-      {open ? (
-        <div className="mt-4 space-y-4">
-          {accounts
-            .filter((row) => !row.revokedAt)
-            .map((row) => (
-              <div key={row.id} className="flex items-center justify-between gap-3 text-sm">
-                <div>
-                  <p>{row.label}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {row.state}
-                    {row.environment ? ` · ${row.environment}` : ""}
-                    {row.failureCode ? ` · ${row.failureCode}` : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    <Trans>Last healthy</Trans>{" "}
-                    {row.lastHealthyAt ? new Date(row.lastHealthyAt).toLocaleString() : "—"}
-                  </p>
-                </div>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void verify(row.id)}
-                  >
-                    <Trans>Verify</Trans>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => {
-                      setLabel(row.label);
-                      setAccount(row.providerAccountId);
-                      setRegion(row.region ?? "");
-                      setToken("");
-                    }}
-                  >
-                    <Trans>Rotate token</Trans>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void revoke(row.id)}
-                  >
-                    <Trans>Disconnect</Trans>
-                  </Button>
-                </div>
+    <section className="space-y-4">
+      <div>
+        <h3 className="text-sm font-medium">
+          <Trans>Broker accounts</Trans>
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {loaded ? (
+            connected > 0 ? (
+              <Trans>{connected} connected</Trans>
+            ) : (
+              <Trans>No broker accounts connected</Trans>
+            )
+          ) : (
+            <Trans>Loading broker accounts…</Trans>
+          )}
+        </p>
+      </div>
+      {loaded ? (
+        <div className="space-y-4">
+          {active.map((row) => (
+            <div key={row.id} className="flex items-center justify-between gap-3 text-sm">
+              <div>
+                <p className="font-medium">{row.label}</p>
+                <p className="text-xs text-muted-foreground">MetaApi</p>
+                <p className="text-xs">{row.state}</p>
+                <p className="text-xs text-muted-foreground">
+                  {[row.environment, row.currency].filter(Boolean).join(" · ")}
+                  {row.failureCode ? ` · ${row.failureCode}` : ""}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <Trans>Last healthy</Trans>{" "}
+                  {row.lastHealthyAt ? new Date(row.lastHealthyAt).toLocaleString() : "—"}
+                </p>
               </div>
-            ))}
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void verify(row.id)}
+                >
+                  <Trans>Verify</Trans>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setLabel(row.label);
+                    setAccount(row.providerAccountId);
+                    setRegion(row.region ?? "");
+                    setToken("");
+                  }}
+                >
+                  <Trans>Rotate token</Trans>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void revoke(row.id)}
+                >
+                  <Trans>Disconnect</Trans>
+                </Button>
+              </div>
+            </div>
+          ))}
           <TradingJournal />
           <form
             className="space-y-3"
@@ -200,7 +212,7 @@ export function TradingConnectionsPanel() {
               />
             </Field>
             <Button type="submit" disabled={busy || !label || !account || !token}>
-              {busy ? t`Saving…` : t`Connect account`}
+              {busy ? t`Saving…` : t`Connect MetaApi account`}
             </Button>
           </form>
           {verified ? <p className="text-sm text-muted-foreground">{verified}</p> : null}
@@ -211,6 +223,6 @@ export function TradingConnectionsPanel() {
           ) : null}
         </div>
       ) : null}
-    </details>
+    </section>
   );
 }

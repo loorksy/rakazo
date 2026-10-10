@@ -391,14 +391,18 @@ describe("run tool selection", () => {
     const baseline = offered();
     expect(baseline).toContain("web_search");
     expect(baseline).toContain("web_fetch");
+    expect(baseline).toContain("trading_accounts");
     expect(baseline).not.toContain("computer_act");
 
-    const disabled = offered(["web_search", "not_a_tool", ""]);
+    const disabled = offered(["web_search", "trading_accounts", "not_a_tool", ""]);
     expect(disabled).not.toContain("web_search");
+    expect(disabled).not.toContain("trading_accounts");
     expect(disabled).toContain("web_fetch");
     expect(disabled).not.toContain("not_a_tool");
     expect(disabled).not.toContain("computer_act");
-    expect(disabled).toEqual(baseline.filter((name) => name !== "web_search"));
+    expect(disabled).toEqual(
+      baseline.filter((name) => name !== "web_search" && name !== "trading_accounts"),
+    );
   });
 
   it("keeps schedule tools in group chats and still blocks create on routines", () => {

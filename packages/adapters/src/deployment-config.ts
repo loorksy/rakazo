@@ -27,7 +27,9 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { createDb } from "@rakazo/db";
+import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
+import { calendarProvider, EconomicCalendarPoller } from "./economic-calendar.js";
 import { persistPreparedSecret } from "./secret-persistence.js";
 import { createSecretStore } from "./secret-store-factory.js";
 
@@ -419,6 +421,23 @@ export class DeploymentConfigService {
       });
     });
     return this.playbook();
+  }
+  async calendarStatus() {
+    const provider = calendarProvider();
+    const configured = Boolean(process.env.ECONOMIC_CALENDAR_API_KEY?.trim());
+    if (!provider || !configured)
+      return { provider, configured, status: "DISABLED" as const, events: 0 };
+    try {
+      await new EconomicCalendarPoller(this.prisma, getLogger()).tick();
+      return {
+        provider,
+        configured: true,
+        status: "OK" as const,
+        events: await this.prisma.economicCalendarEvent.count(),
+      };
+    } catch {
+      return { provider, configured: true, status: "UNAVAILABLE" as const, events: 0 };
+    }
   }
 }
 

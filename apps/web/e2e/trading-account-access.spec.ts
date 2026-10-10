@@ -78,8 +78,10 @@ test("owner grants exact Agent account reads and inspects durable journal", asyn
       );
   });
   const fixture = page.locator("#trading-fixture");
-  await fixture.getByText("Account access", { exact: true }).click();
-  const read = fixture.getByRole("switch", { name: "Account read" });
+  await expect(fixture.getByText("Broker access", { exact: true })).toBeVisible();
+  await expect(fixture.getByText("Market data", { exact: true })).toBeVisible();
+  await expect(fixture.getByText("No authority", { exact: true })).toBeVisible();
+  const read = fixture.getByRole("switch", { name: "Allow account read" });
   await expect(read).not.toBeChecked();
   await read.click();
   await expect

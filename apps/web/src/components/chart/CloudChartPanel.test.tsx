@@ -27,6 +27,7 @@ vi.mock("../../lib/rpc", () => ({
 }));
 vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children: ReactNode }) => children,
+  useLingui: () => ({ t: (parts: TemplateStringsArray) => parts.join("") }),
 }));
 vi.mock("@rakazo/ui-web", () => ({
   Button: ({
@@ -153,4 +154,44 @@ it("reloads authoritative state after a conflict and preserves a calm error", as
   expect(api.charts).toHaveBeenCalledWith({ operation: "get", chartId: chart.id });
   expect(host?.textContent).not.toContain("fixture-secret-sentinel");
   expect(host?.querySelector('[role="status"]')).not.toBeNull();
+});
+it("explains a missing broker account instead of rendering empty selectors", async () => {
+  api.indicators.mockResolvedValue([]);
+  api.list.mockResolvedValue([]);
+  api.charts.mockResolvedValue([]);
+  api.read.mockResolvedValue([]);
+  api.chartEvents.mockResolvedValue((async function* () {})());
+  await render();
+  expect(host?.textContent).toContain("No broker account connected.");
+  expect(host?.textContent).toContain("Connect broker account");
+  expect(host?.querySelector('[aria-label="Broker account"]')).toBeNull();
+  expect(host?.querySelector('[aria-label="Broker instrument"]')).toBeNull();
+});
+it("shows a retry when instrument discovery fails and keeps the saved account visible", async () => {
+  api.indicators.mockResolvedValue([]);
+  api.list.mockResolvedValue([
+    { id: "account", label: "Fixture", revokedAt: null, state: "CONNECTED" },
+  ]);
+  api.charts.mockResolvedValue([]);
+  api.read.mockRejectedValue(new Error("fixture-secret-sentinel"));
+  api.chartEvents.mockResolvedValue((async function* () {})());
+  await render();
+  expect(host?.textContent).toContain("Fixture");
+  expect(host?.textContent).toContain("Could not load broker instruments.");
+  expect(host?.textContent).not.toContain("fixture-secret-sentinel");
+  expect(host?.querySelector('[aria-label="Broker instrument"]')).toBeNull();
+  const retry = [...(host?.querySelectorAll("button") ?? [])].find(
+    (button) => button.textContent === "Retry",
+  );
+  api.read.mockResolvedValue([
+    {
+      id: "instrument",
+      accountId: "account",
+      brokerSymbol: "GOLD.a",
+      displayName: "Gold",
+      verifiedAt: time,
+    },
+  ]);
+  await act(async () => retry?.click());
+  expect(host?.querySelector('[aria-label="Broker instrument"]')?.textContent).toContain("Gold");
 });

@@ -19,6 +19,7 @@ model TradingConnection {
   ciphertext        String
   credentialVersion Int      @default(1)
   environment       String?
+  currency          String?
   capabilities      Json?
   verifiedAt        DateTime?
   revokedAt         DateTime?

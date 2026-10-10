@@ -310,6 +310,14 @@ export const appContract = {
     config: oc.output(DeploymentConfigViewSchema),
     updateConfig: oc.input(DeploymentConfigUpdateSchema).output(DeploymentConfigViewSchema),
     setSecret: oc.input(DeploymentSecretUpdateSchema).output(DeploymentConfigViewSchema),
+    calendarStatus: oc.output(
+      z.strictObject({
+        provider: z.enum(["fmp", "finnhub"]).nullable(),
+        configured: z.boolean(),
+        status: z.enum(["DISABLED", "OK", "UNAVAILABLE"]),
+        events: z.number().int().nonnegative(),
+      }),
+    ),
     get: oc.output(DeploymentSettingsSchema),
     update: oc
       .input(

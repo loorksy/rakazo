@@ -7,23 +7,27 @@ import { errorText } from "../lib/user-error";
 
 export function TradingAccountAccess({ botId }: { botId: string }) {
   const id = useId();
-  const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<TradingAccountAccessView[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (!open) return;
     const abort = new AbortController();
-    setRows([]);
+    setLoaded(false);
     setError(undefined);
     void rpc.trading
       .accountAccess({ botId }, { signal: abort.signal })
-      .then(setRows)
+      .then((next) => {
+        if (!abort.signal.aborted) setRows(next);
+      })
       .catch((failure) => {
         if (!abort.signal.aborted) setError(errorText(failure));
+      })
+      .finally(() => {
+        if (!abort.signal.aborted) setLoaded(true);
       });
     return () => abort.abort();
-  }, [botId, open]);
+  }, [botId]);
   async function change(row: TradingAccountAccessView, accountRead: boolean) {
     if (busy) return;
     setBusy(true);
@@ -38,7 +42,6 @@ export function TradingAccountAccess({ botId }: { botId: string }) {
       setRows(await rpc.trading.accountAccess({ botId }));
     } catch (failure) {
       setError(errorText(failure));
-      // A conflict must be reloaded before another owner intent is accepted.
       await rpc.trading
         .accountAccess({ botId })
         .then(setRows)
@@ -48,44 +51,55 @@ export function TradingAccountAccess({ botId }: { botId: string }) {
     }
   }
   return (
-    <details
-      className="mt-4 border-t border-border pt-4"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary className="cursor-pointer text-sm font-medium">
-        <Trans>Account access</Trans>
-      </summary>
-      {open ? (
-        <div className="mt-3 space-y-3">
-          {rows.map((row) => (
-            <div key={row.accountId} className="flex items-center justify-between gap-3 text-sm">
-              <div>
-                <p>{row.label}</p>
-                {row.mandateRead ? (
-                  <p className="text-xs text-muted-foreground">
-                    <Trans>Read access through active mandate</Trans>
-                  </p>
-                ) : null}
-              </div>
-              <label htmlFor={`${id}-${row.accountId}`} className="flex items-center gap-2">
-                <Trans>Account read</Trans>
-                <Switch
-                  id={`${id}-${row.accountId}`}
-                  checked={row.accountRead}
-                  disabled={busy}
-                  onCheckedChange={(checked) => void change(row, checked)}
-                />
-              </label>
-            </div>
-          ))}
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-        </div>
+    <section className="mt-4 space-y-3 border-t border-border pt-4">
+      <h3 className="text-sm font-medium">
+        <Trans>Broker access</Trans>
+      </h3>
+      {loaded && rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          <Trans>No broker account is connected.</Trans>
+        </p>
       ) : null}
-    </details>
+      {rows.map((row) => {
+        const readable = row.accountRead || row.mandateRead;
+        return (
+          <div key={row.accountId} className="space-y-1 text-sm">
+            <p>
+              <Trans>Account</Trans>
+            </p>
+            <p>{row.label}</p>
+            <p className="text-muted-foreground">
+              <Trans>Market data</Trans>
+              {": "}
+              <Trans>Available</Trans>
+            </p>
+            <p className="text-muted-foreground">
+              <Trans>Account balance / equity / margin / positions</Trans>
+              {": "}
+              {readable ? <Trans>Allowed</Trans> : <Trans>Not allowed</Trans>}
+            </p>
+            <p className="text-muted-foreground">
+              <Trans>Execution</Trans>
+              {": "}
+              {row.mandateRead ? <Trans>Mandate scope</Trans> : <Trans>No authority</Trans>}
+            </p>
+            <label htmlFor={`${id}-${row.accountId}`} className="flex items-center gap-2 pt-1">
+              <Trans>Allow account read</Trans>
+              <Switch
+                id={`${id}-${row.accountId}`}
+                checked={row.accountRead}
+                disabled={busy}
+                onCheckedChange={(checked) => void change(row, checked)}
+              />
+            </label>
+          </div>
+        );
+      })}
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }

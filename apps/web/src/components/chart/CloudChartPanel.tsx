@@ -1,4 +1,4 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   BrokerInstrumentDirectory,
   ChartCommand,
@@ -19,7 +19,14 @@ import { Button } from "@rakazo/ui-web";
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import { CloudChartView } from "./CloudChartView";
-export function CloudChartPanel({ botId }: { botId?: string }) {
+export function CloudChartPanel({
+  botId,
+  onConnectAccount,
+}: {
+  botId?: string;
+  onConnectAccount?: () => void;
+}) {
+  const { t } = useLingui();
   const [chart, setChart] = useState<CloudChart | null>(null);
   const [charts, setCharts] = useState<CloudChart[]>([]);
   const [connections, setConnections] = useState<TradingConnectionView[]>([]);
@@ -31,6 +38,9 @@ export function CloudChartPanel({ botId }: { botId?: string }) {
   const [drawingTool, setDrawingTool] = useState<ChartDrawing["type"]>();
   const [event, setEvent] = useState<ChartEvent | undefined>();
   const [error, setError] = useState(false);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
+  const [instrumentsError, setInstrumentsError] = useState(false);
+  const [instrumentAttempt, setInstrumentAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const current = useRef(chart);
   current.current = chart;
@@ -49,10 +59,18 @@ export function CloudChartPanel({ botId }: { botId?: string }) {
         setChart(list.find((row) => row.ownerBotId === botId) ?? list[0] ?? null);
         const available = accounts.filter((row) => !row.revokedAt);
         setConnections(available);
-        setAccountId(available[0]?.id ?? "");
+        setAccountId((currentId) =>
+          currentId && available.some((row) => row.id === currentId)
+            ? currentId
+            : available.find((row) => row.state === "CONNECTED")?.id || available[0]?.id || "",
+        );
+        setAccountsLoaded(true);
       })
       .catch(() => {
-        if (!abort.signal.aborted) setError(true);
+        if (!abort.signal.aborted) {
+          setError(true);
+          setAccountsLoaded(true);
+        }
       });
     return () => abort.abort();
   }, [botId]);
@@ -73,6 +91,7 @@ export function CloudChartPanel({ botId }: { botId?: string }) {
     const abort = new AbortController();
     setDirectory([]);
     setInstrumentId("");
+    setInstrumentsError(false);
     setBusy(true);
     void rpc.trading
       .read({ operation: "instruments", accountId }, { signal: abort.signal })
@@ -83,13 +102,13 @@ export function CloudChartPanel({ botId }: { botId?: string }) {
         setInstrumentId(rows[0]?.id ?? "");
       })
       .catch(() => {
-        if (!abort.signal.aborted) setError(true);
+        if (!abort.signal.aborted) setInstrumentsError(true);
       })
       .finally(() => {
         if (!abort.signal.aborted) setBusy(false);
       });
     return () => abort.abort();
-  }, [accountId]);
+  }, [accountId, instrumentAttempt]);
   useEffect(() => {
     if (!chart) return;
     const abort = new AbortController();
@@ -175,47 +194,99 @@ export function CloudChartPanel({ botId }: { botId?: string }) {
             ))}
           </select>
         ) : null}
-        <select
-          aria-label="Broker account"
-          className={selectClass}
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-        >
-          {connections.map((row) => (
-            <option key={row.id} value={row.id}>
-              {row.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Broker instrument"
-          className={selectClass}
-          value={instrumentId}
-          onChange={(e) => setInstrumentId(e.target.value)}
-        >
-          {directory.map((row) => (
-            <option key={row.id} value={row.id}>
-              {row.brokerSymbol}
-            </option>
-          ))}
-        </select>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy || !instrumentId}
-          onClick={() =>
-            void command({
-              operation: "create",
-              accountId,
-              instrumentId,
-              timeframe: "1h",
-              scope: botId ? "WORKER" : "PRIVATE",
-              ...(botId ? { botId } : {}),
-            })
-          }
-        >
-          <Trans>Open chart</Trans>
-        </Button>
+        {!accountsLoaded ? (
+          <p className="text-sm text-muted-foreground">
+            <Trans>Loading broker accounts…</Trans>
+          </p>
+        ) : connections.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            <Trans>No broker account connected.</Trans>
+          </p>
+        ) : null}
+        {accountsLoaded && connections.length === 0 ? (
+          <Button variant="outline" size="sm" onClick={onConnectAccount}>
+            <Trans>Connect broker account</Trans>
+          </Button>
+        ) : null}
+        {accountsLoaded && connections.length > 0 ? (
+          <select
+            aria-label="Broker account"
+            className={selectClass}
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
+            {connections.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.state === "CONNECTED" ? row.label : `${row.label} · ${t`Disconnected`}`}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {accountsLoaded &&
+        connections.length > 0 &&
+        busy &&
+        directory.length === 0 &&
+        !instrumentsError ? (
+          <p className="text-sm text-muted-foreground">
+            <Trans>Loading broker instruments…</Trans>
+          </p>
+        ) : null}
+        {accountsLoaded && connections.length > 0 && instrumentsError ? (
+          <p className="text-sm text-muted-foreground">
+            <Trans>Could not load broker instruments.</Trans>
+          </p>
+        ) : null}
+        {accountsLoaded &&
+        connections.length > 0 &&
+        !instrumentsError &&
+        !busy &&
+        directory.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            <Trans>No broker instruments.</Trans>
+          </p>
+        ) : null}
+        {directory.length > 0 ? (
+          <select
+            aria-label="Broker instrument"
+            className={selectClass}
+            value={instrumentId}
+            onChange={(e) => setInstrumentId(e.target.value)}
+          >
+            {directory.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.displayName} · {row.brokerSymbol}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {instrumentsError ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setInstrumentAttempt((value) => value + 1)}
+          >
+            <Trans>Retry</Trans>
+          </Button>
+        ) : null}
+        {instrumentId ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() =>
+              void command({
+                operation: "create",
+                accountId,
+                instrumentId,
+                timeframe: "1h",
+                scope: botId ? "WORKER" : "PRIVATE",
+                ...(botId ? { botId } : {}),
+              })
+            }
+          >
+            <Trans>Open chart</Trans>
+          </Button>
+        ) : null}
       </div>
       {chart ? (
         <>

@@ -54,6 +54,11 @@ msgstr "{0} {unitLabel}"
 msgid "{0} connection"
 msgstr "{0}-Verbindung"
 
+#. placeholder {0}: group.rules
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "{0} contextual trading rules"
+msgstr ""
+
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx
 msgid "{0} default"
@@ -106,6 +111,10 @@ msgstr "Computer von {botName}"
 #: src/pages/shell/bot-credentials.tsx
 msgid "{commandVariable} is reserved and cannot be used as a command variable. Choose another name."
 msgstr "{commandVariable} ist reserviert und kann nicht als Befehlsvariable verwendet werden. Wähle einen anderen Namen."
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "{connected} connected"
+msgstr ""
 
 #: src/lib/billing.ts
 msgid "{count} days"
@@ -209,6 +218,10 @@ msgstr ""
 msgid "A subscription credential is stored securely."
 msgstr "Zugangsdaten für das Abonnement sind sicher gespeichert."
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Abandon unknown outcome"
+msgstr ""
+
 #: src/pages/shell/bot-picker.tsx
 msgid "About groups"
 msgstr ""
@@ -225,13 +238,14 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "Zugriffstoken (optional)"
 
+#: src/components/TradingAccountAccess.tsx
 #: src/components/TradingMandateCard.tsx
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Account"
 msgstr "Konto"
 
 #: src/components/TradingAccountAccess.tsx
-msgid "Account access"
+msgid "Account balance / equity / margin / positions"
 msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
@@ -253,10 +267,6 @@ msgstr ""
 
 #: src/pages/TradingConnectionsPanel.tsx
 msgid "Account name"
-msgstr ""
-
-#: src/components/TradingAccountAccess.tsx
-msgid "Account read"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
@@ -467,6 +477,10 @@ msgstr "{0}-Connector ohne Nachfrage erlauben"
 msgid "Allow {0} without asking"
 msgstr "{0} ohne Nachfrage erlauben"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Allow account read"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Allow email actions without asking"
 msgstr "E-Mail-Aktionen ohne Nachfrage erlauben"
@@ -481,6 +495,10 @@ msgstr "Kaufaktionen ohne Nachfrage erlauben"
 
 #: src/pages/memory-providers/SerenitySettingsForm.tsx
 msgid "Allow writing"
+msgstr ""
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Allowed"
 msgstr ""
 
 #: src/components/TradingMandateCard.tsx
@@ -564,6 +582,14 @@ msgstr ""
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Appearance"
 msgstr "Erscheinungsbild"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Applies immediately"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Applies to new Computers"
+msgstr ""
 
 #: src/components/teach/SkillDraftCard.tsx
 msgid "Approval boundaries"
@@ -668,6 +694,10 @@ msgstr "Anhang"
 msgid "Authentication failed."
 msgstr "Authentifizierung fehlgeschlagen."
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Authentication secret"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Authorization code or callback URL"
@@ -697,6 +727,10 @@ msgstr ""
 msgid "Automated senders will appear after they post here."
 msgstr ""
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Available"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "Available after the routine is saved"
 msgstr ""
@@ -711,6 +745,14 @@ msgstr "Avatar-Studio"
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Avatars"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Axiom dataset"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Axiom token"
 msgstr ""
 
 #: src/components/computer/FilesApp.tsx
@@ -813,6 +855,10 @@ msgstr ""
 msgid "Breach behavior"
 msgstr ""
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Broker access"
+msgstr ""
+
 #: src/pages/TradingConnectionsPanel.tsx
 msgid "Broker accounts"
 msgstr ""
@@ -828,6 +874,26 @@ msgstr "Browser"
 #: src/pages/KnowledgeSection.tsx
 msgid "Built-in"
 msgstr "Integriert"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Calendar API key"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Calendar connected"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Calendar disabled"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Calendar provider"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Calendar unavailable"
+msgstr ""
 
 #: src/App.tsx
 msgid "Can't reach the server."
@@ -876,6 +942,10 @@ msgstr "abgebrochen"
 #: src/pages/ActivityList.tsx
 msgid "Cancelled"
 msgstr "Abgebrochen"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Candles"
+msgstr ""
 
 #: src/pages/Artifacts.tsx
 msgid "Card view"
@@ -1138,6 +1208,10 @@ msgstr "Computer"
 msgid "Computer failed to boot"
 msgstr "Computer konnte nicht gestartet werden"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Computer idle timeout"
+msgstr ""
+
 #: src/pages/Shell.tsx
 msgid "Computer is asleep"
 msgstr "Computer ist im Ruhezustand"
@@ -1149,6 +1223,18 @@ msgstr ""
 #: src/pages/Shell.tsx
 msgid "Computer is stopped"
 msgstr "Computer ist gestoppt"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Computer memory"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Computer process limit"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Computer processors"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Computers"
@@ -1164,6 +1250,10 @@ msgstr "Computer sind aus. Setze SANDBOX_PROVIDER=docker mit SANDBOX_SUPERVISOR_
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Configure a plugin catalog on the server to connect apps."
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Configured"
 msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
@@ -1203,13 +1293,13 @@ msgstr "Modell verbinden"
 msgid "Connect a provider to add backups."
 msgstr "Verbinde einen Anbieter, um Backups hinzuzufügen."
 
-#: src/pages/TradingConnectionsPanel.tsx
-msgid "Connect account"
-msgstr ""
-
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Connect API key"
 msgstr "API-Schlüssel verbinden"
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Connect broker account"
+msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Connect Executor"
@@ -1218,6 +1308,10 @@ msgstr "Executor verbinden"
 #: src/pages/shell/message-cards.tsx
 msgid "Connect MCP server “{name}”"
 msgstr "MCP-Server „{name}“ verbinden"
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Connect MetaApi account"
+msgstr ""
 
 #: src/pages/McpServersOverlay.tsx
 msgid "Connect OAuth"
@@ -1277,6 +1371,18 @@ msgstr "Verbindungstest fehlgeschlagen."
 #: src/pages/PluginsOverlay.tsx
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "Die Verbindung zu {0} steht noch aus. Du kannst dieses Fenster schließen und später erneut nachsehen."
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Containment"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Containment unverified"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Containment verified"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
@@ -1520,6 +1626,10 @@ msgstr ""
 
 #: src/pages/IntegrationSetup.tsx
 msgid "Could not load bots. Reload to try again."
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Could not load broker instruments."
 msgstr ""
 
 #: src/components/computer/TerminalApp.tsx
@@ -1863,6 +1973,10 @@ msgstr "Cron"
 msgid "Cron expression"
 msgstr "Cron-Ausdruck"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Current"
+msgstr ""
+
 #: src/components/AccountAccess.tsx
 #: src/pages/AccountSettingsOverlay.tsx
 msgid "Current password"
@@ -1888,6 +2002,14 @@ msgstr ""
 msgid "Dark"
 msgstr "Dunkel"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Database URL"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Dataset name for optional log shipping."
+msgstr ""
+
 #: src/lib/billing.ts
 #: src/pages/RoutineSchedule.tsx
 msgid "day"
@@ -1907,6 +2029,7 @@ msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
+#: src/pages/OwnerSettingsPanels.tsx
 #: src/pages/shell/avatar-studio-popover.tsx
 msgid "Default"
 msgstr "Standard"
@@ -1996,6 +2119,10 @@ msgstr "Abgelehnt"
 msgid "Deny"
 msgstr "Ablehnen"
 
+#: src/pages/SettingsOverlay.tsx
+msgid "Deployment"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Deployment default"
 msgstr "Bereitstellungsstandard"
@@ -2020,6 +2147,10 @@ msgstr ""
 msgid "Disable LIVE"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Disabled"
+msgstr ""
+
 #: src/pages/shell/bot-panel.tsx
 msgid "Disabled tools"
 msgstr ""
@@ -2034,6 +2165,10 @@ msgstr "Trennen"
 
 #: src/pages/ModelSettingsOverlay.tsx
 msgid "Disconnect {disconnectName}?"
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Disconnected"
 msgstr ""
 
 #. placeholder {0}: selected.providerName ?? selected.provider
@@ -2162,6 +2297,14 @@ msgstr ""
 msgid "Enable LIVE"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Enabled"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Encryption key"
+msgstr ""
+
 #: src/pages/BillingSettingsPanel.tsx
 msgid "Ends {day}"
 msgstr ""
@@ -2201,6 +2344,14 @@ msgstr "Gib eine ganze Zahl von 1 bis 1000 für das Bilderlimit ein."
 msgid "Enter an API key before testing."
 msgstr "Gib vor dem Test einen API-Schlüssel ein."
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Entry timing"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Environment key"
+msgstr ""
+
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/RoutineSchedule.tsx
 msgid "Every"
@@ -2234,8 +2385,16 @@ msgstr "Jeden Monat"
 msgid "Every week"
 msgstr "Jede Woche"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Execution"
+msgstr ""
+
 #: src/components/TradingMandateCard.tsx
 msgid "Execution also requires account readiness and an exact approved mandate."
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Execution discipline"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
@@ -2328,6 +2487,10 @@ msgstr ""
 msgid "Filters"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Financial Modeling Prep"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/Onboarding.tsx
 msgid "Find models"
@@ -2360,6 +2523,10 @@ msgstr "Fertig."
 #: src/pages/McpOAuthCallback.tsx
 msgid "Finishing MCP connection…"
 msgstr "MCP-Verbindung wird abgeschlossen…"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Finnhub"
+msgstr ""
 
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Flag unexpected actions"
@@ -2415,6 +2582,10 @@ msgstr ""
 msgid "Git event"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Gold-specific behavior"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/Shell.tsx
 msgid "Group"
@@ -2442,6 +2613,10 @@ msgstr ""
 
 #: src/lib/call-session.ts
 msgid "Hang up, then enter the code on screen."
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Hard safety rules cannot be disabled."
 msgstr ""
 
 #: src/pages/RoutineEditor.tsx
@@ -2500,6 +2675,14 @@ msgstr "Stunde"
 #: src/pages/RoutineSchedule.tsx
 msgid "hours"
 msgstr "Stunden"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "How long an idle Computer stays running, in milliseconds."
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "How much the API and Worker write to their logs."
+msgstr ""
 
 #: src/pages/RoutineSchedule.tsx
 msgid "How often"
@@ -2629,6 +2812,10 @@ msgstr "Wissen"
 msgid "Language"
 msgstr "Sprache"
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Last healthy"
+msgstr ""
+
 #: src/components/DesktopUpdates.tsx
 msgid "Later"
 msgstr ""
@@ -2669,6 +2856,10 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "LIVE"
+msgstr ""
+
 #: src/components/TradingMandateCard.tsx
 msgid "LIVE availability"
 msgstr ""
@@ -2693,6 +2884,15 @@ msgstr "Webbilder automatisch laden"
 #: src/pages/ActivityList.tsx
 msgid "Loading activity…"
 msgstr "Aktivität wird geladen…"
+
+#: src/components/chart/CloudChartPanel.tsx
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Loading broker accounts…"
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "Loading broker instruments…"
+msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Loading integrations…"
@@ -2750,6 +2950,10 @@ msgstr "Mit lokalem Zugriff können Bots ohne Rückfrage Befehle ausführen. Ver
 msgid "Local Server Settings"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Log level"
+msgstr ""
+
 #: src/pages/Paywall.tsx
 #: src/pages/Shell.tsx
 msgid "Log out"
@@ -2793,6 +2997,10 @@ msgstr ""
 msgid "Manage the Space semantic memory provider."
 msgstr "Verwalte den Anbieter für semantische Erinnerungen des Arbeitsbereichs."
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Mandate scope"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Manual"
 msgstr ""
@@ -2812,6 +3020,10 @@ msgstr "Als gelesen markieren"
 #: src/pages/BotContextMenu.tsx
 msgid "Mark as Unread"
 msgstr "Als ungelesen markieren"
+
+#: src/components/TradingAccountAccess.tsx
+msgid "Market data"
+msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Markets and working instructions"
@@ -2840,6 +3052,10 @@ msgstr "Maximale Bilder pro Anfrage"
 msgid "Maximum loss"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Maximum memory available to each Agent Computer."
+msgstr ""
+
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Maximum of 10 backup models."
 msgstr "Maximal 10 Backup-Modelle."
@@ -2848,6 +3064,14 @@ msgstr "Maximal 10 Backup-Modelle."
 #: src/pages/Onboarding.tsx
 msgid "Maximum output tokens"
 msgstr "Maximale Ausgabetokens"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Maximum processes inside each Agent Computer."
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Maximum tool calls in one Agent turn. Empty leaves the limit off."
+msgstr ""
 
 #: src/pages/memory-providers/SerenitySettingsForm.tsx
 msgid "MCP endpoint"
@@ -2964,6 +3188,10 @@ msgstr "Minute"
 #: src/pages/RoutineSchedule.tsx
 msgid "minutes"
 msgstr "Minuten"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Missing"
+msgstr ""
 
 #: src/components/TradingMandateCard.tsx
 msgid "Mission unavailable"
@@ -3112,6 +3340,14 @@ msgstr "Neuer Skill"
 msgid "New space"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "News protection"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "News-candle detection"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx
 msgid "No agent connections yet."
 msgstr ""
@@ -3132,6 +3368,10 @@ msgstr "keine Authentifizierung"
 msgid "No authentication"
 msgstr "Keine Authentifizierung"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "No authority"
+msgstr ""
+
 #: src/components/computer/TerminalApp.tsx
 msgid "No bot activity yet."
 msgstr "Noch keine Bot-Aktivität."
@@ -3142,6 +3382,22 @@ msgstr ""
 
 #: src/pages/shell/bot-picker.tsx
 msgid "No bots match"
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "No broker account connected."
+msgstr ""
+
+#: src/components/TradingAccountAccess.tsx
+msgid "No broker account is connected."
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "No broker accounts connected"
+msgstr ""
+
+#: src/components/chart/CloudChartPanel.tsx
+msgid "No broker instruments."
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx
@@ -3237,6 +3493,10 @@ msgstr ""
 msgid "None yet"
 msgstr "Noch keine"
 
+#: src/components/TradingAccountAccess.tsx
+msgid "Not allowed"
+msgstr ""
+
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Not connected"
 msgstr "Nicht verbunden"
@@ -3270,6 +3530,10 @@ msgstr "Jetzt"
 msgid "Now using {0}."
 msgstr "Jetzt wird {0} verwendet."
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Number of background jobs the Worker may process at once."
+msgstr ""
+
 #: src/pages/McpOAuthCallback.tsx
 msgid "OAuth authorization was cancelled."
 msgstr "OAuth-Autorisierung wurde abgebrochen."
@@ -3286,6 +3550,10 @@ msgstr "OAuth-Verbindung fehlgeschlagen"
 msgid "OAuth expired"
 msgstr ""
 
+#: src/pages/SettingsOverlay.tsx
+msgid "Observability"
+msgstr ""
+
 #. placeholder {0}: call.botName
 #: src/components/call/CallCard.tsx
 msgid "On a call with {0}"
@@ -3299,6 +3567,10 @@ msgstr ""
 #: src/pages/RoutineSchedule.tsx
 msgid "on the 1st at {0}"
 msgstr "am 1. um {0}"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Only applied to gold instruments"
+msgstr ""
 
 #: src/pages/Shell.tsx
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
@@ -3494,6 +3766,10 @@ msgstr "Wähle ein Modell aus der Liste oder gib eine Modell-ID ein, die dieser 
 msgid "Pin"
 msgstr "Anheften"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Placeholder"
+msgstr ""
+
 #: src/pages/VoiceSettingsOverlay.tsx
 msgid "Playing…"
 msgstr "Wiedergabe…"
@@ -3508,6 +3784,10 @@ msgstr ""
 
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Postgres password"
 msgstr ""
 
 #. placeholder {0}: props.name
@@ -3525,6 +3805,10 @@ msgstr "Privat"
 
 #: src/pages/shell/dialogs.tsx
 msgid "Private workspace with its own bots and groups."
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Processor limit for each Agent Computer."
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx
@@ -3564,10 +3848,6 @@ msgstr "Reagieren"
 #: src/pages/Shell.tsx
 msgid "Reactions"
 msgstr "Reaktionen"
-
-#: src/components/TradingAccountAccess.tsx
-msgid "Read access through active mandate"
-msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Read replies aloud"
@@ -3833,6 +4113,10 @@ msgstr ""
 msgid "Resize panel"
 msgstr "Panelgröße ändern"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Restart required"
+msgstr ""
+
 #: src/components/DesktopUpdates.tsx
 msgid "Restart to update"
 msgstr ""
@@ -3857,7 +4141,12 @@ msgstr ""
 msgid "Resume"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Retests"
+msgstr ""
+
 #: src/components/AccountAccess.tsx
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/Auth.tsx
 #: src/pages/ModelBackupsSettings.tsx
 msgid "Retry"
@@ -3905,6 +4194,10 @@ msgstr ""
 msgid "Rotate key"
 msgstr ""
 
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Rotate token"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 #: src/pages/Shell.tsx
 msgid "Routine"
@@ -3916,6 +4209,10 @@ msgstr "Routinen"
 
 #: src/pages/Paywall.tsx
 msgid "Routines that run while you're away"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Rules are selected contextually. They are not all sent on every Agent turn."
 msgstr ""
 
 #: src/pages/RoutineEditor.tsx
@@ -3950,12 +4247,17 @@ msgstr "Wird ausgeführt…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Sandbox supervisor token"
+msgstr ""
+
 #: src/components/AskCard.tsx
 #: src/components/teach/SkillDraftCard.tsx
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/GroupPanel.tsx
 #: src/pages/KnowledgeSection.tsx
 #: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/OwnerSettingsPanels.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-panel.tsx
 #: src/pages/shell/dialogs.tsx
@@ -4017,6 +4319,7 @@ msgstr ""
 #: src/pages/GroupPanel.tsx
 #: src/pages/ModelBackupsSettings.tsx
 #: src/pages/ModelSettingsOverlay.tsx
+#: src/pages/OwnerSettingsPanels.tsx
 #: src/pages/RoutineEditor.tsx
 #: src/pages/shell/bot-credentials.tsx
 #: src/pages/shell/dialogs.tsx
@@ -4027,6 +4330,10 @@ msgstr "Wird gespeichert…"
 #: src/lib/call-session.ts
 msgid "Say yes or no, or answer in a sentence."
 msgstr "Antworte mit Ja oder Nein oder in einem Satz."
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Screen proxy secret"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx
 #: src/pages/PluginsOverlay.tsx
@@ -4451,6 +4758,10 @@ msgstr ""
 msgid "Target behavior"
 msgstr ""
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Targets"
+msgstr ""
+
 #: src/components/teach/TeachComputerOverlay.tsx
 msgid "Teach a task"
 msgstr "Aufgabe anlernen"
@@ -4491,6 +4802,10 @@ msgstr "Test"
 msgid "Test API key"
 msgstr "API-Schlüssel testen"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Test calendar"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "Test run"
 msgstr ""
@@ -4522,6 +4837,10 @@ msgstr "Der Anbieter drosselt die Anfragen."
 #: src/pages/MemorySettingsOverlay.tsx
 msgid "The selected memory provider is not available in this build."
 msgstr "Der ausgewählte Erinnerungsanbieter ist in diesem Build nicht verfügbar."
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "These deployment checks are read-only. Values are never shown."
+msgstr ""
 
 #: src/pages/shell/bot-credentials.tsx
 msgid "These saved settings can't be read. Remove it and add it again."
@@ -4648,6 +4967,10 @@ msgstr "Heute"
 msgid "Tool sources"
 msgstr "Toolquellen"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Tool-call limit"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Tools"
 msgstr ""
@@ -4660,8 +4983,16 @@ msgstr ""
 msgid "Total reserved risk limit"
 msgstr ""
 
+#: src/pages/SettingsOverlay.tsx
+msgid "Trading"
+msgstr ""
+
 #: src/components/chart/CloudChartView.tsx
 msgid "Trading Agent"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Trading knowledge"
 msgstr ""
 
 #: src/components/TradingMandateCard.tsx
@@ -4679,6 +5010,10 @@ msgstr ""
 #: src/pages/PluginsOverlay.tsx
 msgid "Treg token"
 msgstr "Treg-Token"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Trendlines"
+msgstr ""
 
 #: src/pages/BillingSettingsPanel.tsx
 msgid "Trial"
@@ -4722,6 +5057,10 @@ msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Uninstall"
+msgstr ""
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Unknown"
 msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
@@ -4841,6 +5180,10 @@ msgstr "Dieses Modell verwenden"
 msgid "Use your own key"
 msgstr "Eigenen Schlüssel verwenden"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Used for scheduled economic events and Trading Agent news context."
+msgstr ""
+
 #: src/components/AskCard.tsx
 #: src/pages/shell/bot-credentials.tsx
 msgid "Username"
@@ -4857,6 +5200,14 @@ msgstr ""
 #: src/pages/shell/bot-credentials.tsx
 msgid "Values are encrypted and never shown again."
 msgstr "Werte werden verschlüsselt und nicht erneut angezeigt."
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "verified"
+msgstr ""
+
+#: src/pages/TradingConnectionsPanel.tsx
+msgid "Verify"
+msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Verify and add"
@@ -4962,10 +5313,18 @@ msgstr "Einsatzzeitpunkt"
 msgid "Where should bots run?"
 msgstr "Wo sollen Bots ausgeführt werden?"
 
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Worker concurrency"
+msgstr ""
+
 #: src/lib/roster-status.ts
 #: src/pages/Auth.tsx
 msgid "Working…"
 msgstr "Wird verarbeitet…"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Write-only. The saved key is never shown again."
+msgstr ""
 
 #: src/components/computer/TerminalApp.tsx
 msgid "Wrote {path}"

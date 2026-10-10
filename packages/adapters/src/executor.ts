@@ -5554,7 +5554,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             try {
               const result =
                 name === "trading_accounts"
-                  ? await new TradingConnections(deps.prisma, deps.secretStore).list(run.userId)
+                  ? await new TradingConnections(deps.prisma, deps.secretStore).agentCatalog(
+                      run.userId,
+                      run.botId,
+                    )
                   : await requestBrokerRead(deps.prisma, run.userId, args, context.signal);
               return finish(result);
             } catch (error) {

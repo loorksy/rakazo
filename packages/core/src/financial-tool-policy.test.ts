@@ -98,15 +98,18 @@ describe("hard financial tool boundary", () => {
   it.each(["account", "positions", "orders", "preflight"])(
     "does not delegate %s authority to research peers",
     (operation) => {
-      expect(
-        financialToolPolicy({
-          tradingProduct: true,
-          toolName: "broker_read",
-          viaConnector: false,
-          operation,
-          accountReadsAllowed: false,
-        }).decision,
-      ).toBe("DENY");
+      const denied = financialToolPolicy({
+        tradingProduct: true,
+        toolName: "broker_read",
+        viaConnector: false,
+        operation,
+        accountReadsAllowed: false,
+      });
+      expect(denied.decision).toBe("DENY");
+      if (denied.decision === "DENY") {
+        expect(denied.reason).toContain("Account reads require");
+        expect(denied.reason).not.toContain("No broker account");
+      }
       expect(
         financialToolPolicy({
           tradingProduct: true,

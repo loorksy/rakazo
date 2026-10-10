@@ -268,13 +268,23 @@ export class BrokerConnectionSupervisor {
         }
         slot.session = session;
         const capabilities = await session.capabilities();
+        const account = await session.account().catch(() => null);
+        const currency = z
+          .string()
+          .regex(/^[A-Za-z]{3,8}$/)
+          .safeParse(account?.currency);
         await withBrokerSessionFence(
           this.prisma,
           token,
           async (tx) => {
             await tx.tradingConnection.update({
               where: { id: token.accountId },
-              data: { capabilities, environment: capabilities.environment, verifiedAt: this.now() },
+              data: {
+                capabilities,
+                environment: account?.environment ?? capabilities.environment,
+                ...(currency.success ? { currency: currency.data.toUpperCase() } : {}),
+                verifiedAt: this.now(),
+              },
             });
             await tx.brokerSessionLease.update({
               where: { accountId: token.accountId },

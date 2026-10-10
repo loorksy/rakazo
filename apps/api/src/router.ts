@@ -1202,6 +1202,10 @@ export function createRouter(deps: RouterDeps) {
           throw error;
         }
       }),
+      calendarStatus: authed.deployment.calendarStatus.handler(async ({ context }) => {
+        if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
+        return deploymentConfig.calendarStatus();
+      }),
       setSecret: authed.deployment.setSecret.handler(async ({ context, input }) => {
         if (!context.actor.isDeploymentOwner) throw new ORPCError("FORBIDDEN");
         try {

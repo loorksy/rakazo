@@ -7,10 +7,20 @@ import {
   TradingConnectionViewSchema,
 } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
-import { Prisma, requireTradingOwner } from "@rakazo/db";
+import { listTradingAccountAccess, Prisma, requireTradingOwner } from "@rakazo/db";
 import { z } from "zod";
 import { BrokerProviderError } from "./metaapi-normalize.js";
 import { persistPreparedSecret } from "./secret-persistence.js";
+
+const accountCurrency = z.string().regex(/^[A-Za-z]{3,8}$/);
+
+/** Exact wording the Agent must relay. A missing read grant is not a missing account. */
+export function accountCatalogSummary(accounts: ReadonlyArray<{ accountRead: boolean }>): string {
+  if (accounts.length === 0) return "No broker account is connected.";
+  if (accounts.every((account) => !account.accountRead))
+    return "A broker account is connected. This Agent does not have account-read permission.";
+  return "This Agent can read the permitted account state.";
+}
 
 export class TradingConnections {
   constructor(
@@ -32,6 +42,9 @@ export class TradingConnections {
         providerAccountId: row.providerAccountId,
         region: row.region,
         environment: row.environment,
+        currency: accountCurrency.safeParse(row.currency).success
+          ? row.currency?.toUpperCase()
+          : null,
         verifiedAt: row.verifiedAt?.toISOString() ?? null,
         revokedAt: row.revokedAt?.toISOString() ?? null,
         state:
@@ -45,6 +58,35 @@ export class TradingConnections {
         failureCode: row.lease?.failureCode ?? null,
       }),
     );
+  }
+  /** Same connections as owner settings. Read and execution are separate and never implied. */
+  async agentCatalog(ownerUserId: string, botId: string) {
+    const [accounts, access, mandates] = await Promise.all([
+      this.list(ownerUserId),
+      listTradingAccountAccess(this.prisma, ownerUserId, botId),
+      this.prisma.tradingMandate.findMany({
+        where: { ownerUserId, botId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+        select: { accountId: true },
+      }),
+    ]);
+    const visible = accounts
+      .filter((account) => !account.revokedAt)
+      .map((account) => {
+        const grant = access.find((row) => row.accountId === account.id);
+        return {
+          id: account.id,
+          label: account.label,
+          provider: account.provider,
+          state: account.state,
+          environment: account.environment,
+          marketData: true as const,
+          accountRead: Boolean(grant?.accountRead || grant?.mandateRead),
+          execution: mandates.some((row) => row.accountId === account.id)
+            ? ("MANDATE" as const)
+            : ("NONE" as const),
+        };
+      });
+    return { summary: accountCatalogSummary(visible), accounts: visible };
   }
   async save(ownerUserId: string, spaceId: string, raw: unknown) {
     await requireTradingOwner(this.prisma, ownerUserId);
@@ -138,10 +180,19 @@ export class TradingConnections {
           signal,
         ),
       );
+    const currency = accountCurrency.safeParse(account.currency);
+    await this.prisma.tradingConnection.updateMany({
+      where: { id: accountId, ownerUserId, revokedAt: null },
+      data: {
+        verifiedAt: new Date(),
+        ...(account.environment ? { environment: account.environment } : {}),
+        ...(currency.success ? { currency: currency.data.toUpperCase() } : {}),
+      },
+    });
     return {
       accountId,
       environment: account.environment ?? null,
-      currency: account.currency ?? null,
+      currency: currency.success ? currency.data.toUpperCase() : null,
       tradingAllowed: account.tradingAllowed ?? null,
       connected: true as const,
     };

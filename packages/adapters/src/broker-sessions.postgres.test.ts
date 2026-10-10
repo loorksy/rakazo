@@ -5,7 +5,9 @@ import {
   claimBrokerSession,
   createDb,
   heartbeatBrokerSession,
+  listTradingAccountAccess,
   releaseBrokerSession,
+  setTradingAccountAccess,
   withBrokerSessionFence,
 } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -148,6 +150,55 @@ suite("protected broker sessions (PostgreSQL)", () => {
     await expect(claimBrokerSession(db.prisma, accountId, "b", initialTime)).rejects.toThrow(
       "stale or revoked",
     );
+  });
+  it("uses one saved connection for settings, account access, and the agent catalog", async () => {
+    await db.prisma.organization.create({
+      data: { id: "org", slug: "fixture", name: "Fixture", createdAt: initialTime },
+    });
+    await db.prisma.space.create({
+      data: { id: "space", organizationId: "org", name: "Fixture" },
+    });
+    await db.prisma.deploymentSettings.update({
+      where: { id: "default" },
+      data: { ownerSpaceId: "space" },
+    });
+    await db.prisma.bot.create({
+      data: { id: "main", spaceId: "space", userId: owner, name: "Fixture", color: "blue" },
+    });
+    const connections = new TradingConnections(db.prisma, secrets);
+    const listed = (await connections.list(owner)).filter((row) => !row.revokedAt);
+    const access = await listTradingAccountAccess(db.prisma, owner, "main");
+    const catalog = await connections.agentCatalog(owner, "main");
+    expect(listed.map((row) => row.id)).toEqual([accountId]);
+    expect(access.map((row) => row.accountId)).toEqual([accountId]);
+    expect(catalog.accounts.map((row) => row.id)).toEqual([accountId]);
+    expect(catalog.summary).toBe(
+      "A broker account is connected. This Agent does not have account-read permission.",
+    );
+    expect(catalog.accounts[0]).toMatchObject({
+      marketData: true,
+      accountRead: false,
+      execution: "NONE",
+    });
+    expect(JSON.stringify(catalog)).not.toContain(credential);
+    await setTradingAccountAccess(db.prisma, owner, {
+      botId: "main",
+      accountId,
+      accountRead: true,
+      expectedRevision: 0,
+    });
+    const granted = await connections.agentCatalog(owner, "main");
+    expect(granted.accounts[0]).toMatchObject({
+      id: accountId,
+      accountRead: true,
+      execution: "NONE",
+    });
+    expect(granted.summary).toBe("This Agent can read the permitted account state.");
+    await connections.revoke(owner, accountId);
+    const removed = await connections.agentCatalog(owner, "main");
+    expect(removed.accounts).toEqual([]);
+    expect(removed.summary).toBe("No broker account is connected.");
+    expect(await listTradingAccountAccess(db.prisma, owner, "main")).toEqual([]);
   });
   it("rejects foreign principals and never exposes stored broker secrets", async () => {
     const connections = new TradingConnections(db.prisma, secrets);
@@ -530,7 +581,10 @@ suite("protected broker sessions (PostgreSQL)", () => {
     await f.supervisor.tick();
     await f.supervisor.drain();
     expect(observed).toHaveLength(1);
-    expect(f.session.account).not.toHaveBeenCalled();
+    expect(f.session.account).toHaveBeenCalledTimes(1);
+    expect(
+      (await db.prisma.tradingConnection.findUniqueOrThrow({ where: { id: accountId } })).currency,
+    ).toBe("USD");
     await unsubscribe();
   });
   it("restores connected health after an internal provider reconnect", async () => {

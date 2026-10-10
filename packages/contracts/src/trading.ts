@@ -225,6 +225,10 @@ export const TradingConnectionViewSchema = z.strictObject({
   providerAccountId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
   region: Reference.nullable(),
   environment: BrokerEnvironmentSchema.nullable(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3,8}$/)
+    .nullable(),
   verifiedAt: Timestamp.nullable(),
   revokedAt: Timestamp.nullable(),
   state: z.enum(["DISCONNECTED", "CONNECTING", "CONNECTED", "RECONNECTING"]),

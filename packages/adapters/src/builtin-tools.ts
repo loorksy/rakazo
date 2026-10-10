@@ -202,7 +202,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "trading_accounts",
     description:
-      "List the owner's broker connections and connection health. Credentials are never returned. Choose the exact account before market or account reads; a connected account does not grant live execution authority.",
+      "List the owner's saved broker connections and relay the summary exactly. summary 'No broker account is connected.' means none is saved. A listed account with accountRead false exists, but this Agent does not have account-read permission for balances, equity, margin, or positions. marketData true means instruments, quotes, and candles are available without that permission. execution NONE means this Agent has no mandate and is not granted by account read. Credentials are never returned, and this tool never grants execution.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
