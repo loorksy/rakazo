@@ -242,9 +242,9 @@ export class SimulationBroker {
         !authority ||
         mandate.approvedByUserId !== actor.ownerUserId ||
         mandate.approvedFingerprint !== tradingMandateFingerprint(envelope) ||
-        guard?.frozen ||
+        (guard?.frozen && !(authority === "FINISHING" && mandate.status === "EMERGENCY_STOPPED")) ||
         !limits?.autonomousEnabled ||
-        limits.frozen ||
+        (limits.frozen && !(authority === "FINISHING" && mandate.status === "EMERGENCY_STOPPED")) ||
         limits.accountId !== context.accountId ||
         limits.mode !== "SIMULATION" ||
         limits.revision !== guard?.revision ||

@@ -129,6 +129,28 @@ export class DockerSandboxProvider implements SandboxProvider {
   private url(path: string) {
     return `${this.supervisorUrl.replace(/\/$/, "")}${path}`;
   }
+  async financialContainment(context: AdapterContext) {
+    const response = await fetch(
+      this.url(`/financial-containment?spaceId=${encodeURIComponent(context.spaceId)}`),
+      { headers: this.headers(context), signal: context.signal },
+    );
+    if (!response.ok) return { active: false, revision: null, checkedAt: new Date().toISOString() };
+    const evidence = await readSandboxJson<{
+      active: boolean;
+      revision: string | null;
+      checkedAt: string;
+    }>(response, context.signal);
+    const age = Date.now() - Date.parse(evidence.checkedAt);
+    if (
+      evidence.active !== true ||
+      evidence.revision !== "financial-egress-v1" ||
+      !Number.isFinite(age) ||
+      age < -2000 ||
+      age > 5000
+    )
+      return { active: false, revision: null, checkedAt: new Date().toISOString() };
+    return { active: true, revision: evidence.revision, checkedAt: evidence.checkedAt };
+  }
 
   private headers(context: AdapterContext, botId?: string) {
     return {

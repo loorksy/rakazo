@@ -72,6 +72,7 @@ import {
   endsSentence,
   expandSkillReferencesInPrompt,
   financialBuiltinRead,
+  financialResearchUrlAllowed,
   financialToolPolicy,
   formatSkillRunPrompt,
   formatSkillsCatalogInstruction,
@@ -4303,6 +4304,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             tradingProduct: settings?.singleOwnerEnforced === true,
             toolName: name,
             viaConnector,
+            connectorFinancialClass: (resolvedTool ?? connectorTools.get(name))?.route
+              ?.financialClass,
+            researchUrlAllowed:
+              name === "web_fetch" && financialResearchUrlAllowed(String(args.url ?? "")),
             operation: typeof args.operation === "string" ? args.operation : undefined,
             accountReadsAllowed:
               settings?.singleOwnerEnforced === true &&
@@ -5479,7 +5484,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
           }
           if (name === "web_fetch") {
-            return finish(await webFetchFromTool(web, context, args));
+            return finish(
+              await webFetchFromTool(
+                web,
+                { ...context, financialResearchOnly: settings?.singleOwnerEnforced === true },
+                args,
+              ),
+            );
           }
           if (PAGE_BROWSER_TOOL_NAMES.has(name)) {
             if (heldForTakeover) {

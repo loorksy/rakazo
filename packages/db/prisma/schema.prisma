@@ -383,6 +383,7 @@ model DeploymentSettings {
   ownerSpaceId                    String?
   singleOwnerEnforced             Boolean  @default(false)
   ownerBootstrapCompleted         Boolean  @default(false)
+  tradingLiveEnabled              Boolean  @default(false)
   ownerBootstrapProofHash         String?
   signupsEnabled                  Boolean  @default(true)
   signupAllowlist                 String   @default("")
@@ -1682,6 +1683,7 @@ model TradingRiskReservation {
   status String @default("RESERVED")
   executionGeneration Int
   providerReference String?
+  providerState Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1830,4 +1832,79 @@ model TradingAgentAccountAccess {
   account TradingConnection @relation(fields: [accountId], references: [id], onDelete: Cascade)
   @@id([botId, accountId])
   @@map("trading_agent_account_access")
+}
+
+// Durable outbound mutation identity. Ordinary Run/Bot/chat deletion cannot erase evidence.
+model TradingProviderExecution {
+  effectId String @id
+  ownerUserId String
+  accountId String
+  clientId String @unique
+  actionFingerprint String
+  status String @default("PENDING")
+  claimedGeneration Int?
+  sentAt DateTime?
+  admission Json?
+  outcome Json?
+  reconciledAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([accountId, status], map: "trading_provider_executions_account_status")
+  @@map("trading_provider_executions")
+}
+
+// Rebuildable state; durable supervision/drift records copy evidence they require.
+model TradingBrokerSnapshot {
+  accountId String @id
+  generation Int
+  account Json
+  positions Json
+  orders Json
+  observedAt DateTime
+  revision Int @default(1)
+  @@map("trading_broker_snapshots")
+}
+
+model TradingPositionSupervision {
+  id String @id @default(cuid())
+  ownerUserId String
+  botId String
+  accountId String
+  positionId String
+  mandateId String @unique
+  baseline Json
+  expected Json
+  status String @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([accountId, status], map: "trading_position_supervisions_account_status")
+  @@map("trading_position_supervisions")
+}
+
+model TradingDriftEvent {
+  id String @id @default(cuid())
+  ownerUserId String
+  accountId String
+  supervisionId String?
+  reason String
+  evidence Json
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([accountId, resolvedAt], map: "trading_drift_events_account_unresolved")
+  @@map("trading_drift_events")
+}
+
+// Written only by trusted runtime health probes, never owner/model input.
+model TradingRuntimeHealth {
+  id String @id @default("default")
+  containmentRevision String?
+  containmentScopeFingerprint String?
+  containmentActive Boolean @default(false)
+  riskHealthy Boolean @default(false)
+  effectsHealthy Boolean @default(false)
+  emergencyStopHealthy Boolean @default(false)
+  observabilityHealthy Boolean @default(false)
+  jobLagMs Int?
+  observedAt DateTime
+  @@map("trading_runtime_health")
 }

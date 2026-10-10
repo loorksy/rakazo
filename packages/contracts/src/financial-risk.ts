@@ -33,6 +33,8 @@ export const TradingMandateEnvelopeSchema = TradingAuthorityEnvelopeSchema.exten
   supervisionPositionId: Id.nullable(),
   supervisedOrderIds: z.array(Id).max(100),
   targetBehavior: z.enum(["FREEZE", "CANCEL_PENDING", "CLOSE_ATTRIBUTED_EXPOSURE"]),
+  /** Absence preserves existing approval fingerprints and means freeze only. */
+  emergencyBehavior: z.enum(["FREEZE", "CANCEL_PENDING", "CLOSE_ATTRIBUTED_EXPOSURE"]).optional(),
   riskCalculationVersion: z.literal("stop-loss-v1"),
   costReservePerTrade: TradingDecimalSchema,
 }).superRefine((envelope, context) => {

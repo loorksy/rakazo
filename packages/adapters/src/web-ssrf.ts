@@ -25,6 +25,7 @@ export interface SafeWebFetchOptions {
   headers?: Record<string, string>;
   signal?: AbortSignal;
   maxRedirects?: number;
+  urlAllowed?: (url: string) => boolean;
   /** Keep the first `maxBytes` of a longer body instead of rejecting it. */
   truncate?: boolean;
   /** Refuse any hop, redirects included, whose port is not listed. */
@@ -135,6 +136,7 @@ export async function fetchSafeWebBytes(
       redirectsRemaining: options.maxRedirects ?? MAX_REDIRECTS,
       truncate: options.truncate ?? false,
       allowedPorts: options.allowedPorts,
+      urlAllowed: options.urlAllowed,
     });
   } finally {
     // Race graceful close against the shared deadline. Do not wait unbounded on close().
@@ -165,11 +167,14 @@ async function followRedirects(
     redirectsRemaining: number;
     truncate: boolean;
     allowedPorts?: readonly number[];
+    urlAllowed?: (url: string) => boolean;
   },
 ): Promise<SafeWebResponse<Uint8Array>> {
   if (state.signal.aborted) {
     throw abortError(state.signal);
   }
+  if (state.urlAllowed && !state.urlAllowed(rawUrl))
+    throw new Error("Destination outside verified research boundary");
   const validated = await assertSafeWebUrl(rawUrl, state.resolve, state.signal, state.allowedPorts);
   // Race fetch against the deadline — injected fetch may ignore init.signal.
   const response = await withAbort(

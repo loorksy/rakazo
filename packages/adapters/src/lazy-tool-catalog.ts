@@ -74,7 +74,7 @@ export function lazyCatalogTools(
         },
       },
       readOnly: true,
-      route: { connectorId, toolName: CATALOG_SEARCH },
+      route: { connectorId, toolName: CATALOG_SEARCH, financialClass: "NON_FINANCIAL" },
     },
     {
       name: `${prefix}_load_tool`,
@@ -91,7 +91,7 @@ export function lazyCatalogTools(
         required: ["id"],
       },
       readOnly: true,
-      route: { connectorId, toolName: CATALOG_LOAD },
+      route: { connectorId, toolName: CATALOG_LOAD, financialClass: "NON_FINANCIAL" },
     },
     {
       name: `${prefix}_execute_tool`,

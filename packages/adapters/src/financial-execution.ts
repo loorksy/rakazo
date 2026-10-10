@@ -36,7 +36,7 @@ function view(effect: Effect) {
           : effect.status === "denied"
             ? ("DENIED" as const)
             : ("UNCERTAIN" as const),
-    mode: "SIMULATION" as const,
+    mode: canonicalFinancialAction(effect.request).mode,
     providerReference: effect.financialProviderReference,
     ...(result.success ? { result: result.data } : {}),
   };
@@ -84,7 +84,7 @@ export class FinancialExecution {
       return {
         effectId: effect.id,
         status: "APPROVAL_REQUIRED" as const,
-        mode: "SIMULATION" as const,
+        mode: action.mode,
         ask: buildFinancialApprovalAskBlock(
           effect.id,
           action,
@@ -96,6 +96,13 @@ export class FinancialExecution {
     const facts = await this.preflight(actor, action, context.signal);
     context.signal.throwIfAborted();
     effect = await this.effects.begin(actor, effect.id, facts);
+    if (action.mode === "LIVE")
+      return {
+        effectId: effect.id,
+        mode: action.mode,
+        status: "STARTED" as const,
+        providerReference: null,
+      };
     let outcome: FinancialEffectOutcome;
     try {
       context.signal.throwIfAborted();
@@ -120,6 +127,22 @@ export class FinancialExecution {
   async reconcile(actor: ChartActor, raw: unknown) {
     const command = TradeReconcileCommandSchema.parse(raw);
     await this.effects.recoverInterrupted();
-    return view(await this.effects.reconcileSimulation(actor, command.effectId));
+    const effect = await this.prisma.externalEffect.findUniqueOrThrow({
+      where: { id: command.effectId },
+    });
+    if (canonicalFinancialAction(effect.request).mode === "SIMULATION")
+      return view(await this.effects.reconcileSimulation(actor, command.effectId));
+    const context = effect.financialContext as {
+      ownerId?: string;
+      botId?: string;
+      authorizationId?: string;
+    } | null;
+    const mandate = context?.authorizationId
+      ? await this.prisma.tradingMandate.findUnique({ where: { id: context.authorizationId } })
+      : null;
+    if (!mandate || mandate.ownerUserId !== actor.ownerUserId || mandate.botId !== actor.botId)
+      throw new Error("Exact Agent effect scope required");
+    // The trusted account Worker reconciles from provider state. Tool calls never resend.
+    return view(effect);
   }
 }

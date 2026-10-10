@@ -146,6 +146,8 @@ export { TradeProposals } from "./trade-proposals.js";
 export * from "./trading-connections.js";
 export { enqueueMissionWakes, wakeTradingMission } from "./trading-mission-wakes.js";
 export { TradingMissions } from "./trading-missions.js";
+export { TradingOwnerControls } from "./trading-owner-controls.js";
+export { TradingRuntimeHealthProbe } from "./trading-runtime-health.js";
 export * from "./voice-factory.js";
 export * from "./wakeup.js";
 export * from "./web-limits.js";

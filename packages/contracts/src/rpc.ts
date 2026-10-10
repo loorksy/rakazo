@@ -207,6 +207,18 @@ export const appContract = {
         }),
       ),
     missions: oc.input(TradingMissionCommandSchema).output(TradingMissionResponseSchema),
+    setLiveEnabled: oc
+      .input(z.strictObject({ enabled: z.boolean() }))
+      .output(z.strictObject({ enabled: z.boolean() })),
+    reconcileDrift: oc
+      .input(z.strictObject({ accountId: Id, expectedRevision: z.number().int().positive() }))
+      .output(
+        z.strictObject({
+          accountId: Id,
+          revision: z.number().int().positive(),
+          requiresNewMandate: z.literal(true),
+        }),
+      ),
     resolveMandate: oc.input(MandateResolutionSchema).output(TradingMandateViewSchema),
     controlMandate: oc.input(MandateControlSchema).output(TradingMandateViewSchema),
     accountGuardrails: oc

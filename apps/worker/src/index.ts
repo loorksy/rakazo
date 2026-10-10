@@ -50,6 +50,7 @@ import {
   ScriptedAgentRuntime,
   SpaceMemoryProviderResolver,
   sandboxProviderOptionsFromEnv,
+  TradingRuntimeHealthProbe,
   withSecretPersistence,
 } from "@rakazo/adapters";
 import { resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
@@ -266,6 +267,13 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, databaseCapacityBackoffMs(attempt)));
     }
   }
+  const tradingHealth = new TradingRuntimeHealthProbe(
+    prisma,
+    sandbox,
+    () => brokerSupervisor.health(),
+    logger,
+  );
+  tradingHealth.start();
   const reconciler = createJobReconciler({
     prisma,
     jobs,
@@ -287,6 +295,7 @@ async function main() {
     if (stopping) return;
     stopping = true;
     try {
+      await tradingHealth.close();
       await reconciler.stop();
       await brokerSupervisor.close();
       await jobHost.stop();

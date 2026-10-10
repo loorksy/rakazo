@@ -211,7 +211,14 @@ export class MetaApiBrokerProvider implements BrokerProvider {
       await rpc.connect();
       await rpc.waitSynchronized(20);
       if (input.signal?.aborted) throw new BrokerProviderError("DISCONNECTED");
-      const session = new MetaApiReadSession(input.accountId, sdk, account, rpc, this.now);
+      const session = new MetaApiReadSession(
+        input.accountId,
+        sdk,
+        account,
+        rpc,
+        this.now,
+        credential,
+      );
       opened = session;
       await session.account(); // Validate authentic account reads before advertising readiness.
       input.signal?.removeEventListener("abort", abort);
@@ -242,13 +249,16 @@ class MetaApiReadSession implements BrokerReadSession {
     private readonly accountPort: MetaApiAccountPort,
     private readonly rpc: MetaApiRpcPort,
     private readonly now: () => Date,
+    private readonly credential: string,
   ) {
-    this.execution = new MetaApiExecutionAdapter(accountId, rpc);
+    this.execution = new MetaApiExecutionAdapter(accountId, rpc, credential);
   }
   private async read<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closed) throw new BrokerProviderError("DISCONNECTED");
     try {
       const result = await operation();
+      const encoded = JSON.stringify(result);
+      if (encoded?.includes(this.credential)) throw new BrokerProviderError("INVALID_RESPONSE");
       if (this.closed) throw new BrokerProviderError("DISCONNECTED");
       return result;
     } catch (error) {
@@ -491,7 +501,23 @@ class MetaApiReadSession implements BrokerReadSession {
         }
         const stream = this.stream ?? this.accountPort.getStreamingConnection();
         this.stream = stream;
-        const listener = new BrokerListener(this.accountId, identities, emit, this.now);
+        const listener = new BrokerListener(
+          this.accountId,
+          identities,
+          (event) => {
+            if (JSON.stringify(event).includes(this.credential)) {
+              emit({
+                type: "connection_changed",
+                accountId: this.accountId,
+                connected: false,
+                receivedAt: this.now().toISOString(),
+              });
+              return;
+            }
+            emit(event);
+          },
+          this.now,
+        );
         stream.addSynchronizationListener(listener);
         this.listeners.add(listener);
         const acquired: string[] = [];

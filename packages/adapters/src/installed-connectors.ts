@@ -6,6 +6,7 @@ import type {
   ConnectorTool,
   SecretStore,
 } from "@rakazo/adapter-kit";
+import { financialResearchUrlAllowed } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { z } from "zod";
 import {
@@ -210,6 +211,11 @@ export class InstalledConnectorProvider implements ConnectorProvider {
             connectorId: "installed",
             resourceId: install.id,
             toolName: operation.id,
+            ...(operation.readOnly &&
+            operation.method === "GET" &&
+            financialResearchUrlAllowed(new URL(operation.path, install.source).toString())
+              ? { financialClass: "NON_FINANCIAL" as const }
+              : {}),
             catalogGroup,
           },
         }));
@@ -270,6 +276,24 @@ export class InstalledConnectorProvider implements ConnectorProvider {
     }
     let credential: string | undefined;
     try {
+      const settings = context.botId
+        ? await this.prisma.deploymentSettings.findUnique({
+            where: { id: "default" },
+            select: { singleOwnerEnforced: true },
+          })
+        : null;
+      if (settings?.singleOwnerEnforced) {
+        const config = install.kind === "api" ? ApiConfigSchema.parse(install.config) : null;
+        const operation = config?.operations.find(
+          (candidate) => candidate.id === (call.route?.toolName ?? call.tool),
+        );
+        if (
+          !operation?.readOnly ||
+          operation.method !== "GET" ||
+          !financialResearchUrlAllowed(new URL(operation.path, install.source).toString())
+        )
+          throw new Error("STRUCTURED_FINANCIAL_EXECUTION_REQUIRED");
+      }
       credential = await this.loadCredential(install, context);
       const remote = await this.remoteFor(context);
       if (install.kind === "mcp") {

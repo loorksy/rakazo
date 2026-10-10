@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     bash \
     chromium \
+    libnss3-tools \
     fonts-liberation \
     fonts-dejavu-core \
     fonts-noto-cjk \
@@ -64,6 +65,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \
   && ln -sfn /bin/true /usr/bin/xmessage
+COPY research-chromium.sh /usr/local/bin/chromium
+RUN chmod 0755 /usr/local/bin/chromium
 RUN ln -s "$(dpkg -L libnss-wrapper | grep '/libnss_wrapper.so$')" /usr/local/lib/libnss_wrapper.so
 ARG TARGETARCH
 ARG UV_VERSION=0.12.19

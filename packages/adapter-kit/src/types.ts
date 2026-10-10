@@ -6,6 +6,8 @@ import type {
 } from "@rakazo/contracts";
 
 export interface AdapterContext {
+  /** Trusted executor sets this for enforced trading deployments; never tool input. */
+  financialResearchOnly?: boolean;
   operationId: string;
   traceId: string;
   spaceId: string;
@@ -239,6 +241,8 @@ export interface ConnectorTool {
 export interface ConnectorRoute {
   connectorId: string;
   toolName: string;
+  /** Trusted adapter classification; remote MCP annotations never populate this field. */
+  financialClass?: "NON_FINANCIAL";
   resourceId?: string;
   resourceRevision?: string | number;
   /** Source label for lazy catalog name indexes. Never exposed as a model schema field. */

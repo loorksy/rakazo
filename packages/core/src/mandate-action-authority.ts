@@ -31,6 +31,8 @@ export function mandateActionAuthority(input: {
     behavior = envelope.expiryBehavior;
   else if (status === "RISK_STOPPED") behavior = envelope.breachBehavior;
   else if (status === "TARGET_REACHED") behavior = envelope.targetBehavior;
+  else if (status === "EMERGENCY_STOPPED" && now < end)
+    behavior = envelope.emergencyBehavior ?? "FREEZE";
   else return null;
   if (behavior === "FREEZE") return null;
   if (action.operation === "CANCEL_ORDER") return "FINISHING";

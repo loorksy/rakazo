@@ -110,3 +110,38 @@ unfinished. A model reviewer alone cannot prove that guarantee. Remaining provid
 edge cases, readiness evidence, observability and retention hardening still need
 implementation and verification. These are implementation/security gaps, not a
 remaining Prisma environment blocker. The entire authorized build is not complete.
+
+## Controlled LIVE implementation stage (2026-10-10)
+
+Initial implementation HEAD remains `9ce0094f`. The provider port and MetaApi adapter
+were committed and pushed as `d67944de`. This continuing stage adds the durable
+Worker dispatch path, exact owner-position supervision, conservative manual drift,
+backend readiness, isolated Computer research egress, connector capability checks,
+and pre-authorized emergency finishing. The product remains professional peer
+trading Agents with owner-defined roles and no mandatory Main Agent.
+
+LIVE remains disabled by default. An authenticated owner's product enablement is
+only one admission condition. Every dispatch independently checks fresh account,
+quote, capability, exact Mandate, atomic risk capacity, and trusted runtime health.
+Uncertain effects hold their reservation and block relevant new risk; no mutation
+is resent after the durable send claim. Positive provider reconciliation is required.
+
+Stage verification: 19 PostgreSQL fake-provider acceptance tests passed, including
+actual SIGKILL after independent provider acceptance, shared-account concurrent
+reservations, peer authority denial, owner-position protection/full/partial close,
+manual drift and emergency freeze/pre-authorized close. Six real isolated Docker
+hostile-process tests passed, including direct/proxy/subprocess broker attempts and
+ordinary research. Twelve HTTP/HTTPS research gateway tests passed. Focused
+execution/policy/review tests passed (184-test and 86-test runs overlap; counts must
+not be added). No real-money automated mutation or private provider verification
+was performed.
+
+This is a tested implementation stage, not a declaration of transformation completion.
+The remaining full repository gates, broader provider/runtime observability coverage,
+owner-facing LIVE controls, and final acceptance/report review are still in progress.
+Supported LIVE execution is conservative: exact hedging attribution; netting
+ambiguity is blocked. Unknown management outcomes remain uncertain rather than
+being inferred from an unrelated current state. Unverified remote execution and
+opaque connector contracts do not gain financial network authority. Research
+network destinations are trusted compiled origins, not model-selected policy.
+Kili and upstream/main have not been modified.

@@ -51,6 +51,8 @@ import {
   screenUrlWithToken,
   xdotoolCommand,
 } from "./computer-spec.js";
+import { FINANCIAL_EGRESS_REVISION } from "./financial-egress.js";
+import { ensureResearchGateway, verifyFinancialNetworks } from "./financial-network.js";
 import { assertComputerHomeWritable } from "./home-ownership.js";
 import {
   assertRequestIdentity,
@@ -146,6 +148,22 @@ export function resolveDockerSocketPath(
 }
 
 app.get("/health", (c) => c.json({ ok: true, image: COMPUTER_IMAGE }));
+app.get("/financial-containment", async (c) => {
+  if (!hasValidBearerToken(c.req.header("authorization"), supervisorToken))
+    return c.json({ error: "unauthorized" }, 401);
+  const spaceId = z.string().min(1).max(128).parse(c.req.query("spaceId"));
+  const runtime = await inspectSupervisorContainer();
+  const owner = computerNetworkOwnerFor(dataDir, runtime);
+  const active =
+    computerEgressMode === "financial" &&
+    !!runtime &&
+    (await verifyFinancialNetworks(docker, owner, spaceId, runtime.Image).catch(() => false));
+  return c.json({
+    active,
+    revision: active ? FINANCIAL_EGRESS_REVISION : null,
+    checkedAt: new Date().toISOString(),
+  });
+});
 
 app.use("/computers", async (c, next) => {
   if (!hasValidBearerToken(c.req.header("authorization"), supervisorToken)) {
@@ -180,6 +198,8 @@ app.post("/computers", async (c) => {
       const runtimeInfo = await inspectSupervisorContainer();
       const networkMode = computerNetworkName(body.botId, runtimeInfo);
       const networkOwner = computerNetworkOwnerFor(dataDir, runtimeInfo);
+      if (computerEgressMode === "financial" && networkMode)
+        await ensureBotNetwork(body.botId, networkOwner);
       const serviceHomePath = path.resolve(body.homePath);
       assertBotHomePath(serviceHomePath, body.botId);
       const hostUid = process.getuid?.();
@@ -222,9 +242,10 @@ app.post("/computers", async (c) => {
         const restrictedBridgeOk =
           !botNetwork ||
           reconnect ||
-          computerEgressMode !== "restricted" ||
-          botNetworkInfo?.Options?.["com.docker.network.bridge.name"] ===
-            computerBridgeNameFor(body.botId);
+          (computerEgressMode !== "restricted" && computerEgressMode !== "financial") ||
+          (botNetworkInfo?.Options?.["com.docker.network.bridge.name"] ===
+            computerBridgeNameFor(body.botId) &&
+            (computerEgressMode !== "financial" || botNetworkInfo.Internal));
         if (
           info.Image === desired.Id &&
           // A named-network container must also still be attached: a network
@@ -234,6 +255,10 @@ app.post("/computers", async (c) => {
             (info.HostConfig.NetworkMode === networkMode &&
               (reconnect || Boolean(info.NetworkSettings?.Networks?.[networkMode])))) &&
           restrictedBridgeOk &&
+          (computerEgressMode !== "financial" ||
+            info.Mounts.some(
+              (mount) => mount.Destination === "/etc/rakazo/research-trust" && !mount.RW,
+            )) &&
           info.Config.User === computerUser &&
           controlPublishOk &&
           (!storage.homeVolume || homeVolumeMatches(info.HostConfig.Mounts, storage.homeVolume)) &&
@@ -288,6 +313,15 @@ app.post("/computers", async (c) => {
             : await ensureBotNetwork(body.botId, networkOwner);
         let container: Docker.Container | undefined;
         try {
+          if (
+            computerEgressMode === "financial" &&
+            (!runtimeInfo || !networkMode || screenNetworkMode === "internal")
+          )
+            throw new Error("Financial containment requires the managed isolated Docker topology");
+          const researchTrustVolume =
+            computerEgressMode === "financial" && runtimeInfo && networkMode
+              ? await ensureResearchGateway(docker, networkOwner, runtimeInfo.Image, networkMode)
+              : undefined;
           if (existing) {
             await existing.remove({ force: true }).catch(() => undefined);
           }
@@ -300,6 +334,7 @@ app.post("/computers", async (c) => {
               ...storage,
               user: computerUser,
               networkMode,
+              researchTrustVolume,
               controlToken: randomUUID(),
               publishControlPort: controlViaLoopback,
             }),
@@ -1493,7 +1528,14 @@ export async function reclaimIdleComputerNetworks() {
 // screens and rejoin lazily, so they do not keep a network in use.
 async function screenPeerIds() {
   const runtime = screenNetworkMode === "isolated" ? await inspectSupervisorContainer() : undefined;
-  return runtime ? await composeScreenPeerIds(runtime) : new Set<string>();
+  const peers = runtime ? await composeScreenPeerIds(runtime) : new Set<string>();
+  if (computerEgressMode === "financial") {
+    const gateways = await docker.listContainers({
+      filters: { label: ["rakazo.financialContainment=financial-egress-v1"] },
+    });
+    for (const gateway of gateways) peers.add(gateway.Id);
+  }
+  return peers;
 }
 
 // Removes a computer network used by nothing but screen peers and, when given,
@@ -1531,15 +1573,21 @@ async function reclaimComputerNetwork(container: Docker.Container, botId: string
 }
 
 async function ensureBotNetwork(botId: string, owner: string) {
-  return docker
+  const network = await docker
     .createNetwork(computerNetworkCreateOptions(botId, owner, computerEgressMode))
     .catch(async (error) => {
       // Existing networks and concurrent provision requests are both safe.
       if (!/already exists/i.test(String(error))) throw error;
-      if (computerEgressMode === "restricted") {
+      if (computerEgressMode === "restricted" || computerEgressMode === "financial") {
         await rekeyRestrictedBotNetwork(computerNetworkNameFor(botId), botId, owner);
       }
     });
+  if (computerEgressMode === "financial") {
+    const runtime = await inspectSupervisorContainer();
+    if (!runtime) throw new Error("Financial containment requires the managed supervisor");
+    await ensureResearchGateway(docker, owner, runtime.Image, computerNetworkNameFor(botId));
+  }
+  return network;
 }
 
 // A network created before SANDBOX_COMPUTER_EGRESS=restricted has a generic br-*
@@ -1555,7 +1603,8 @@ async function rekeyRestrictedBotNetwork(name: string, botId: string, owner: str
       .inspect()
       .catch(() => undefined);
   const hasNamedBridge = (info: Docker.NetworkInspectInfo | undefined) =>
-    info?.Options?.["com.docker.network.bridge.name"] === expectedBridge;
+    info?.Options?.["com.docker.network.bridge.name"] === expectedBridge &&
+    (computerEgressMode !== "financial" || info.Internal);
   const info = await inspect();
   if (info && !hasNamedBridge(info)) {
     const network = docker.getNetwork(name);
@@ -1577,7 +1626,7 @@ async function rekeyRestrictedBotNetwork(name: string, botId: string, owner: str
   }
   if (!info || !hasNamedBridge(info)) {
     await docker
-      .createNetwork(computerNetworkCreateOptions(botId, owner, "restricted"))
+      .createNetwork(computerNetworkCreateOptions(botId, owner, computerEgressMode))
       .catch((error) => {
         if (!/already exists/i.test(String(error))) throw error;
       });

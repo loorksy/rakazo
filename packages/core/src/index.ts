@@ -28,6 +28,7 @@ export * from "./events.js";
 export * from "./farewell.js";
 export * from "./featured-connectors.js";
 export * from "./financial-decimal.js";
+export * from "./financial-egress-policy.js";
 export * from "./financial-risk.js";
 export * from "./financial-tool-policy.js";
 export * from "./format-file-size.js";

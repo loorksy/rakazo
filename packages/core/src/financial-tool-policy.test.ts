@@ -54,11 +54,14 @@ describe("hard financial tool boundary", () => {
     "secret_request",
     "request_secret",
     "add_mcp_server",
-    "cloud_agent_launch",
-    "cloud_agent_reply",
   ])("restores %s under its normal policy", (toolName) => {
     expect(
-      financialToolPolicy({ tradingProduct: true, toolName, viaConnector: false }).decision,
+      financialToolPolicy({
+        tradingProduct: true,
+        toolName,
+        viaConnector: false,
+        researchUrlAllowed: true,
+      }).decision,
     ).toBe("ALLOW");
   });
   it.each([
@@ -84,7 +87,12 @@ describe("hard financial tool boundary", () => {
     "run_subagent",
   ])("retains safe structured/research %s", (toolName) => {
     expect(
-      financialToolPolicy({ tradingProduct: true, toolName, viaConnector: false }).decision,
+      financialToolPolicy({
+        tradingProduct: true,
+        toolName,
+        viaConnector: false,
+        researchUrlAllowed: true,
+      }).decision,
     ).toBe("ALLOW");
   });
   it.each(["account", "positions", "orders", "preflight"])(
@@ -115,5 +123,31 @@ describe("hard financial tool boundary", () => {
       financialToolPolicy({ tradingProduct: false, toolName: "shell", viaConnector: false })
         .decision,
     ).toBe("ALLOW");
+  });
+  it.each(["buy", "readOnly_order", "http_get", "execute_tool"])(
+    "blocks opaque MCP %s regardless of name or model approval",
+    (toolName) => {
+      expect(
+        financialToolPolicy({ tradingProduct: true, viaConnector: true, toolName }).decision,
+      ).toBe("DENY");
+    },
+  );
+  it("permits trusted nonfinancial connector contracts and denies unknown web destinations", () => {
+    expect(
+      financialToolPolicy({
+        tradingProduct: true,
+        viaConnector: true,
+        toolName: "market_research",
+        connectorFinancialClass: "NON_FINANCIAL",
+      }).decision,
+    ).toBe("ALLOW");
+    expect(
+      financialToolPolicy({
+        tradingProduct: true,
+        viaConnector: false,
+        toolName: "web_fetch",
+        researchUrlAllowed: false,
+      }).decision,
+    ).toBe("DENY");
   });
 });

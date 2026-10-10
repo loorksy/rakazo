@@ -213,4 +213,46 @@ describe("trusted MetaApi execution boundary (fixtures only)", () => {
     ).toMatchObject({ status: "SUCCEEDED" });
     expect(rpc.modifyPosition).toHaveBeenCalledExactlyOnceWith("fixture-position", 1.1, 0);
   });
+  it("translates pending expiry exactly when the provider method is available", async () => {
+    const { rpc } = fixture();
+    const pending = vi.fn().mockResolvedValue({ numericCode: 10008, orderId: "pending-fixture" });
+    const adapter = new MetaApiExecutionAdapter("fixture-account", {
+      ...rpc,
+      createLimitBuyOrder: pending,
+    });
+    const result = await adapter.execute({
+      ...request,
+      action: {
+        ...request.action,
+        operation: "OPEN",
+        side: "BUY",
+        orderType: "LIMIT",
+        volume: "0.1",
+        price: "1.1",
+        stopLimitPrice: null,
+        expiresAt: "2026-10-10T13:00:00.000Z",
+        fillingMode: null,
+        stopLoss: "1.09",
+        takeProfit: null,
+      },
+    });
+    expect(result).toMatchObject({ status: "SUCCEEDED", providerReference: "pending-fixture" });
+    expect(pending).toHaveBeenCalledExactlyOnceWith("EURUSD", 0.1, 1.1, 1.09, undefined, {
+      clientId: request.clientId,
+      expiration: { type: "ORDER_TIME_SPECIFIED", time: new Date("2026-10-10T13:00:00.000Z") },
+    });
+  });
+  it("never forwards a sentinel credential reflected by an acknowledgement", async () => {
+    const { rpc } = fixture();
+    rpc.createMarketBuyOrder.mockResolvedValue({
+      numericCode: 10009,
+      positionId: "fixture-secret-sentinel",
+    });
+    const adapter = new MetaApiExecutionAdapter("fixture-account", rpc, "fixture-secret-sentinel");
+    expect(await adapter.execute(request)).toEqual({
+      status: "UNCERTAIN",
+      providerReference: null,
+      code: "PROVIDER_OUTCOME_UNKNOWN",
+    });
+  });
 });

@@ -31,8 +31,10 @@ import {
   withBrokerSessionFence,
 } from "@rakazo/db";
 import { z } from "zod";
+import { observeBrokerState, readBrokerState } from "./broker-state.js";
 import { observeMarketWatches, recoverMarketWakes } from "./market-watches.js";
 import { BrokerProviderError, sanitizedBrokerError } from "./metaapi-normalize.js";
+import { ProviderDispatcher } from "./provider-dispatch.js";
 import { observeSimulationAccount, pauseSimulationObservation } from "./simulation-market.js";
 import { enqueueMissionWakes } from "./trading-mission-wakes.js";
 
@@ -85,6 +87,13 @@ export class BrokerConnectionSupervisor {
   private stopping = false;
   private readonly work = new Set<Promise<void>>();
   private lastCleanup = 0;
+  private lastTickAt = 0;
+  health() {
+    return {
+      active: !!this.timer && !this.stopping && this.now().getTime() - this.lastTickAt < 5000,
+      streams: this.slots.size,
+    };
+  }
   constructor(
     private readonly prisma: PrismaClient,
     private readonly secrets: SecretStore,
@@ -203,6 +212,7 @@ export class BrokerConnectionSupervisor {
           if (slot) await this.drop(row.id, slot);
         }
       }
+      this.lastTickAt = this.now().getTime();
     } finally {
       this.ticking = false;
     }
@@ -255,6 +265,18 @@ export class BrokerConnectionSupervisor {
         );
         slot.failures = 0;
         slot.release = await session.subscribe([], (event) => this.observe(slot, event));
+      }
+      const liveActivity = await this.prisma.tradingGoal.count({
+        where: { accountId: token.accountId, mode: "LIVE" },
+      });
+      if (liveActivity) {
+        await observeBrokerState(
+          this.prisma,
+          token,
+          await readBrokerState(slot.session),
+          this.now(),
+        );
+        await new ProviderDispatcher(this.prisma, this.now).tick(token, slot.session);
       }
       const requests = await this.prisma.brokerReadRequest.findMany({
         where: { accountId: token.accountId, status: "PENDING" },
@@ -468,8 +490,19 @@ export class BrokerConnectionSupervisor {
         // Subscribe before returning financial evidence. The account book can change
         // between periodic refreshes; bounded raw ticks cover that admission window.
         await this.updateSubscriptions(slot);
+      } else {
+        await observeBrokerState(
+          this.prisma,
+          slot.token,
+          await readBrokerState(session),
+          this.now(),
+        );
       }
       const facts = await session.preflight(action);
+      const specification =
+        action.mode === "LIVE"
+          ? z.json().parse(await session.specification(instrument.brokerSymbol))
+          : undefined;
       await withBrokerSessionFence(
         this.prisma,
         slot.token,
@@ -477,6 +510,7 @@ export class BrokerConnectionSupervisor {
           tx.brokerInstrument.update({
             where: { id: instrument.id },
             data: {
+              ...(specification ? { specification } : {}),
               verifiedAt: new Date(facts.specificationObservedAt),
               revision: { increment: 1 },
             },

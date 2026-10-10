@@ -79,7 +79,7 @@ export class FinancialEffects {
       throw new Error("Stale financial effect ownership");
     return { effect, context, execution };
   }
-  private async authority(
+  async authority(
     tx: Prisma.TransactionClient,
     context: FinancialContext,
     action: ReturnType<typeof canonicalFinancialAction>,
@@ -123,8 +123,8 @@ export class FinancialEffects {
       envelope.accountId !== context.accountId ||
       envelope.mode !== context.mode ||
       !limits?.autonomousEnabled ||
-      limits.frozen ||
-      guard?.frozen ||
+      ((limits.frozen || guard?.frozen) &&
+        !(authority === "FINISHING" && mandate.status === "EMERGENCY_STOPPED")) ||
       limits.revision !== guard?.revision ||
       limits.accountId !== context.accountId ||
       limits.mode !== context.mode ||
@@ -137,8 +137,6 @@ export class FinancialEffects {
       }))
     )
       throw new Error("Verified owner account required");
-    // LIVE has no readiness grant yet; no credential/session can imply operator authorization.
-    if (context.mode !== "SIMULATION") throw new Error("LIVE readiness incomplete");
     return { mandate, envelope, authority, goal };
   }
   private journal(
@@ -439,6 +437,18 @@ export class FinancialEffects {
         data: { status: "executing", financialStartedAt: this.now() },
       });
       await this.journal(tx, updated, context, "STARTED", {});
+      if (context.mode === "LIVE") {
+        if (context.version !== 2) throw new Error("Stable provider identity required");
+        await tx.tradingProviderExecution.create({
+          data: {
+            effectId: id,
+            ownerUserId: context.ownerUserId,
+            accountId: context.accountId,
+            clientId: context.clientId,
+            actionFingerprint: context.actionFingerprint,
+          },
+        });
+      }
       return updated;
     });
   }

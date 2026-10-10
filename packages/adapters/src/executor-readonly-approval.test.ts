@@ -92,7 +92,12 @@ function fixture({
       properties: { id: { type: "string" } },
       required: ["id"],
     },
-    route: { connectorId: "demo", resourceId: "resource-1", toolName: name },
+    route: {
+      connectorId: "demo",
+      resourceId: "resource-1",
+      toolName: name,
+      financialClass: "NON_FINANCIAL",
+    },
   };
   const effects: Effect[] = [];
   const results: unknown[] = [];

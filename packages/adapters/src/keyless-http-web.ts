@@ -7,6 +7,7 @@ import type {
   WebSearchHit,
   WebSearchRequest,
 } from "@rakazo/adapter-kit";
+import { financialResearchUrlAllowed } from "@rakazo/core";
 import { JSDOM } from "jsdom";
 import { clampMaxChars, clampMaxResults } from "./web-limits.js";
 import { fetchSafeWebText, type ResolveHostname } from "./web-ssrf.js";
@@ -99,6 +100,7 @@ export class KeylessHttpWebProvider implements WebProvider {
       maxBytes: 1024 * 1024,
       userAgent: this.userAgent,
       signal: request.signal ?? context.signal,
+      urlAllowed: context.financialResearchOnly ? financialResearchUrlAllowed : undefined,
     });
     return this.searchBackend.parse(body, maxResults);
   }
@@ -112,6 +114,7 @@ export class KeylessHttpWebProvider implements WebProvider {
       maxBytes: this.maxBufferBytes,
       userAgent: this.userAgent,
       signal: request.signal ?? context.signal,
+      urlAllowed: context.financialResearchOnly ? financialResearchUrlAllowed : undefined,
     });
     if (!body.trim()) throw new Error(`Failed to fetch content from ${url}`);
     const extracted = extractReadableText(body, url);

@@ -19,6 +19,7 @@ import { financialUnits } from "@rakazo/core";
 import { tradingMandateFingerprint } from "@rakazo/core/node/financial-action";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
+import { approveSupervision, captureSupervision } from "./broker-state.js";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
 import { saveMissionWakes, savePlanWakes } from "./trading-mission-wakes.js";
@@ -270,6 +271,15 @@ export class TradingMissions {
           expiresAt: new Date(envelope.expiresAt),
         },
       });
+      if (goal.mode === "LIVE" && envelope.supervisionPositionId)
+        await captureSupervision(tx, {
+          ownerUserId: actor.ownerUserId,
+          botId: bot.id,
+          accountId: goal.accountId,
+          mandateId: mandate.id,
+          positionId: envelope.supervisionPositionId,
+          now: this.now(),
+        });
       await tx.financialJournal.create({
         data: {
           ownerUserId: actor.ownerUserId,
@@ -333,8 +343,6 @@ export class TradingMissions {
       if (mandate.expiresAt <= this.now()) throw new Error("Mandate expired");
       const goal = await tx.tradingGoal.findUniqueOrThrow({ where: { id: mandate.goalId } });
       const objective = TradingGoalInputSchema.parse(goal.definition);
-      if (mandate.mode === "LIVE")
-        throw new Error("LIVE readiness incomplete; live activation is disabled");
       const bot = await this.agent(tx, ownerUserId, mandate.botId);
       if (bot.id !== mandate.botId)
         throw new Error("Authorized Bot identity changed; propose a new mandate");
@@ -366,6 +374,8 @@ export class TradingMissions {
           revision: { increment: 1 },
         },
       });
+      if (mandate.mode === "LIVE" && envelope.supervisionPositionId)
+        await approveSupervision(tx, mandate.id, this.now());
       await saveMissionWakes(tx, next);
       await tx.financialJournal.create({
         data: {
@@ -386,8 +396,6 @@ export class TradingMissions {
   async setAccountGuardrails(ownerUserId: string, raw: AccountRiskGuardrails) {
     await requireTradingOwner(this.prisma, ownerUserId);
     const limits = AccountRiskGuardrailsSchema.parse(raw);
-    if (limits.mode === "LIVE")
-      throw new Error("LIVE readiness incomplete; live activation is disabled");
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM trading_connections WHERE id = ${limits.accountId} FOR UPDATE`;
       const account = await tx.tradingConnection.findFirst({
@@ -633,11 +641,30 @@ export class TradingMissions {
           },
         },
       });
+      const emergency =
+        command.action === "EMERGENCY_STOP" &&
+        TradingMandateEnvelopeSchema.parse(mandate.envelope).emergencyBehavior &&
+        TradingMandateEnvelopeSchema.parse(mandate.envelope).emergencyBehavior !== "FREEZE";
+      if (emergency)
+        await tx.tradingMissionWake.create({
+          data: {
+            mandateId: mandate.id,
+            wakeKey: `mission:${mandate.id}:emergency:${mandate.revision + 1}`,
+            kind: "ACCOUNT_EVENT",
+            dueAt: this.now(),
+            status: "WAITING",
+          },
+        });
       return projectMandate(
         await tx.tradingMandate.update({
           where: { id: mandate.id },
           data: {
-            status: command.action === "CANCEL" ? "CANCELLED" : "PAUSED",
+            status:
+              command.action === "CANCEL"
+                ? "CANCELLED"
+                : emergency
+                  ? "EMERGENCY_STOPPED"
+                  : "PAUSED",
             revision: { increment: 1 },
           },
         }),

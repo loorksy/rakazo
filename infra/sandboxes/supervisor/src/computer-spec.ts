@@ -159,13 +159,14 @@ export function resolveScreenNetworkMode(value: string | undefined): ScreenNetwo
  * Enforcement lives on the Docker host (infra/compose/restrict-computer-egress.sh);
  * the flag only marks the networks. Supervisor capabilities stay unchanged.
  */
-export type ComputerEgressMode = "open" | "restricted";
+export type ComputerEgressMode = "open" | "restricted" | "financial";
 
 export function resolveComputerEgressMode(
   value = process.env.SANDBOX_COMPUTER_EGRESS,
 ): ComputerEgressMode {
   if (value === undefined || value.trim() === "" || value === "open") return "open";
   if (value === "restricted") return "restricted";
+  if (value === "financial") return "financial";
   throw new Error(`Unsupported SANDBOX_COMPUTER_EGRESS value: ${value}`);
 }
 
@@ -205,7 +206,8 @@ export function computerNetworkCreateOptions(
     Driver: "bridge",
     CheckDuplicate: true,
     Labels: { "rakazo.computerOwner": owner, "rakazo.botId": botId },
-    ...(egress === "restricted"
+    ...(egress === "financial" ? { Internal: true, EnableIPv6: false } : {}),
+    ...(egress === "restricted" || egress === "financial"
       ? { Options: { "com.docker.network.bridge.name": computerBridgeNameFor(botId) } }
       : {}),
   };
@@ -286,6 +288,7 @@ export interface ComputerCreateInput {
   user?: string;
   controlToken?: string;
   networkMode?: string;
+  researchTrustVolume?: string;
   publishControlPort?: boolean;
 }
 
@@ -316,6 +319,18 @@ export function containerCreateOptions(input: ComputerCreateInput) {
       "NPM_CONFIG_PREFIX=/home/rakazo/.local",
       "PIP_USER=1",
       ...(input.controlToken ? [`RAKAZO_COMPUTER_CONTROL_TOKEN=${input.controlToken}`] : []),
+      ...(input.researchTrustVolume
+        ? [
+            "RAKAZO_RESEARCH_PROXY=http://rakazo-research:8080",
+            "HTTP_PROXY=http://rakazo-research:8080",
+            "HTTPS_PROXY=http://rakazo-research:8080",
+            "ALL_PROXY=http://rakazo-research:8080",
+            "NO_PROXY=",
+            "SSL_CERT_FILE=/etc/rakazo/research-trust/ca.crt",
+            "REQUESTS_CA_BUNDLE=/etc/rakazo/research-trust/ca.crt",
+            "NODE_EXTRA_CA_CERTS=/etc/rakazo/research-trust/ca.crt",
+          ]
+        : []),
     ],
     Labels: {
       "rakazo.managed": "true",
@@ -342,6 +357,31 @@ export function containerCreateOptions(input: ComputerCreateInput) {
           }
         : { Binds: [`${input.homePath}:/home/rakazo`], Mounts: undefined }),
       PortBindings: ports.PortBindings,
+      ...(input.researchTrustVolume
+        ? {
+            Mounts: [
+              ...(input.homeVolume
+                ? [
+                    {
+                      Type: "volume" as const,
+                      Source: input.homeVolume.name,
+                      Target: "/home/rakazo",
+                      VolumeOptions: {
+                        NoCopy: true,
+                        Subpath: input.homeVolume.subpath,
+                      } as Docker.MountSettings["VolumeOptions"],
+                    },
+                  ]
+                : []),
+              {
+                Type: "volume" as const,
+                Source: input.researchTrustVolume,
+                Target: "/etc/rakazo/research-trust",
+                ReadOnly: true,
+              },
+            ],
+          }
+        : {}),
       ShmSize: 256 * 1024 * 1024,
       CapDrop: ["ALL"],
       SecurityOpt: ["no-new-privileges:true"],

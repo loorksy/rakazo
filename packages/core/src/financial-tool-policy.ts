@@ -41,8 +41,29 @@ export function financialToolPolicy(input: {
   viaConnector: boolean;
   operation?: string;
   accountReadsAllowed?: boolean;
+  connectorFinancialClass?: "NON_FINANCIAL";
+  researchUrlAllowed?: boolean;
 }): FinancialToolDecision {
   if (!input.tradingProduct) return { decision: "ALLOW" };
+  if (["cloud_agent_launch", "cloud_agent_reply"].includes(input.toolName))
+    return {
+      decision: "DENY",
+      code: "STRUCTURED_EXECUTION_REQUIRED",
+      reason: "Remote execution requires verified financial egress containment.",
+    };
+  if (input.viaConnector && input.connectorFinancialClass !== "NON_FINANCIAL")
+    return {
+      decision: "DENY",
+      code: "UNVERIFIED_CONNECTOR",
+      reason:
+        "This connector has no trusted non-financial execution contract. Financial mutations require structured execution.",
+    };
+  if (input.toolName === "web_fetch" && input.researchUrlAllowed !== true)
+    return {
+      decision: "DENY",
+      code: "STRUCTURED_EXECUTION_REQUIRED",
+      reason: "This destination is outside the verified research boundary.",
+    };
   if (
     input.toolName === "broker_read" &&
     ["account", "positions", "orders", "preflight"].includes(input.operation ?? "") &&

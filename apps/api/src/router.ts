@@ -119,6 +119,7 @@ import {
   storeBotSecret,
   TradingConnections,
   TradingMissions,
+  TradingOwnerControls,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -769,6 +770,16 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      setLiveEnabled: authed.trading.setLiveEnabled.handler(({ context, input }) =>
+        new TradingOwnerControls(deps.prisma).setLiveEnabled(context.actor.userId, input.enabled),
+      ),
+      reconcileDrift: authed.trading.reconcileDrift.handler(({ context, input }) =>
+        new TradingOwnerControls(deps.prisma).reconcileDrift(
+          context.actor.userId,
+          input.accountId,
+          input.expectedRevision,
+        ),
+      ),
       accountAccess: authed.trading.accountAccess.handler(({ context, input }) =>
         listTradingAccountAccess(deps.prisma, context.actor.userId, input.botId),
       ),
@@ -801,7 +812,7 @@ export function createRouter(deps: RouterDeps) {
           context.actor.userId,
           input,
         );
-        if (input.action === "RESUME")
+        if (input.action === "RESUME" || input.action === "EMERGENCY_STOP")
           await enqueueMissionWakes(deps.prisma, deps.jobs, result.id).catch(() => undefined);
         return result;
       }),

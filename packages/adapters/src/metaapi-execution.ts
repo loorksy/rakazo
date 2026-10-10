@@ -3,7 +3,7 @@ import { FinancialActionSchema } from "@rakazo/contracts";
 import { z } from "zod";
 import { brokerSdkNumber } from "./metaapi-normalize.js";
 
-type TradeOptions = { clientId: string };
+type TradeOptions = { clientId: string; expiration?: { type: "ORDER_TIME_SPECIFIED"; time: Date } };
 type OpenTrade = (
   symbol: string,
   volume: number,
@@ -58,6 +58,7 @@ export class MetaApiExecutionAdapter implements ExecutionProvider {
   constructor(
     private readonly accountId: string,
     private readonly rpc: MetaApiExecutionPort,
+    private readonly credential = "",
   ) {}
   async execute(request: ExecutionRequest): Promise<ExecutionResult> {
     const action = FinancialActionSchema.parse(request.action);
@@ -74,11 +75,17 @@ export class MetaApiExecutionAdapter implements ExecutionProvider {
       code: "CAPABILITY_UNAVAILABLE",
     });
     let send: (() => Promise<unknown>) | undefined;
-    const options = { clientId: request.clientId };
+    const options: TradeOptions = { clientId: request.clientId };
     if (action.operation === "OPEN") {
       // These optional semantics cannot be silently discarded by the SDK translation.
-      if (action.expiresAt || action.fillingMode || action.orderType === "STOP_LIMIT")
+      if (
+        action.fillingMode ||
+        action.orderType === "STOP_LIMIT" ||
+        (action.orderType === "MARKET" && action.expiresAt)
+      )
         return unavailable();
+      if (action.expiresAt)
+        options.expiration = { type: "ORDER_TIME_SPECIFIED", time: new Date(action.expiresAt) };
       const stop = action.stopLoss === null ? undefined : brokerSdkNumber(action.stopLoss);
       const take = action.takeProfit === null ? undefined : brokerSdkNumber(action.takeProfit);
       const volume = brokerSdkNumber(action.volume);
@@ -136,6 +143,8 @@ export class MetaApiExecutionAdapter implements ExecutionProvider {
       const parsed = acknowledgement.safeParse(await send());
       if (!parsed.success) return unknown();
       const { numericCode, positionId, orderId } = parsed.data;
+      if (this.credential && JSON.stringify(parsed.data).includes(this.credential))
+        return unknown();
       const reference = positionId ?? orderId ?? null;
       if (
         (numericCode === 10009 || (numericCode === 10008 && action.operation === "OPEN")) &&
@@ -191,6 +200,7 @@ export class MetaApiExecutionAdapter implements ExecutionProvider {
       const matching = rows.filter((row) => row.clientId === request.clientId);
       if (matching.length !== 1) return unknown();
       const row = matching[0]!;
+      if (this.credential && JSON.stringify(row).includes(this.credential)) return unknown();
       const type =
         action.orderType === "MARKET"
           ? `POSITION_TYPE_${action.side}`

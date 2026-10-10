@@ -22,6 +22,7 @@ import { requireTradingOwner } from "@rakazo/db";
 import type { ChartActor } from "./cloud-charts.js";
 import { fenceChartExecution } from "./cloud-charts.js";
 import { attributedFinancialAssessment, financialTarget } from "./financial-target.js";
+import { requireLiveReadiness } from "./live-readiness.js";
 
 const consuming = ["RESERVED", "COMMITTED", "UNCERTAIN"];
 /** Protected accounting only. This class exposes no broker mutation or model-facing risk input. */
@@ -29,7 +30,7 @@ export class AccountRiskLedger {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly now: () => Date = () => new Date(),
-    private readonly operatorLiveEnabled = false,
+    _operatorLiveEnabled = false,
   ) {}
 
   /** Caller obtains facts through trusted provider preflight, never through tool/model arguments. */
@@ -187,24 +188,21 @@ export class AccountRiskLedger {
       limits.accountId !== account.id ||
       limits.mode !== mandate.mode ||
       limits.revision !== guardrail.revision ||
-      guardrail.frozen ||
-      limits.frozen ||
+      ((guardrail.frozen || limits.frozen) &&
+        !(authority === "FINISHING" && mandate.status === "EMERGENCY_STOPPED")) ||
       !limits.autonomousEnabled
     )
       throw new Error("Account authority is frozen or disabled");
     if (mandate.mode === "LIVE") {
-      if (!this.operatorLiveEnabled || !account.verifiedAt)
-        throw new Error("LIVE trading disabled");
-      const lease = await tx.brokerSessionLease.findUnique({ where: { accountId: account.id } });
-      if (
-        lease?.state !== "CONNECTED" ||
-        !lease.expiresAt ||
-        lease.expiresAt <= this.now() ||
-        lease.credentialVersion !== account.credentialVersion
-      )
-        throw new Error("Verified broker session required");
-      // Readiness is intentionally not implied by a valid socket; no live executor exists yet.
-      throw new Error("LIVE readiness has not been established");
+      await requireLiveReadiness(tx, {
+        ownerUserId: actor.ownerUserId,
+        botId: actor.botId,
+        mandateId: mandate.id,
+        action,
+        facts,
+        effectId,
+        now: this.now(),
+      });
     }
     if (limits.maxDrawdown !== null) throw new Error("Verified account drawdown baseline required");
     if (mandate.mode === "SIMULATION") {
@@ -216,9 +214,10 @@ export class AccountRiskLedger {
         throw new Error("Simulation book revision conflict");
     }
     if (
-      !mandate.observedAt ||
-      this.now().getTime() - mandate.observedAt.getTime() > 15000 ||
-      mandate.observedAt.getTime() > this.now().getTime() + 2000
+      action.operation === "OPEN" &&
+      (!mandate.observedAt ||
+        this.now().getTime() - mandate.observedAt.getTime() > 15000 ||
+        mandate.observedAt.getTime() > this.now().getTime() + 2000)
     )
       throw new Error("Fresh mission accounting required");
     const active = await tx.tradingMandate.count({
@@ -310,6 +309,8 @@ export class AccountRiskLedger {
           mandateId,
           actionFingerprint,
           assessment,
+          facts,
+          target: target?.target ?? null,
           authorityPhase: authority,
           accountRiskBefore: financialDecimal(sum(reservations, "risk")),
           accountRiskAfter: financialDecimal(
