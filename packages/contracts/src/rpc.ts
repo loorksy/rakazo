@@ -110,6 +110,11 @@ import {
   TradingConnectionViewSchema,
 } from "./trading.js";
 import {
+  TradingAccountAccessViewSchema,
+  TradingJournalPageSchema,
+  TradingJournalQuerySchema,
+} from "./trading-account-access.js";
+import {
   MandateControlSchema,
   MandateResolutionSchema,
   TradingMandateViewSchema,
@@ -180,6 +185,10 @@ const spaceName = z.string().trim().min(1).max(60);
 
 export const appContract = {
   trading: {
+    accountAccess: oc
+      .input(z.strictObject({ botId: Id }))
+      .output(z.array(TradingAccountAccessViewSchema).max(100)),
+    journal: oc.input(TradingJournalQuerySchema).output(TradingJournalPageSchema),
     setAccountAccess: oc
       .input(
         z.strictObject({

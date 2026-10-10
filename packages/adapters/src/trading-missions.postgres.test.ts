@@ -19,6 +19,8 @@ import {
   answerRunInput,
   claimBrokerSession,
   createDb,
+  listTradingAccountAccess,
+  readTradingJournal,
   setTradingAccountAccess,
   tradingAccountReadAllowed,
   withBrokerSessionFence,
@@ -245,6 +247,16 @@ suite("owner-only durable trading goals/plans/mandates", () => {
   });
   it("owner grants and revokes exact Agent/account reads without execution or peer transfer", async () => {
     const scope = { ownerUserId: owner, botId: "main", accountId: "account" };
+    expect(await listTradingAccountAccess(db.prisma, owner, "main")).toEqual([
+      {
+        botId: "main",
+        accountId: "account",
+        label: "Fixture",
+        accountRead: false,
+        mandateRead: false,
+        revision: 0,
+      },
+    ]);
     expect(await tradingAccountReadAllowed(db.prisma, scope)).toBe(false);
     const granted = await setTradingAccountAccess(db.prisma, owner, {
       botId: "main",
@@ -253,6 +265,13 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       expectedRevision: 0,
     });
     expect(granted.revision).toBe(1);
+    expect((await listTradingAccountAccess(db.prisma, owner, "main"))[0]).toMatchObject({
+      accountRead: true,
+      revision: 1,
+      mandateRead: false,
+    });
+    await expect(listTradingAccountAccess(db.prisma, "peer-human", "main")).rejects.toThrow();
+    await expect(listTradingAccountAccess(db.prisma, owner, "foreign-bot")).rejects.toThrow();
     expect(await tradingAccountReadAllowed(db.prisma, scope)).toBe(true);
     expect(await db.prisma.tradingMandate.count()).toBe(0);
     await db.prisma.bot.create({
@@ -290,6 +309,79 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       expectedRevision: 1,
     });
     expect(await tradingAccountReadAllowed(db.prisma, scope)).toBe(false);
+  });
+
+  it("journal reads paginate stably, retain audit after account deletion and isolate the owner", async () => {
+    const at = new Date("2026-10-09T09:00:00Z");
+    await db.prisma.financialJournal.createMany({
+      data: [
+        {
+          id: "j-a",
+          ownerUserId: owner,
+          accountId: "account",
+          mode: "SIMULATION",
+          event: "FIXTURE_EVENT",
+          entry: { quantity: "1" },
+          mandateId: "mission-a",
+          createdAt: at,
+        },
+        {
+          id: "j-b",
+          ownerUserId: owner,
+          accountId: "account",
+          mode: "SIMULATION",
+          event: "FIXTURE_EVENT",
+          entry: { quantity: "2" },
+          mandateId: "mission-a",
+          createdAt: at,
+        },
+        {
+          id: "j-c",
+          ownerUserId: owner,
+          accountId: "other-account",
+          mode: "LIVE",
+          event: "FIXTURE_EVENT",
+          entry: {},
+          createdAt: at,
+        },
+        {
+          id: "j-foreign",
+          ownerUserId: "peer-human",
+          accountId: "account",
+          mode: "SIMULATION",
+          event: "FIXTURE_EVENT",
+          entry: {},
+          createdAt: at,
+        },
+      ],
+    });
+    const query = {
+      accountId: "account",
+      mode: "SIMULATION" as const,
+      mandateId: "mission-a",
+      limit: 1,
+    };
+    const first = await readTradingJournal(db.prisma, owner, query);
+    expect(first.entries.map((row) => row.id)).toEqual(["j-b"]);
+    expect(first.nextCursor).toBe("j-b");
+    const second = await readTradingJournal(db.prisma, owner, {
+      ...query,
+      cursor: first.nextCursor!,
+    });
+    expect(second.entries.map((row) => row.id)).toEqual(["j-a"]);
+    expect(second.nextCursor).toBeNull();
+    await expect(
+      readTradingJournal(db.prisma, owner, { ...query, cursor: "j-foreign" }),
+    ).rejects.toThrow();
+    await expect(readTradingJournal(db.prisma, "peer-human", { limit: 30 })).rejects.toThrow();
+    await db.prisma.brokerInstrument.deleteMany({ where: { accountId: "account" } });
+    await db.prisma.tradingConnection.delete({ where: { id: "account" } });
+    expect((await readTradingJournal(db.prisma, owner, query)).entries[0].id).toBe("j-b");
+    expect(
+      (await readTradingJournal(db.prisma, owner, { mode: "LIVE", limit: 30 })).entries.map(
+        (row) => row.id,
+      ),
+    ).toEqual(["j-c"]);
   });
 
   it("the owner binds a goal to any peer explicitly, never to a first or privileged Bot", async () => {

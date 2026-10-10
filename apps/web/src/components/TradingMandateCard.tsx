@@ -8,6 +8,7 @@ import { TradingMissionDetailSchema } from "@rakazo/contracts";
 import { Button, Input } from "@rakazo/ui-web";
 import { useEffect, useId, useState } from "react";
 import { rpc } from "../lib/rpc";
+import { TradingJournal } from "./TradingJournal";
 
 /** This card reads current authority. A message snapshot or model text is never approval. */
 export function TradingMandateCard({
@@ -428,6 +429,7 @@ export function TradingMandateCard({
           </Button>
         ) : null}
       </div>
+      {!readOnly ? <TradingJournal mandateId={mandate.id} /> : null}
     </section>
   );
 }

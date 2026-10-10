@@ -189,12 +189,14 @@ import {
   IsolationError,
   issueMessagingLinkCode,
   listSpaceBackupModels,
+  listTradingAccountAccess,
   lockOwnedGroup,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
   Prisma,
   parseComputerMode,
   pushSessionExpiresAt,
+  readTradingJournal,
   releaseSpaceDeletionClaim,
   renameSpaceForMember,
   renewSpaceDeletionClaim,
@@ -767,6 +769,12 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      accountAccess: authed.trading.accountAccess.handler(({ context, input }) =>
+        listTradingAccountAccess(deps.prisma, context.actor.userId, input.botId),
+      ),
+      journal: authed.trading.journal.handler(({ context, input }) =>
+        readTradingJournal(deps.prisma, context.actor.userId, input),
+      ),
       setAccountAccess: authed.trading.setAccountAccess.handler(({ context, input }) =>
         setTradingAccountAccess(deps.prisma, context.actor.userId, input),
       ),

@@ -86,3 +86,17 @@ current goals get a reevaluation, with no broker action or simulator fill replay
 The existing job reconciler repairs a commit-before-enqueue interruption.
 Web/Electron and native mobile expose Resume and a separate Unfreeze account action;
 resume never silently unfreezes an account or widens financial authority.
+
+## Owner account scopes and journal
+
+Agent settings expose exact owner-granted account-read access with revision-checked
+updates. Active mandates supply their own bounded read scope separately; switching
+off an explicit grant does not revoke a mandate. Market/chart knowledge remains
+available without account access. These settings expose no credential reference,
+provider account identifier or financial approval capability.
+
+The owner can inspect the immutable journal from broker settings or a mission.
+Queries filter account, mode, mandate or effect and paginate by timestamp plus ID.
+Cursor lookup is owner- and filter-scoped, so another owner's cursor fails closed.
+Account/chat deletion does not erase journal snapshots. Web/Electron use progressive
+details; mobile uses native controls and selectable event details.

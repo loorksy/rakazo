@@ -24,6 +24,7 @@ import { MenuPicker } from "../components/menu-picker";
 import { NativeActionButton } from "../components/native-action-button";
 import { NativeSwitch } from "../components/native-switch";
 import { Chevron } from "../components/row-accessories";
+import { TradingAccountAccess } from "../components/trading-account-access";
 import {
   type MobileBot,
   type MobileMe,
@@ -395,6 +396,7 @@ export default function BotSettingsScreen() {
             ) : null}
           </View>
         ) : null}
+        {bot ? <TradingAccountAccess key={bot.id} botId={bot.id} /> : null}
         {error ? <Text style={{ color: tokens.destructive, marginTop: 16 }}>{error}</Text> : null}
         <NativeActionButton
           disabled={!name.trim() || pending || !bot}

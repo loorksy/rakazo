@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { TradingConnectionView } from "@rakazo/contracts";
 import { Button, Field, FieldLabel, Input } from "@rakazo/ui-web";
 import { useEffect, useId, useState } from "react";
+import { TradingJournal } from "../components/TradingJournal";
 import { rpc } from "../lib/rpc";
 import { errorText } from "../lib/user-error";
 
@@ -96,6 +97,7 @@ export function TradingConnectionsPanel() {
                 </Button>
               </div>
             ))}
+          <TradingJournal />
           <form
             className="space-y-3"
             onSubmit={(event) => {

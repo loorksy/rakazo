@@ -15,6 +15,7 @@ import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { useThreadReadOnly } from "../lib/thread-read-only";
 import { NativeActionButton } from "./native-action-button";
+import { TradingJournal } from "./trading-journal";
 
 export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mandateId: string }) {
   const { t } = useI18n();
@@ -294,6 +295,7 @@ export function TradingMandateCard({ goalId, mandateId }: { goalId: string; mand
           onPress={() => void control("CANCEL")}
         />
       ) : null}
+      {!readOnly ? <TradingJournal mandateId={mandate.id} /> : null}
     </View>
   );
 }

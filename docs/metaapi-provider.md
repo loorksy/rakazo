@@ -108,6 +108,6 @@ calculation. Missing provider margin/conversion evidence remains unknown and the
 Risk Engine refuses an increase. SDK numeric inputs must preserve decimal text on
 serialization round trip; larger unsafe integers are rejected.
 
-Main alone may read account/position/order/preflight state in the trading deployment.
+Account/position/order/preflight reads require this exact Agent’s explicit owner-granted account access or valid active mandate in the trading deployment.
 Every Agent retains broker quote/history/specification discovery without financial
 account authority. The existing owner-only human RPC can inspect the account.

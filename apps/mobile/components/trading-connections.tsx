@@ -7,6 +7,7 @@ import { useI18n } from "../lib/i18n";
 import { useThemedStyles } from "../lib/native";
 import { errorText } from "../lib/user-error";
 import { NativeActionButton } from "./native-action-button";
+import { TradingJournal } from "./trading-journal";
 
 export function TradingConnections() {
   const styles = useThemedStyles(createStyles);
@@ -83,6 +84,7 @@ export function TradingConnections() {
                 />
               </View>
             ))}
+          <TradingJournal />
           <TextInput
             style={styles.input}
             placeholder={t("Account name")}

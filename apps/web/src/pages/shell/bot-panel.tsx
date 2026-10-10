@@ -33,6 +33,7 @@ import {
 import { X } from "lucide-react";
 import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { ErrorBoundary, SectionLoadFailed } from "../../components/ErrorBoundary";
+import { TradingAccountAccess } from "../../components/TradingAccountAccess";
 import { botProfilePatch } from "../../lib/bot-profile-patch";
 import { thinkingLevelLabel } from "../../lib/model-catalog";
 import { rpc } from "../../lib/rpc";
@@ -719,6 +720,7 @@ export function BotSettings({
         ))}
         {advancedOpened ? <BotCredentialsSection botId={bot.id} /> : null}
       </details>
+      <TradingAccountAccess key={bot.id} botId={bot.id} />
       {error ? <p className="mt-2 text-[13px] text-destructive">{error}</p> : null}
       <div className="mt-5 flex flex-col items-start gap-3">
         <Button

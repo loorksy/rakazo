@@ -18,7 +18,7 @@ Owner chart creation can attach a chart to any eligible Agent. The legacy MAIN
 scope migrates to PRIVATE without widening access.
 
 All 117 forward migrations apply to a fresh fixture database. Expanded PostgreSQL
-coverage passes: 83 mission/account cases, 28 chart cases, 8 shared-account risk
+coverage passes: 84 mission/account cases, 28 chart cases, 8 shared-account risk
 cases and 6 owner admission cases. The risk race uses distinct Agent IDs and
 separate mandates. Focused identity, support-review, executor, onboarding and chart
 UI suites pass. Web, API, Worker, adapters, database and mobile type checks and the
@@ -256,3 +256,17 @@ current reevaluation through the existing Worker. The expanded mission gate cove
 current book valuation, frozen accounts, expiry, sticky targets/risk stops, revision
 replay and started effects. Resume and separate account unfreeze controls are
 available on Web/Electron and native mobile. LIVE resume remains unavailable.
+
+## Account settings and journal checkpoint
+
+Owner-only account-access projections and revision-checked controls now exist in
+Agent settings on Web/Electron and mobile. Mandate-supplied read access is displayed
+separately from explicit grants. An owner-only journal query provides stable bounded
+pagination and filters without requiring the account/chat to still exist. Mission
+and broker settings expose progressive journal history on both surfaces.
+
+The expanded PostgreSQL mission suite has 84 passing cases (83 in the full run,
+with the corrected journal fixture and access case then verified separately).
+Twenty-eight affected web/settings/card tests pass. Chromium captures the exact
+Agent/account grant request and renders the immutable event without widened
+financial authority. Changed-package type checks and production web build pass.

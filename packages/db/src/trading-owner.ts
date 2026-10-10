@@ -1,5 +1,5 @@
-import type { Actor } from "@rakazo/contracts";
-import { TradingMandateEnvelopeSchema } from "@rakazo/contracts";
+import type { Actor, TradingJournalQuery } from "@rakazo/contracts";
+import { TradingJournalPageSchema, TradingMandateEnvelopeSchema } from "@rakazo/contracts";
 import { ownerSessionAllowed } from "@rakazo/core";
 import {
   ownerBootstrapProofDigest,
@@ -125,24 +125,19 @@ export async function tradingAccountReadAllowed(
     where: { botId_accountId: { botId: input.botId, accountId: input.accountId } },
   });
   if (access?.ownerUserId === input.ownerUserId && access.accountRead) return true;
-  const mandate = await prisma.tradingMandate.findFirst({
-    where: {
-      ownerUserId: input.ownerUserId,
-      botId: input.botId,
-      accountId: input.accountId,
-      approvedByUserId: input.ownerUserId,
-      approvedAt: { not: null },
-      status: "ACTIVE",
-      expiresAt: { gt: new Date() },
-    },
-  });
-  const envelope = TradingMandateEnvelopeSchema.safeParse(mandate?.envelope);
-  return Boolean(
-    mandate &&
-      envelope.success &&
-      mandate.approvedFingerprint === mandate.fingerprint &&
-      mandate.fingerprint === tradingMandateFingerprint(envelope.data),
-  );
+  return (
+    await prisma.tradingMandate.findMany({
+      where: {
+        ownerUserId: input.ownerUserId,
+        botId: input.botId,
+        accountId: input.accountId,
+        approvedByUserId: input.ownerUserId,
+        approvedAt: { not: null },
+        status: "ACTIVE",
+        expiresAt: { gt: new Date() },
+      },
+    })
+  ).some(mandateReadValid);
 }
 
 /** Human RPC only; tools and peer messages cannot grant account access. */
@@ -191,5 +186,135 @@ export async function setTradingAccountAccess(
       accountRead: row.accountRead,
       revision: row.revision,
     };
+  });
+}
+
+function mandateReadValid(mandate: {
+  ownerUserId: string;
+  botId: string;
+  accountId: string;
+  mode: string;
+  fingerprint: string;
+  approvedFingerprint: string | null;
+  envelope: unknown;
+}): boolean {
+  const envelope = TradingMandateEnvelopeSchema.safeParse(mandate.envelope);
+  return Boolean(
+    envelope.success &&
+      envelope.data.ownerId === mandate.ownerUserId &&
+      envelope.data.botId === mandate.botId &&
+      envelope.data.accountId === mandate.accountId &&
+      envelope.data.mode === mandate.mode &&
+      Date.parse(envelope.data.expiresAt) > Date.now() &&
+      mandate.approvedFingerprint === mandate.fingerprint &&
+      mandate.fingerprint === tradingMandateFingerprint(envelope.data),
+  );
+}
+
+/** Owner settings projection; secret IDs and provider account identifiers never leave here. */
+export async function listTradingAccountAccess(
+  prisma: PrismaClient,
+  ownerUserId: string,
+  botId: string,
+) {
+  await requireTradingOwner(prisma, ownerUserId);
+  const settings = await prisma.deploymentSettings.findUniqueOrThrow({ where: { id: "default" } });
+  if (
+    !(await prisma.bot.findFirst({
+      where: {
+        id: botId,
+        userId: ownerUserId,
+        spaceId: settings.ownerSpaceId ?? "",
+        archivedAt: null,
+      },
+    }))
+  )
+    throw new IsolationError();
+  const [accounts, grants, mandates] = await Promise.all([
+    prisma.tradingConnection.findMany({
+      where: { ownerUserId, revokedAt: null },
+      orderBy: { id: "asc" },
+      take: 101,
+      select: { id: true, label: true },
+    }),
+    prisma.tradingAgentAccountAccess.findMany({ where: { ownerUserId, botId } }),
+    prisma.tradingMandate.findMany({
+      where: {
+        ownerUserId,
+        botId,
+        approvedByUserId: ownerUserId,
+        approvedAt: { not: null },
+        status: "ACTIVE",
+        expiresAt: { gt: new Date() },
+      },
+    }),
+  ]);
+  if (accounts.length > 100) throw new Error("Account settings limit exceeded");
+  return accounts.map((account) => {
+    const grant = grants.find((row) => row.accountId === account.id);
+    return {
+      botId,
+      accountId: account.id,
+      label: account.label,
+      accountRead: grant?.accountRead ?? false,
+      revision: grant?.revision ?? 0,
+      mandateRead: mandates.some((row) => row.accountId === account.id && mandateReadValid(row)),
+    };
+  });
+}
+
+/** Immutable audit survives account/chat deletion; lookup never widens beyond this owner. */
+export async function readTradingJournal(
+  prisma: PrismaClient,
+  ownerUserId: string,
+  query: TradingJournalQuery,
+) {
+  await requireTradingOwner(prisma, ownerUserId);
+  const where = {
+    ownerUserId,
+    ...(query.accountId ? { accountId: query.accountId } : {}),
+    ...(query.mode ? { mode: query.mode } : {}),
+    ...(query.mandateId ? { mandateId: query.mandateId } : {}),
+    ...(query.effectId ? { effectId: query.effectId } : {}),
+  };
+  const cursor = query.cursor
+    ? await prisma.financialJournal.findFirst({
+        where: { ...where, id: query.cursor },
+        select: { id: true, createdAt: true },
+      })
+    : null;
+  if (query.cursor && !cursor) throw new IsolationError("Journal cursor unavailable");
+  const rows = await prisma.financialJournal.findMany({
+    where: {
+      ...where,
+      ...(cursor
+        ? {
+            OR: [
+              { createdAt: { lt: cursor.createdAt } },
+              { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: query.limit + 1,
+    select: {
+      id: true,
+      accountId: true,
+      mode: true,
+      effectId: true,
+      goalId: true,
+      mandateId: true,
+      event: true,
+      entry: true,
+      createdAt: true,
+    },
+  });
+  const entries = rows
+    .slice(0, query.limit)
+    .map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+  return TradingJournalPageSchema.parse({
+    entries,
+    nextCursor: rows.length > query.limit ? (entries.at(-1)?.id ?? null) : null,
   });
 }
