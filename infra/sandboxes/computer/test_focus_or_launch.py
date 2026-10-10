@@ -280,6 +280,14 @@ class ScriptTest(unittest.TestCase):
             ]
         )
         try:
+            # Popen returns before the child has exec'd; until then /proc shows the parent's argv.
+            for proc in (equals, separate):
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    with open(f"/proc/{proc.pid}/cmdline", "rb") as cmdline:
+                        if b"--user-data-dir" in cmdline.read():
+                            break
+                    time.sleep(0.01)
             self.assertEqual(helper.window_profile(str(equals.pid)), "/profiles/mine")
             self.assertEqual(helper.window_profile(str(separate.pid)), "/profiles/other")
             self.assertIsNone(helper.window_profile("99999999"))
