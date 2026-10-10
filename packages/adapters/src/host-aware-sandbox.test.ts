@@ -61,6 +61,19 @@ describe("host-aware sandbox", () => {
     expect(pageBrowser).not.toHaveBeenCalled();
   });
 
+  it("forwards financial containment to the isolated supervisor", async () => {
+    const evidence = {
+      active: true,
+      revision: "financial-egress-v2",
+      checkedAt: new Date().toISOString(),
+      mode: "financial" as const,
+    };
+    const isolated: SandboxProvider = new FakeSandboxProvider();
+    isolated.financialContainment = async () => evidence;
+    const sandbox = new HostAwareSandbox(isolated, new DesktopSandboxProvider(), async () => true);
+    expect(await sandbox.financialContainment(ctx)).toEqual(evidence);
+  });
+
   it("does not expose page commands when neither provider supports them", () => {
     const sandbox = new HostAwareSandbox(
       new FakeSandboxProvider(),

@@ -75,6 +75,20 @@ export class HostAwareSandbox implements SandboxProvider {
     return this.isolated.describe();
   }
 
+  /** Deployment attestation belongs to the isolated supervisor, not a desktop host route. */
+  financialContainment(context: AdapterContext) {
+    const probe = this.isolated.financialContainment;
+    if (!probe) {
+      return Promise.resolve({
+        active: false,
+        revision: null,
+        checkedAt: new Date().toISOString(),
+        mode: null,
+      });
+    }
+    return probe.call(this.isolated, context);
+  }
+
   private route(computer: ComputerRef) {
     return computer.kind === "desktop" ? this.host : this.isolated;
   }

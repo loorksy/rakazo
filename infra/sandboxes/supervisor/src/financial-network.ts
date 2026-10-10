@@ -164,6 +164,8 @@ export async function verifyFinancialNetworks(
   });
   for (const computer of computers) {
     const info = await docker.getContainer(computer.Id).inspect();
+    // A stopped Computer has no attached network. Only a running one can bypass egress.
+    if (!info.State.Running) continue;
     const networks = Object.keys(info.NetworkSettings.Networks ?? {});
     if (
       networks.length !== 1 ||
