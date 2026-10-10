@@ -261,6 +261,8 @@ app.post("/computers", async (c) => {
               (mount) => mount.Destination === "/etc/rakazo/research-trust" && !mount.RW,
             )) &&
           info.Config.User === computerUser &&
+          (computerEgressMode !== "financial" ||
+            (info.Config.Env ?? []).includes("NO_PROXY=127.0.0.1,localhost")) &&
           controlPublishOk &&
           (!storage.homeVolume || homeVolumeMatches(info.HostConfig.Mounts, storage.homeVolume)) &&
           // A computer that cannot rejoin its network is replaced below instead.

@@ -1584,6 +1584,12 @@ describe("computer resource limits", () => {
     homePath: "/var/rakazo/homes/bot-x",
   };
 
+  it("leaves loopback off the research proxy so the Computer browser can reach itself", () => {
+    const options = containerCreateOptions({ ...createInput, researchTrustVolume: "trust" });
+    expect(options.Env).toContain("NO_PROXY=127.0.0.1,localhost");
+    expect(options.Env).toContain("no_proxy=127.0.0.1,localhost");
+  });
+
   it("caps memory and cpu by default and keeps #343's pids ceiling", () => {
     const { HostConfig } = containerCreateOptions(createInput);
     expect(HostConfig.Memory).toBe(2 * 1024 ** 3);
