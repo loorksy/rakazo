@@ -1531,7 +1531,7 @@ async function screenPeerIds() {
   const peers = runtime ? await composeScreenPeerIds(runtime) : new Set<string>();
   if (computerEgressMode === "financial") {
     const gateways = await docker.listContainers({
-      filters: { label: ["rakazo.financialContainment=financial-egress-v1"] },
+      filters: { label: [`rakazo.financialContainment=${FINANCIAL_EGRESS_REVISION}`] },
     });
     for (const gateway of gateways) peers.add(gateway.Id);
   }

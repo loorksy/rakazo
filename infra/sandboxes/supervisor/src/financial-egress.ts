@@ -1,17 +1,36 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import http from "node:http";
 import https from "node:https";
+import type { Socket } from "node:net";
 import { isIP } from "node:net";
 import path from "node:path";
+import type { Duplex } from "node:stream";
 import { promisify } from "node:util";
+import { FINANCIAL_CONTAINMENT_REVISION, financialResearchUrlAllowed } from "@rakazo/core";
 
-export const FINANCIAL_EGRESS_REVISION = "financial-egress-v1";
+export const FINANCIAL_EGRESS_REVISION = FINANCIAL_CONTAINMENT_REVISION;
 const run = promisify(execFile);
-function publicAddress(address: string) {
+/** Upstream requests in flight per gateway; more get 503 instead of queueing without bound. */
+export const MAX_RESEARCH_REQUESTS = 64;
+/** Hostname certificates kept in memory; older entries are evicted first. */
+export const MAX_RESEARCH_CERTIFICATES = 512;
+const TUNNEL_IDLE_MS = 120_000;
+/** The only request headers forwarded. Cookies, authorization and custom headers never leave. */
+const FORWARDED_HEADERS = [
+  "accept",
+  "accept-language",
+  "cache-control",
+  "if-modified-since",
+  "if-none-match",
+  "range",
+  "referer",
+] as const;
+
+export function publicAddress(address: string) {
   // Deny mapped/transition IPv6 as well as local, reserved and documentation space.
   if (isIP(address) === 6)
     return /^2[0-9a-f]{3}:/i.test(address) && !/^2001:(?:db8|0|2|10|20):/i.test(address);
@@ -25,7 +44,8 @@ function publicAddress(address: string) {
     a < 224 &&
     a !== 10 &&
     a !== 127 &&
-    a !== 192 &&
+    !(a === 192 && b === 168) &&
+    !(a === 192 && b === 0) &&
     !(a === 169 && b === 254) &&
     !(a === 172 && b >= 16 && b <= 31) &&
     !(a === 100 && b >= 64 && b <= 127) &&
@@ -34,35 +54,21 @@ function publicAddress(address: string) {
   );
 }
 export interface ResearchGatewayOptions {
-  origins: string[];
   privateDirectory: string;
   publicDirectory: string;
   /** Explicit dependency injection for isolated offline fixtures, never deployment configuration. */
+  policy?: (url: string, method: string) => boolean;
   resolve?: (hostname: string) => Promise<{ address: string; family: number }>;
   upstreamCa?: string;
 }
 export async function createResearchGateway(options: ResearchGatewayOptions) {
-  const origins = new Set(
-    options.origins.map((origin) => {
-      const url = new URL(origin);
-      if (
-        !["http:", "https:"].includes(url.protocol) ||
-        url.username ||
-        url.password ||
-        url.pathname !== "/" ||
-        url.search ||
-        url.hash ||
-        !/^[a-z0-9.-]+$/.test(url.hostname)
-      )
-        throw new Error("Invalid trusted research origin");
-      return url.origin;
-    }),
-  );
+  const allowed = options.policy ?? financialResearchUrlAllowed;
   await mkdir(options.privateDirectory, { recursive: true, mode: 0o700 });
   await chmod(options.privateDirectory, 0o700);
   await mkdir(options.publicDirectory, { recursive: true });
   const key = path.join(options.privateDirectory, "ca.key");
   const cert = path.join(options.publicDirectory, "ca.crt");
+  const leafKey = path.join(options.privateDirectory, "leaf.key");
   try {
     await readFile(key);
     await readFile(cert);
@@ -84,30 +90,40 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
     ]);
     await chmod(key, 0o600);
   }
+  try {
+    await readFile(leafKey);
+  } catch {
+    await run("openssl", ["genrsa", "-out", leafKey, "2048"]);
+    await chmod(leafKey, 0o600);
+  }
+  const leafKeyBytes = await readFile(leafKey);
   const certificates = new Map<string, Promise<{ key: Buffer; cert: Buffer }>>();
   async function certificate(hostname: string) {
     let value = certificates.get(hostname);
-    if (!value) {
-      value = (async () => {
-        const prefix = path.join(
-          options.privateDirectory,
-          createHash("sha256").update(hostname).digest("hex"),
-        );
+    if (value) {
+      certificates.delete(hostname);
+      certificates.set(hostname, value);
+      return value;
+    }
+    value = (async () => {
+      const prefix = path.join(
+        options.privateDirectory,
+        createHash("sha256").update(hostname).digest("hex"),
+      );
+      try {
+        return { key: leafKeyBytes, cert: await readFile(`${prefix}.crt`) };
+      } catch {
         await writeFile(`${prefix}.ext`, `subjectAltName=DNS:${hostname}\n`);
         await run("openssl", [
           "req",
           "-new",
-          "-newkey",
-          "rsa:2048",
-          "-nodes",
-          "-keyout",
-          `${prefix}.key`,
+          "-key",
+          leafKey,
           "-out",
           `${prefix}.csr`,
           "-subj",
           `/CN=${hostname}`,
         ]);
-        await chmod(`${prefix}.key`, 0o600);
         await run("openssl", [
           "x509",
           "-req",
@@ -126,9 +142,17 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
           "-extfile",
           `${prefix}.ext`,
         ]);
-        return { key: await readFile(`${prefix}.key`), cert: await readFile(`${prefix}.crt`) };
-      })();
-      certificates.set(hostname, value);
+        await rm(`${prefix}.csr`, { force: true });
+        await rm(`${prefix}.ext`, { force: true });
+        return { key: leafKeyBytes, cert: await readFile(`${prefix}.crt`) };
+      }
+    })();
+    value.catch(() => certificates.delete(hostname));
+    certificates.set(hostname, value);
+    while (certificates.size > MAX_RESEARCH_CERTIFICATES) {
+      const oldest = certificates.keys().next().value;
+      if (oldest === undefined) break;
+      certificates.delete(oldest);
     }
     return value;
   }
@@ -140,12 +164,10 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
         throw new Error("Untrusted destination");
       return addresses[0]!;
     });
+  let inFlight = 0;
   async function forward(req: IncomingMessage, res: ServerResponse, url: URL) {
     if (
-      !origins.has(url.origin) ||
-      url.username ||
-      url.password ||
-      !["GET", "HEAD"].includes(req.method ?? "") ||
+      !allowed(url.href, req.method ?? "") ||
       req.headers.upgrade ||
       req.headers["transfer-encoding"] ||
       (req.headers["content-length"] && req.headers["content-length"] !== "0") ||
@@ -155,19 +177,38 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
       res.end("STRUCTURED_FINANCIAL_EXECUTION_REQUIRED");
       return;
     }
+    if (inFlight >= MAX_RESEARCH_REQUESTS) {
+      res.writeHead(503, { "retry-after": "1" });
+      res.end("RESEARCH_GATEWAY_BUSY");
+      return;
+    }
+    inFlight++;
+    let released = false;
+    const release = () => {
+      if (!released) {
+        released = true;
+        inFlight--;
+      }
+    };
+    res.on("close", release);
     try {
       const address = await resolve(url.hostname);
       const transport = url.protocol === "https:" ? https : http;
-      // Pin the validated lookup result. No redirects, cookies, auth or opaque tunnels.
+      const headers: Record<string, string> = {
+        host: url.host,
+        "user-agent": String(req.headers["user-agent"] ?? "Rakazo Research").slice(0, 256),
+      };
+      for (const name of FORWARDED_HEADERS) {
+        const value = req.headers[name];
+        if (typeof value === "string" && value.length <= 2048) headers[name] = value;
+      }
+      if (!headers.accept) headers.accept = "*/*";
+      // Pin the validated lookup result. Redirects return to the client and are checked again.
       const upstream = transport.request(
         url,
         {
           method: req.method,
-          headers: {
-            host: url.host,
-            accept: req.headers.accept ?? "*/*",
-            "user-agent": "Rakazo Research",
-          },
+          headers,
           hostname: address.address,
           family: address.family,
           servername: url.hostname,
@@ -175,10 +216,11 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
           timeout: 15000,
         },
         (response) => {
-          const headers = { ...response.headers };
-          delete headers["set-cookie"];
-          delete headers["proxy-authenticate"];
-          res.writeHead(response.statusCode ?? 502, headers);
+          const forwarded = { ...response.headers };
+          delete forwarded["set-cookie"];
+          delete forwarded["proxy-authenticate"];
+          delete forwarded["alt-svc"];
+          res.writeHead(response.statusCode ?? 502, forwarded);
           response.pipe(res);
         },
       );
@@ -191,6 +233,7 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
       res.on("close", () => upstream.destroy());
       upstream.end();
     } catch {
+      release();
       res.writeHead(403);
       res.end("DESTINATION_UNVERIFIED");
     }
@@ -208,12 +251,22 @@ export async function createResearchGateway(options: ResearchGatewayOptions) {
     }
   });
   gateway.on("upgrade", (_req, socket) => socket.destroy());
+  // Hijacked CONNECT sockets leave HTTP connection tracking; close them with everything else.
+  const tunnels = new Set<Duplex>();
+  const closeTracked = gateway.closeAllConnections.bind(gateway);
+  gateway.closeAllConnections = () => {
+    closeTracked();
+    for (const tunnel of tunnels) tunnel.destroy();
+  };
   gateway.on("connect", (req, socket, head) => {
+    tunnels.add(socket);
+    socket.on("close", () => tunnels.delete(socket));
+    (socket as Socket).setTimeout(TUNNEL_IDLE_MS, () => socket.destroy());
     void (async () => {
       try {
         const url = new URL(`https://${req.url}`);
         if (
-          !origins.has(url.origin) ||
+          !allowed(url.href, "GET") ||
           url.username ||
           url.password ||
           url.pathname !== "/" ||

@@ -418,25 +418,49 @@ export function brokerSdkNumber(input: string): number {
   return number;
 }
 
+/** MetaTrader deal reasons, reduced to what supervision needs to distinguish. */
+function dealReason(reason: string | undefined) {
+  if (reason === "DEAL_REASON_SL") return "STOP_LOSS" as const;
+  if (reason === "DEAL_REASON_TP") return "TAKE_PROFIT" as const;
+  if (reason === "DEAL_REASON_SO") return "STOP_OUT" as const;
+  if (reason === "DEAL_REASON_EXPERT") return "API" as const;
+  if (
+    reason === "DEAL_REASON_CLIENT" ||
+    reason === "DEAL_REASON_MOBILE" ||
+    reason === "DEAL_REASON_WEB"
+  )
+    return "MANUAL" as const;
+  return "OTHER" as const;
+}
+const Deal = z.object({
+  id: text,
+  positionId: text,
+  time: z.union([z.date(), z.iso.datetime({ offset: true })]),
+  entryType: z.enum(["DEAL_ENTRY_IN", "DEAL_ENTRY_OUT", "DEAL_ENTRY_OUT_BY"]),
+  volume: numeric,
+  profit: signed,
+  commission: signed,
+  swap: signed,
+  reason: z.string().max(64).optional(),
+  clientId: text.nullish(),
+});
+function normalizeDeal(deal: z.infer<typeof Deal>) {
+  return {
+    id: deal.id,
+    positionId: deal.positionId,
+    time: new Date(deal.time).toISOString(),
+    entry: deal.entryType === "DEAL_ENTRY_IN" ? ("IN" as const) : ("OUT" as const),
+    volume: deal.volume,
+    profit: deal.profit,
+    commission: deal.commission,
+    swap: deal.swap,
+    reason: dealReason(deal.reason),
+    clientId: deal.clientId ?? null,
+  };
+}
 export function normalizePositionHistory(input: unknown, accountId: string, positionId: string) {
   const raw = parse(
-    z.object({
-      synchronizing: z.boolean(),
-      deals: z
-        .array(
-          z.object({
-            id: text,
-            positionId: text,
-            time: z.union([z.date(), z.iso.datetime({ offset: true })]),
-            entryType: z.enum(["DEAL_ENTRY_IN", "DEAL_ENTRY_OUT", "DEAL_ENTRY_OUT_BY"]),
-            volume: numeric,
-            profit: signed,
-            commission: signed,
-            swap: signed,
-          }),
-        )
-        .max(1000),
-    }),
+    z.object({ synchronizing: z.boolean(), deals: z.array(Deal).max(1000) }),
     input,
   );
   if (raw.deals.some((deal) => deal.positionId !== positionId))
@@ -445,15 +469,6 @@ export function normalizePositionHistory(input: unknown, accountId: string, posi
     accountId,
     positionId,
     synchronized: !raw.synchronizing,
-    deals: raw.deals.map((deal) => ({
-      id: deal.id,
-      positionId,
-      time: new Date(deal.time).toISOString(),
-      entry: deal.entryType === "DEAL_ENTRY_IN" ? ("IN" as const) : ("OUT" as const),
-      volume: deal.volume,
-      profit: deal.profit,
-      commission: deal.commission,
-      swap: deal.swap,
-    })),
+    deals: raw.deals.map(normalizeDeal),
   };
 }

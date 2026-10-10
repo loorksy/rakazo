@@ -98,6 +98,8 @@ export interface BrokerReadSession {
       profit: string;
       commission: string;
       swap: string;
+      reason?: "STOP_LOSS" | "TAKE_PROFIT" | "STOP_OUT" | "MANUAL" | "API" | "OTHER";
+      clientId?: string | null;
     }>;
   }>;
   account(): Promise<BrokerAccountState>;

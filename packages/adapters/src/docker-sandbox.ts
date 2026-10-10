@@ -17,7 +17,11 @@ import type {
   ScreenSession,
   TerminalRequest,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@rakazo/core";
+import {
+  boundedSandboxCommandTimeoutMs,
+  FINANCIAL_CONTAINMENT_REVISION,
+  resolveSupervisorToken,
+} from "@rakazo/core";
 import { outgoingCorrelationHeaders } from "@rakazo/logging";
 import {
   boundedComputerActions,
@@ -143,7 +147,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     const age = Date.now() - Date.parse(evidence.checkedAt);
     if (
       evidence.active !== true ||
-      evidence.revision !== "financial-egress-v1" ||
+      evidence.revision !== FINANCIAL_CONTAINMENT_REVISION ||
       !Number.isFinite(age) ||
       age < -2000 ||
       age > 5000

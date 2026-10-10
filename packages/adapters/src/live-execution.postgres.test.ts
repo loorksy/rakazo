@@ -1,6 +1,11 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import type { BrokerReadSession, ExecutionRequest, SandboxProvider } from "@rakazo/adapter-kit";
+import type {
+  BrokerReadSession,
+  ExecutionProvider,
+  ExecutionRequest,
+  SandboxProvider,
+} from "@rakazo/adapter-kit";
 import type {
   FinancialAction,
   FinancialRiskFacts,
@@ -12,17 +17,32 @@ import {
   TradingCapabilitiesSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
+import { FINANCIAL_CONTAINMENT_REVISION } from "@rakazo/core";
 import {
   financialActionFingerprint,
   tradingMandateFingerprint,
 } from "@rakazo/core/node/financial-action";
-import { claimBrokerSession, createDb, withBrokerSessionFence } from "@rakazo/db";
+import {
+  claimBrokerSession,
+  createDb,
+  heartbeatBrokerSession,
+  schemaReadiness,
+  withBrokerSessionFence,
+} from "@rakazo/db";
 import { createLogger, createTestSink } from "@rakazo/logging";
 import { makeWorkerUtils } from "graphile-worker";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BrokerPositionHistory } from "./broker-history.js";
+import {
+  createBrokerHistoryCache,
+  HISTORY_PENDING_TIMEOUT_MS,
+  PENDING_HISTORY_READS_PER_TICK,
+  readBrokerHistory,
+} from "./broker-history.js";
 import {
   BrokerStateSchema,
   captureSupervision,
+  HISTORY_PENDING,
   observeBrokerState,
   remainingVolume,
 } from "./broker-state.js";
@@ -47,7 +67,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
   let action: FinancialAction;
   const reset = () =>
     db.prisma
-      .$executeRaw`TRUNCATE trade_previews, trade_proposals, trading_mission_wakes, trading_provider_executions, trading_broker_snapshots, trading_position_supervisions, trading_drift_events, trading_runtime_health, simulation_executions, simulation_books, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE trade_previews, trade_proposals, trading_mission_wakes, trading_provider_executions, trading_broker_snapshots, trading_position_histories, trading_position_supervisions, trading_drift_events, trading_runtime_health, simulation_executions, simulation_books, trading_risk_reservations, trading_mandates, trading_plans, trading_goals, account_risk_guardrails, financial_journal, external_effects, trading_connections, organization, deployment_settings CASCADE`;
   beforeAll(() => {
     if (!url || !new URL(url).pathname.endsWith("_test"))
       throw new Error("Dedicated fixture _test database required");
@@ -381,6 +401,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
       verifiedAt: now.toISOString(),
       revision: "fixture-v1",
     });
+    const schema = await schemaReadiness(db.prisma);
     await withBrokerSessionFence(
       db.prisma,
       token,
@@ -399,7 +420,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
         });
         await tx.tradingRuntimeHealth.create({
           data: {
-            containmentRevision: "financial-egress-v1",
+            containmentRevision: FINANCIAL_CONTAINMENT_REVISION,
             containmentScopeFingerprint: createHash("sha256")
               .update(JSON.stringify([]))
               .digest("hex"),
@@ -408,6 +429,8 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
             effectsHealthy: true,
             emergencyStopHealthy: true,
             observabilityHealthy: true,
+            schemaHealthy: schema.healthy,
+            schemaFingerprint: schema.expected,
             jobLagMs: 0,
             observedAt: now,
           },
@@ -464,7 +487,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
         : [],
     });
     await observeBrokerState(db.prisma, token, state, now);
-    const execute = vi.fn(async (request: ExecutionRequest) => {
+    const execute = vi.fn<ExecutionProvider["execute"]>(async (request: ExecutionRequest) => {
       if (request.action.operation === "CANCEL_ORDER") {
         const orderId = request.action.orderId;
         const index = state.orders.findIndex((row) => row.id === orderId);
@@ -925,7 +948,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
     const sandbox = {
       financialContainment: async () => ({
         active,
-        revision: "financial-egress-v1",
+        revision: FINANCIAL_CONTAINMENT_REVISION,
         checkedAt: new Date().toISOString(),
       }),
     } as unknown as SandboxProvider;
@@ -957,6 +980,250 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
     expect(
       await db.prisma.tradingRuntimeHealth.findUnique({ where: { id: "default" } }),
     ).toMatchObject({ effectsHealthy: false });
+  });
+  it("database schema must match this build exactly before LIVE admission", async () => {
+    const schema = await schemaReadiness(db.prisma);
+    expect(schema).toMatchObject({ healthy: true, missing: [], unexpected: [], changed: [] });
+    await ready();
+    const row = await prepare();
+    const inputs = async () => ({
+      ownerUserId: owner,
+      botId: "fixture-main",
+      mandateId: row.mandateId,
+      action,
+      facts,
+      now,
+    });
+    expect(await db.prisma.$transaction(async (tx) => liveReadiness(tx, await inputs()))).toEqual({
+      ready: true,
+      failures: [],
+    });
+    const latest = await db.prisma.$queryRaw<Array<{ id: string; migration_name: string }>>`
+      SELECT id, migration_name FROM _prisma_migrations ORDER BY migration_name DESC LIMIT 1`;
+    // Behind the build: the newest shipped migration was never applied.
+    await db.prisma
+      .$executeRaw`UPDATE _prisma_migrations SET rolled_back_at = now() WHERE id = ${latest[0]!.id}`;
+    try {
+      expect((await schemaReadiness(db.prisma)).missing).toEqual([latest[0]!.migration_name]);
+      expect(
+        (await db.prisma.$transaction(async (tx) => liveReadiness(tx, await inputs()))).failures,
+      ).toContain("DATABASE_MIGRATIONS_UNHEALTHY");
+    } finally {
+      await db.prisma
+        .$executeRaw`UPDATE _prisma_migrations SET rolled_back_at = NULL WHERE id = ${latest[0]!.id}`;
+    }
+    // Ahead of the build or edited after application: a newer schema is never assumed compatible.
+    await db.prisma.$executeRaw`
+      INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, started_at, applied_steps_count)
+      VALUES ('fixture-future', 'fixture', '299912310001_future_build', now(), now(), 1)`;
+    try {
+      expect((await schemaReadiness(db.prisma)).unexpected).toEqual(["299912310001_future_build"]);
+      expect(
+        (await db.prisma.$transaction(async (tx) => liveReadiness(tx, await inputs()))).failures,
+      ).toContain("DATABASE_MIGRATIONS_UNHEALTHY");
+    } finally {
+      await db.prisma.$executeRaw`DELETE FROM _prisma_migrations WHERE id = 'fixture-future'`;
+    }
+    // A health attestation from a Worker running a different build does not count.
+    await db.prisma.tradingRuntimeHealth.update({
+      where: { id: "default" },
+      data: { schemaFingerprint: "different-build" },
+    });
+    expect(
+      (await db.prisma.$transaction(async (tx) => liveReadiness(tx, await inputs()))).failures,
+    ).toEqual(["RUNTIME_BUILD_MISMATCH"]);
+  });
+  it("a broker-side stop-loss exit of an Agent position settles exactly instead of raising drift", async () => {
+    const fixture = await ready();
+    const row = await prepare();
+    await row.send();
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).toEqual([]);
+    fixture.state.positions.splice(0, 1);
+    fixture.state.account.balance = "9989.5";
+    const stopped = closedHistory("fixture-provider-position", {
+      profit: "-10.5",
+      time: now.toISOString(),
+    });
+    stopped.deals[1]!.reason = "STOP_LOSS";
+    expect(
+      await observeBrokerState(db.prisma, fixture.token, fixture.state, now, [stopped]),
+    ).toEqual([]);
+    expect(await db.prisma.tradingDriftEvent.count()).toBe(0);
+    expect(
+      await db.prisma.tradingRiskReservation.findFirst({
+        where: { providerReference: "fixture-provider-position", kind: "POSITION" },
+      }),
+    ).toMatchObject({ status: "RELEASED", providerState: null });
+    expect(
+      await db.prisma.financialJournal.findFirst({ where: { event: "LIVE_PROTECTIVE_EXIT" } }),
+    ).toMatchObject({
+      entry: expect.objectContaining({ reason: "STOP_LOSS", realizedPnl: "-10.5" }),
+    });
+    expect(
+      await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: row.mandateId } }),
+    ).toMatchObject({ status: "ACTIVE" });
+    expect(
+      (
+        await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: row.mandateId } })
+      ).missionPnl.toFixed(),
+    ).toBe("-10.5");
+    expect(await db.prisma.tradingMissionWake.count({ where: { mandateId: row.mandateId } })).toBe(
+      1,
+    );
+  });
+  it("a manual close of an Agent position is drift, not an assumed protective exit", async () => {
+    const fixture = await ready();
+    const row = await prepare();
+    await row.send();
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).toEqual([]);
+    fixture.state.positions.splice(0, 1);
+    fixture.state.account.balance = "10003";
+    const manual = closedHistory("fixture-provider-position", {
+      profit: "3",
+      time: now.toISOString(),
+    });
+    manual.deals[1]!.reason = "MANUAL";
+    expect(
+      await observeBrokerState(db.prisma, fixture.token, fixture.state, now, [manual]),
+    ).toEqual(["ATTRIBUTED_POSITION_CLOSED_EXTERNALLY"]);
+    expect(
+      await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: row.mandateId } }),
+    ).toMatchObject({ status: "NEEDS_ATTENTION" });
+  });
+  const pendingEntry: () => FinancialAction = () => ({
+    ...action,
+    orderType: "LIMIT",
+    price: "2699",
+    expiresAt: "2026-10-09T12:00:00.000Z",
+  });
+  async function pendingFixture() {
+    const fixture = await ready();
+    fixture.execute.mockImplementation(async (request: ExecutionRequest) => {
+      const open = request.action;
+      if (open.operation !== "OPEN") throw new Error("Fixture expects an entry");
+      fixture.state.orders.push({
+        id: "fixture-order",
+        accountId: "fixture-account",
+        symbol: open.brokerSymbol,
+        side: open.side,
+        volume: open.volume,
+        orderType: "LIMIT",
+        price: open.price!,
+        stopLimitPrice: null,
+        stopLoss: open.stopLoss,
+        takeProfit: open.takeProfit,
+        expiresAt: open.expiresAt,
+        clientId: request.clientId,
+      });
+      return { status: "SUCCEEDED", providerReference: "fixture-order", code: "FIXTURE_ACCEPTED" };
+    });
+    const row = await prepare("pending-mandate", {}, pendingEntry());
+    await row.send();
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).toEqual([]);
+    expect(fixture.state.orders).toHaveLength(1);
+    return { fixture, row };
+  }
+  it("an Agent pending entry that expires at its stated time releases its reservation", async () => {
+    const { fixture } = await pendingFixture();
+    fixture.state.orders.splice(0, 1);
+    const later = new Date("2026-10-09T12:00:01Z");
+    // The provider session reconnected meanwhile; a reconnect alone is not drift.
+    const resumed = await claimBrokerSession(
+      db.prisma,
+      "fixture-account",
+      "fixture-provider-worker",
+      later,
+    );
+    expect(resumed!.generation).toBe(fixture.token.generation + 1);
+    expect(await observeBrokerState(db.prisma, resumed!, fixture.state, later)).toEqual([]);
+    expect(
+      await db.prisma.tradingRiskReservation.findFirstOrThrow({
+        where: { providerReference: "fixture-order" },
+      }),
+    ).toMatchObject({ status: "RELEASED" });
+    expect(await db.prisma.financialJournal.count({ where: { event: "LIVE_ORDER_EXPIRED" } })).toBe(
+      1,
+    );
+  });
+  it("an Agent pending entry cancelled outside Rakazo before expiry is drift", async () => {
+    const { fixture } = await pendingFixture();
+    fixture.state.orders.splice(0, 1);
+    expect(await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).toEqual([
+      "ATTRIBUTED_ORDER_CHANGED_EXTERNALLY",
+    ]);
+  });
+  it("an Agent pending entry that fills at the broker keeps exact attribution", async () => {
+    const { fixture } = await pendingFixture();
+    const admittedRisk = (
+      await db.prisma.tradingRiskReservation.findFirstOrThrow({
+        where: { providerReference: "fixture-order", kind: "PENDING" },
+      })
+    ).risk.toFixed();
+    const order = fixture.state.orders.splice(0, 1)[0]!;
+    fixture.state.positions.push({
+      id: order.id,
+      accountId: order.accountId,
+      symbol: order.symbol,
+      side: order.side,
+      volume: order.volume,
+      entry: "2699.2",
+      stopLoss: order.stopLoss,
+      takeProfit: order.takeProfit,
+      clientId: order.clientId,
+    });
+    fixture.state.account.positionValuations = [{ id: order.id, profit: "0" }];
+    const filled = closedHistory(order.id, { profit: "0", time: now.toISOString() });
+    filled.deals.splice(1, 1);
+    expect(
+      await observeBrokerState(db.prisma, fixture.token, fixture.state, now, [filled]),
+    ).toEqual([]);
+    const reservation = await db.prisma.tradingRiskReservation.findFirstOrThrow({
+      where: { providerReference: order.id },
+    });
+    expect(reservation).toMatchObject({ kind: "POSITION", status: "COMMITTED" });
+    // Adverse fill slippage widens reserved risk; it never shrinks below the admitted amount.
+    const admitted = await db.prisma.financialJournal.findFirstOrThrow({
+      where: { event: "LIVE_ORDER_FILLED" },
+    });
+    expect(admitted.entry).toMatchObject({ orderId: order.id, entry: "2699.2" });
+    expect(Number(reservation.risk.toFixed())).toBeGreaterThan(Number(admittedRisk));
+  });
+  it("the owner can retire a permanently uncertain LIVE effect without a claimed outcome", async () => {
+    const fixture = await ready();
+    const row = await prepare();
+    await row.send();
+    fixture.execute.mockImplementation(async () => ({
+      status: "UNCERTAIN" as const,
+      providerReference: null,
+      code: "FIXTURE_TIMEOUT",
+    }));
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    const execution = await db.prisma.tradingProviderExecution.findFirstOrThrow();
+    expect(execution.status).toBe("UNCERTAIN");
+    const controls = new TradingOwnerControls(db.prisma, () => now);
+    const status = await controls.liveStatus(owner);
+    expect(status.accounts[0]?.uncertainEffects).toEqual([
+      expect.objectContaining({ effectId: execution.effectId, abandonable: true }),
+    ]);
+    await expect(controls.abandonUncertainEffect("intruder", execution.effectId)).rejects.toThrow();
+    expect(await controls.abandonUncertainEffect(owner, execution.effectId)).toMatchObject({
+      requiresReconciliation: true,
+    });
+    expect(await db.prisma.tradingProviderExecution.findFirstOrThrow()).toMatchObject({
+      status: "RESOLVED",
+      outcome: expect.objectContaining({ code: "OWNER_ABANDONED_UNKNOWN_OUTCOME" }),
+    });
+    expect(
+      await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: row.mandateId } }),
+    ).toMatchObject({ status: "CANCELLED" });
+    expect(await db.prisma.tradingDriftEvent.count({ where: { resolvedAt: null } })).toBe(1);
+    // The retired request is never resent or reconciled again.
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(fixture.execute).toHaveBeenCalledTimes(1);
+    expect(fixture.reconcile).not.toHaveBeenCalled();
   });
   it("mixed manual and Agent exposure on a netting account pauses management and new entries", async () => {
     const fixture = await ready();
@@ -1390,4 +1657,198 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
       }
     },
   );
+  const closedHistory = (
+    positionId: string,
+    exit: { profit: string; time: string },
+  ): BrokerPositionHistory => ({
+    accountId: "fixture-account",
+    positionId,
+    synchronized: true,
+    deals: [
+      {
+        id: `${positionId}-in`,
+        positionId,
+        entry: "IN",
+        time: new Date(now.getTime() - 3_600_000).toISOString(),
+        volume: "0.02",
+        profit: "0",
+        commission: "0",
+        swap: "0",
+      },
+      {
+        id: `${positionId}-out`,
+        positionId,
+        entry: "OUT",
+        time: exit.time,
+        volume: "0.02",
+        profit: exit.profit,
+        commission: "0",
+        swap: "0",
+      },
+    ],
+  });
+  it("provider history progresses past 100 attributed positions within a fixed per-tick read budget", async () => {
+    const fixture = await ready();
+    const scope = await claimed("history-mandate");
+    const stale = new Date(now.getTime() - 86_400_000);
+    await db.prisma.tradingRiskReservation.createMany({
+      data: Array.from({ length: 150 }, (_, index) => ({
+        ownerUserId: owner,
+        accountId: "fixture-account",
+        mode: "LIVE",
+        mandateId: scope.mandateId,
+        effectId: `historical-effect-${index}`,
+        actionFingerprint: "historical",
+        kind: "POSITION",
+        risk: "0",
+        exposure: "0",
+        margin: "0",
+        status: "RELEASED",
+        executionGeneration: 1,
+        providerReference: `historical-${String(index).padStart(3, "0")}`,
+        createdAt: stale,
+        updatedAt: stale,
+      })),
+    });
+    const positionHistory = vi.fn(async (positionId: string) =>
+      closedHistory(positionId, { profit: "1", time: stale.toISOString() }),
+    );
+    const session = { ...fixture.session, positionHistory };
+    const cache = createBrokerHistoryCache();
+    let ticks = 0;
+    while ((await db.prisma.tradingPositionHistory.count()) < 150) {
+      ticks++;
+      if (ticks > 40) throw new Error("History reads made no progress");
+      const before = positionHistory.mock.calls.length;
+      const read = await readBrokerHistory(db.prisma, session, fixture.state, cache, now);
+      expect(read.missing).toEqual([]);
+      expect(read.histories.length).toBeGreaterThan(0);
+      expect(positionHistory.mock.calls.length - before).toBeLessThanOrEqual(
+        PENDING_HISTORY_READS_PER_TICK + 1,
+      );
+      expect(
+        await observeBrokerState(db.prisma, fixture.token, fixture.state, now, read.histories),
+      ).toEqual([]);
+    }
+    expect(await db.prisma.tradingPositionHistory.count({ where: { complete: true } })).toBe(150);
+    expect(
+      await db.prisma.financialJournal.count({ where: { event: "PROVIDER_POSITION_HISTORY" } }),
+    ).toBe(150);
+    // Old deals were already reflected in the observed balance; nothing is double counted.
+    expect(await db.prisma.tradingDriftEvent.count()).toBe(0);
+    const settled = positionHistory.mock.calls.length;
+    const idle = await readBrokerHistory(db.prisma, session, fixture.state, cache, now);
+    expect(idle).toEqual({ histories: [], missing: [] });
+    expect(positionHistory.mock.calls.length).toBe(settled);
+  });
+  it("a closed attributed position defers the observation until its exact history explains the balance", async () => {
+    const fixture = await ready();
+    const row = await prepare();
+    await row.send();
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).toEqual([]);
+    const snapshot = await db.prisma.tradingBrokerSnapshot.findUniqueOrThrow({
+      where: { accountId: "fixture-account" },
+    });
+    fixture.state.positions.splice(0, 1);
+    fixture.state.account.balance = "9994";
+    let available = false;
+    const positionHistory = vi.fn(async (positionId: string) => {
+      if (!available) throw Object.assign(new Error("fixture"), { statusCode: 503 });
+      const history = closedHistory(positionId, { profit: "-6", time: now.toISOString() });
+      history.deals[1]!.reason = "STOP_LOSS";
+      return history;
+    });
+    const session = { ...fixture.session, positionHistory };
+    const cache = createBrokerHistoryCache();
+    const pending = await readBrokerHistory(db.prisma, session, fixture.state, cache, now);
+    expect(pending.missing).toEqual(["fixture-provider-position"]);
+    expect(
+      await observeBrokerState(
+        db.prisma,
+        fixture.token,
+        fixture.state,
+        now,
+        pending.histories,
+        pending.missing,
+      ),
+    ).toEqual([HISTORY_PENDING]);
+    expect(
+      await db.prisma.tradingBrokerSnapshot.findUniqueOrThrow({
+        where: { accountId: "fixture-account" },
+      }),
+    ).toMatchObject({ revision: snapshot.revision });
+    expect(await db.prisma.tradingDriftEvent.count()).toBe(0);
+    available = true;
+    const explained = await readBrokerHistory(db.prisma, session, fixture.state, cache, now);
+    expect(explained.missing).toEqual([]);
+    expect(
+      await observeBrokerState(
+        db.prisma,
+        fixture.token,
+        fixture.state,
+        now,
+        explained.histories,
+        explained.missing,
+      ),
+    ).toEqual([]);
+    expect(
+      (
+        await db.prisma.tradingPositionHistory.findUniqueOrThrow({
+          where: {
+            accountId_positionId: {
+              accountId: "fixture-account",
+              positionId: "fixture-provider-position",
+            },
+          },
+        })
+      ).realizedPnl?.toFixed(),
+    ).toBe("-6");
+    expect(
+      (
+        await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: row.mandateId } })
+      ).missionPnl.toFixed(),
+    ).toBe("-6");
+    // Accounting keeps using the persisted exact history; it is not reread every observation.
+    const reads = positionHistory.mock.calls.length;
+    const later = await readBrokerHistory(db.prisma, session, fixture.state, cache, now);
+    expect(
+      await observeBrokerState(db.prisma, fixture.token, fixture.state, now, later.histories),
+    ).toEqual([]);
+    expect(positionHistory.mock.calls.length).toBe(reads);
+  });
+  it("required history that never arrives becomes owner-visible drift after the timeout", async () => {
+    const fixture = await ready();
+    const row = await prepare();
+    await row.send();
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).toEqual([]);
+    fixture.state.positions.splice(0, 1);
+    fixture.state.account.balance = "9994";
+    const positionHistory = vi.fn(async () => {
+      throw Object.assign(new Error("fixture"), { statusCode: 429 });
+    });
+    const session = { ...fixture.session, positionHistory };
+    const cache = createBrokerHistoryCache();
+    const later = new Date(now.getTime() + HISTORY_PENDING_TIMEOUT_MS + 1000);
+    for (let at = 20_000; at < later.getTime() - now.getTime(); at += 20_000)
+      await heartbeatBrokerSession(db.prisma, fixture.token, new Date(now.getTime() + at));
+    const read = await readBrokerHistory(db.prisma, session, fixture.state, cache, later);
+    expect(read.missing).toEqual(["fixture-provider-position"]);
+    expect(positionHistory).toHaveBeenCalledTimes(1);
+    const reasons = await observeBrokerState(
+      db.prisma,
+      fixture.token,
+      fixture.state,
+      later,
+      read.histories,
+      read.missing,
+    );
+    expect(reasons).toContain("PROVIDER_HISTORY_UNAVAILABLE");
+    expect(reasons).toContain("ACCOUNT_STATE_CHANGED");
+    expect(await db.prisma.tradingDriftEvent.count({ where: { resolvedAt: null } })).toBe(1);
+    expect(
+      await db.prisma.tradingMandate.findUniqueOrThrow({ where: { id: row.mandateId } }),
+    ).toMatchObject({ status: "NEEDS_ATTENTION" });
+  });
 });

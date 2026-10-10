@@ -24,7 +24,7 @@ suite("hostile Computer subprocess containment (real isolated Docker fixtures)",
     (
       await run("docker", ["--host=unix:///var/run/docker.sock", ...args], {
         env: { PATH: process.env.PATH },
-        timeout: 30000,
+        timeout: 90000,
         maxBuffer: 1024 * 1024,
       })
     ).stdout.trim();
@@ -37,7 +37,7 @@ suite("hostile Computer subprocess containment (real isolated Docker fixtures)",
     await mkdir(path.join(directory, "private"), { mode: 0o700 });
     await docker("network", "create", "--internal", isolated);
     await docker("network", "create", "--internal", uplink);
-    const server = `const http=require('http');let calls=0;http.createServer((req,res)=>{if(req.url==='/count'){res.end(String(calls));return}calls++;res.end('public market research')}).listen(8080,'0.0.0.0')`;
+    const server = `const http=require('http');let calls=0;http.createServer((req,res)=>{if(req.url==='/count'){res.end(String(calls));return}calls++;res.end(req.headers.authorization||req.headers.cookie?'CREDENTIAL_LEAKED':'public market research')}).listen(8080,'0.0.0.0')`;
     for (const name of [research, broker])
       await docker(
         "run",
@@ -57,17 +57,25 @@ suite("hostile Computer subprocess containment (real isolated Docker fixtures)",
       );
     brokerIp = JSON.parse(await docker("inspect", broker))[0].NetworkSettings.Networks[uplink]
       .IPAddress;
+    // The real gateway and the real core research policy. Only the fixture's port 8080 is mapped
+    // to the default port, and the policy import is pointed at the copied file.
     await writeFile(
       path.join(directory, "gateway.mjs"),
-      `import {createResearchGateway} from '/fixture/financial-egress.ts';import {lookup} from 'node:dns/promises';const server=await createResearchGateway({origins:['http://research.fixture:8080'],privateDirectory:'/private',publicDirectory:'/public',resolve:()=>lookup('${research}')});server.listen(8080,'0.0.0.0');`,
+      `import {createResearchGateway} from '/fixture/financial-egress.ts';import {financialResearchUrlAllowed} from '/fixture/financial-egress-policy.ts';import {lookup} from 'node:dns/promises';const server=await createResearchGateway({privateDirectory:'/private',publicDirectory:'/public',policy:(url,method)=>financialResearchUrlAllowed(url.replace(':8080/','/'),method),resolve:()=>lookup('${research}')});server.listen(8080,'0.0.0.0');`,
     );
     await writeFile(
       path.join(directory, "financial-egress.ts"),
-      await readFile(path.resolve("infra/sandboxes/supervisor/src/financial-egress.ts")),
+      (
+        await readFile(path.resolve("infra/sandboxes/supervisor/src/financial-egress.ts"), "utf8")
+      ).replace('from "@rakazo/core"', 'from "./financial-egress-policy.ts"'),
+    );
+    await writeFile(
+      path.join(directory, "financial-egress-policy.ts"),
+      await readFile(path.resolve("packages/core/src/financial-egress-policy.ts")),
     );
     await writeFile(
       path.join(directory, "Dockerfile"),
-      `FROM ${image}\nCOPY gateway.mjs financial-egress.ts /fixture/\n`,
+      `FROM ${image}\nCOPY gateway.mjs financial-egress.ts financial-egress-policy.ts /fixture/\n`,
     );
     await docker("build", "--pull=false", "--network=none", "-t", `${prefix}:fixture`, directory);
     await docker(
@@ -112,10 +120,11 @@ suite("hostile Computer subprocess containment (real isolated Docker fixtures)",
       "-e",
       "setInterval(()=>{},1000)",
     );
+    // Two RSA keys are generated at first start; under concurrent load this can take seconds.
     await execute(
-      `for(let i=0;i<40;i++){try{const r=await fetch('http://rakazo-research:8080/health');if(r.ok)break}catch{}if(i===39)throw Error('gateway failed');await new Promise(r=>setTimeout(r,100));}`,
+      `for(let i=0;i<300;i++){try{const r=await fetch('http://rakazo-research:8080/health');if(r.ok)break}catch{}if(i===299)throw Error('gateway failed');await new Promise(r=>setTimeout(r,100));}`,
     );
-  }, 60000);
+  }, 180000);
   afterAll(async () => {
     for (const name of [computer, gateway, research, broker])
       await docker("rm", "-f", name).catch(() => undefined);
@@ -126,12 +135,26 @@ suite("hostile Computer subprocess containment (real isolated Docker fixtures)",
     await docker("image", "rm", `${prefix}:fixture`).catch(() => undefined);
     if (directory) await rm(directory, { recursive: true, force: true });
   }, 60000);
-  it("allows normal public research by the same Computer", async () => {
+  it.each(["research.fixture", "news.example.org", "calendar.example.com"])(
+    "allows normal public research on %s by the same Computer",
+    async (host) => {
+      expect(
+        await execute(
+          `import http from 'node:http';http.get({host:'rakazo-research',port:8080,path:'http://${host}:8080/markets',headers:{authorization:'Bearer fixture-broker-secret-sentinel'}},res=>{let b='';res.on('data',d=>b+=d);res.on('end',()=>console.log(res.statusCode+':'+b))})`,
+        ),
+      ).toBe("200:public market research");
+    },
+  );
+  it.each([
+    "http://news.example.org:8080/feed?apiKey=fixture-broker-secret-sentinel",
+    "http://mt-client-api-v1.london.agiliumtrade.ai:8080/users/current/accounts/a/trade",
+    "http://169.254.169.254:8080/latest/meta-data",
+  ])("blocks authenticated, broker API or metadata destination %s", async (url) => {
     expect(
       await execute(
-        `import http from 'node:http';http.get({host:'rakazo-research',port:8080,path:'http://research.fixture:8080/markets'},res=>{let b='';res.on('data',d=>b+=d);res.on('end',()=>console.log(res.statusCode+':'+b))})`,
+        `import http from 'node:http';http.get({host:'rakazo-research',port:8080,path:'${url}'},res=>{res.resume();res.on('end',()=>console.log(res.statusCode))})`,
       ),
-    ).toBe("200:public market research");
+    ).toBe("403");
   });
   it("blocks broker web Buy/Sell and scripts via the proxy", async () => {
     for (const method of ["GET", "POST"]) {

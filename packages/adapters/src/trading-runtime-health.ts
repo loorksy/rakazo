@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { SandboxProvider } from "@rakazo/adapter-kit";
-import { financialRiskEngineHealthy } from "@rakazo/core";
+import { FINANCIAL_CONTAINMENT_REVISION, financialRiskEngineHealthy } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
+import { schemaReadiness } from "@rakazo/db";
 import type { Logger } from "@rakazo/logging";
 
 /** Trusted Worker liveness and actual supervisor inspection. No UI or Agent can attest health. */
@@ -59,7 +60,7 @@ export class TradingRuntimeHealthProbe {
     const age = evidence ? Date.now() - Date.parse(evidence.checkedAt) : Number.POSITIVE_INFINITY;
     const containmentActive =
       evidence?.active === true &&
-      evidence.revision === "financial-egress-v1" &&
+      evidence.revision === FINANCIAL_CONTAINMENT_REVISION &&
       age >= -2000 &&
       age <= 5000 &&
       computers.every((c) => c.kind === "docker");
@@ -104,6 +105,14 @@ export class TradingRuntimeHealthProbe {
     });
     const oldest = (values: Array<Date | null>) =>
       Math.max(0, ...values.filter((v): v is Date => !!v).map((v) => Date.now() - v.getTime()));
+    const schema = await schemaReadiness(this.prisma).catch(() => null);
+    if (schema && !schema.healthy)
+      this.logger.warn("database schema does not match this build", {
+        missing: schema.missing.slice(0, 20),
+        changed: schema.changed.slice(0, 20),
+        unexpected: schema.unexpected.slice(0, 20),
+        unfinished: schema.unfinished,
+      });
     const effectsHealthy = worker.active && database[0]?.effects === true;
     const emergencyStopHealthy = database[0]?.emergency === true;
     // The engine is local deterministic code; exact decimal arithmetic must remain intact.
@@ -127,12 +136,13 @@ export class TradingRuntimeHealthProbe {
       unresolvedDrift,
       jobLagMs,
       containmentActive,
+      schemaHealthy: schema?.healthy === true,
     };
     this.logger.info("trading operational health", metrics);
     await this.logger.flush({ timeoutMs: 1000 });
     const data = {
       containmentActive,
-      containmentRevision: containmentActive ? "financial-egress-v1" : null,
+      containmentRevision: containmentActive ? FINANCIAL_CONTAINMENT_REVISION : null,
       containmentScopeFingerprint: createHash("sha256")
         .update(JSON.stringify(computers))
         .digest("hex"),
@@ -140,6 +150,8 @@ export class TradingRuntimeHealthProbe {
       effectsHealthy,
       emergencyStopHealthy,
       observabilityHealthy: worker.active && jobLagMs !== null && jobLagMs <= 30000,
+      schemaHealthy: schema?.healthy === true,
+      schemaFingerprint: schema?.healthy ? schema.expected : null,
       jobLagMs,
       observedAt: new Date(),
     };

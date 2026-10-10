@@ -1689,6 +1689,7 @@ model TradingRiskReservation {
 
   @@index([accountId, mode, status])
   @@index([mandateId, status])
+  @@index([accountId, providerReference], map: "trading_risk_reservations_provider_reference")
   @@map("trading_risk_reservations")
 }
 
@@ -1853,6 +1854,26 @@ model TradingProviderExecution {
   @@map("trading_provider_executions")
 }
 
+// Rebuildable provider deal history per attributed position; the journal keeps immutable copies.
+model TradingPositionHistory {
+  accountId String
+  positionId String
+  ownerUserId String
+  deals Json
+  synchronized Boolean
+  complete Boolean @default(false)
+  realizedPnl Decimal? @db.Decimal(38, 12)
+  dealCount Int
+  dealsHash String
+  verifiedAt DateTime
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@id([accountId, positionId])
+  @@index([accountId, complete, verifiedAt], map: "trading_position_histories_verification")
+  @@map("trading_position_histories")
+}
+
 // Rebuildable state; durable supervision/drift records copy evidence they require.
 model TradingBrokerSnapshot {
   accountId String @id
@@ -1904,6 +1925,8 @@ model TradingRuntimeHealth {
   effectsHealthy Boolean @default(false)
   emergencyStopHealthy Boolean @default(false)
   observabilityHealthy Boolean @default(false)
+  schemaHealthy Boolean @default(false)
+  schemaFingerprint String?
   jobLagMs Int?
   observedAt DateTime
   @@map("trading_runtime_health")

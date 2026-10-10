@@ -51,6 +51,18 @@ export async function ensureResearchGateway(
   const name = researchGatewayName(owner);
   let container = docker.getContainer(name);
   let info = await container.inspect().catch(() => undefined);
+  // An image update or a new containment revision leaves our previous gateway untrusted.
+  // Replace only a gateway this supervisor created for the same owner; never a foreign name.
+  if (
+    info &&
+    !trustedResearchGateway(info, owner, image) &&
+    info.Config.Labels?.["rakazo.researchOwner"] === owner &&
+    info.Config.Labels?.["rakazo.financialContainment"]?.startsWith("financial-egress-")
+  ) {
+    await container.remove({ force: true });
+    container = docker.getContainer(name);
+    info = undefined;
+  }
   if (!info) {
     const uplink = `rakazo-research-uplink-${owner}`;
     await docker
@@ -117,7 +129,8 @@ export async function ensureResearchGateway(
     throw new Error("Financial Computer requires an internal network");
   if (!isolated.Containers?.[info.Id])
     await network.connect({ Container: info.Id, EndpointConfig: { Aliases: ["rakazo-research"] } });
-  for (let attempt = 0; attempt < 40; attempt++) {
+  // First start generates two RSA keys; slow or busy hosts need more than a few seconds.
+  for (let attempt = 0; attempt < 120; attempt++) {
     const current = await container.inspect();
     if (current.State.Health?.Status === "healthy") return researchPublicVolume(owner);
     if (!current.State.Running) throw new Error("Research gateway unavailable");

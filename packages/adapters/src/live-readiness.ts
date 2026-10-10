@@ -5,9 +5,10 @@ import {
   TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
-import { mandateActionAuthority } from "@rakazo/core";
+import { FINANCIAL_CONTAINMENT_REVISION, mandateActionAuthority } from "@rakazo/core";
 import { tradingMandateFingerprint } from "@rakazo/core/node/financial-action";
 import type { Prisma } from "@rakazo/db";
+import { schemaReadiness } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 
 const fresh = (value: Date | string | null | undefined, now: Date, age: number) => {
@@ -132,7 +133,7 @@ export async function liveReadiness(
   check(runtime?.emergencyStopHealthy, "EMERGENCY_STOP_UNHEALTHY");
   check(
     runtime?.containmentActive &&
-      runtime.containmentRevision === "financial-egress-v1" &&
+      runtime.containmentRevision === FINANCIAL_CONTAINMENT_REVISION &&
       runtime.containmentScopeFingerprint === containmentScopeFingerprint &&
       computers.every((computer) => computer.kind === "docker"),
     "FINANCIAL_CONTAINMENT_UNVERIFIED",
@@ -141,17 +142,13 @@ export async function liveReadiness(
     runtime?.observabilityHealthy && runtime.jobLagMs !== null && runtime.jobLagMs <= 30000,
     "OBSERVABILITY_UNHEALTHY",
   );
-  const migrations = await tx.$queryRaw<
-    Array<{ migration_name: string; finished_at: Date | null; rolled_back_at: Date | null }>
-  >`
-    SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations
-    WHERE migration_name = '202610100004_live_runtime_readiness'
-       OR (finished_at IS NULL AND rolled_back_at IS NULL)`;
+  // This process compares the database with its own build; the Worker that attests runtime
+  // health must be running that same build.
+  const schema = await schemaReadiness(tx);
+  check(schema.healthy, "DATABASE_MIGRATIONS_UNHEALTHY");
   check(
-    migrations.some(
-      (row) => row.migration_name === "202610100004_live_runtime_readiness" && row.finished_at,
-    ) && !migrations.some((row) => !row.finished_at && !row.rolled_back_at),
-    "DATABASE_MIGRATIONS_UNHEALTHY",
+    runtime?.schemaHealthy && runtime.schemaFingerprint === schema.expected,
+    "RUNTIME_BUILD_MISMATCH",
   );
   const unresolved = await tx.externalEffect.count({
     where: {

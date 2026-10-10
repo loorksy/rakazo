@@ -5,13 +5,22 @@ import {
   TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
-import { financialDecimal, financialUnits } from "@rakazo/core";
-import type { BrokerLeaseToken, Prisma, PrismaClient } from "@rakazo/db";
-import { withBrokerSessionFence } from "@rakazo/db";
+import { financialCeil, financialDecimal, financialUnits } from "@rakazo/core";
+import type { BrokerLeaseToken, PrismaClient } from "@rakazo/db";
+import { Prisma, withBrokerSessionFence } from "@rakazo/db";
 import { z } from "zod";
 
 import type { BrokerPositionHistory } from "./broker-history.js";
-import { closedPositionPnl, recordBrokerHistories } from "./broker-history.js";
+import {
+  BrokerPositionHistorySchema,
+  DEAL_CLOCK_SKEW_MS,
+  HISTORY_PENDING_TIMEOUT_MS,
+  realizedPositionPnl,
+  recordBrokerHistories,
+} from "./broker-history.js";
+
+/** Returned when required provider history is still being read; nothing was persisted. */
+export const HISTORY_PENDING = "PROVIDER_HISTORY_PENDING";
 
 const Id = z.string().min(1).max(128);
 export const BrokerPositionStateSchema = z.object({
@@ -230,6 +239,7 @@ export async function observeBrokerState(
   state: BrokerState,
   now: Date,
   histories: BrokerPositionHistory[] = [],
+  missingHistory: string[] = [],
 ) {
   // Even fixture providers must pass the secret-stripping schema before persistence.
   state = BrokerStateSchema.parse(state);
@@ -244,12 +254,25 @@ export async function observeBrokerState(
         where: { accountId: token.accountId },
       });
       const previous = prior ? BrokerStateSchema.parse(prior) : null;
+      // Keep the last explained snapshot until required history arrives. Its age blocks new
+      // LIVE risk meanwhile; after the timeout the gap itself becomes owner-visible drift.
+      if (
+        prior &&
+        missingHistory.length &&
+        now.getTime() - prior.observedAt.getTime() < HISTORY_PENDING_TIMEOUT_MS
+      )
+        return [HISTORY_PENDING];
       const history = await recordBrokerHistories(
         tx,
         connection.ownerUserId,
         token.accountId,
         histories,
-        prior?.observedAt ?? null,
+        prior && previous
+          ? {
+              observedAt: prior.observedAt,
+              positionIds: new Set(previous.positions.map((row) => row.id)),
+            }
+          : null,
         now,
       );
       const supervisions = await tx.tradingPositionSupervision.findMany({
@@ -258,9 +281,12 @@ export async function observeBrokerState(
       });
       if (supervisions.length > 1000) throw new Error("Supervision capacity exceeded");
       const reasons = new Set<string>();
+      let transitions: Awaited<ReturnType<typeof classifyAttributedOutcomes>> | null = null;
       if (history.conflict) reasons.add("PROVIDER_HISTORY_CONFLICT");
+      if (missingHistory.length) reasons.add("PROVIDER_HISTORY_UNAVAILABLE");
       if (previous) {
-        if (prior?.generation !== token.generation) reasons.add("PROVIDER_SESSION_GAP");
+        // A reconnect alone is not drift: the full state diff and deal history below detect
+        // every net change that happened while the session was down.
         if (
           financialUnits(previous.account.balance) + history.cash !==
             financialUnits(state.account.balance) ||
@@ -269,34 +295,52 @@ export async function observeBrokerState(
           previous.account.tradingAllowed !== state.account.tradingAllowed
         )
           reasons.add("ACCOUNT_STATE_CHANGED");
-        for (const supervision of supervisions) {
-          const expected = z.object({ position: Position.nullable() }).parse(supervision.expected);
-          const position = state.positions.find((row) => row.id === supervision.positionId) ?? null;
-          if (JSON.stringify(position) !== JSON.stringify(expected.position))
-            reasons.add("SUPERVISED_POSITION_CHANGED");
-        }
-        const known = await tx.tradingRiskReservation.findMany({
+        const committed = await tx.tradingRiskReservation.findMany({
           where: {
             accountId: token.accountId,
             mode: "LIVE",
-            status: { in: ["COMMITTED", "RELEASED"] },
+            status: "COMMITTED",
+            kind: { in: ["POSITION", "PENDING"] },
           },
+          take: 10001,
         });
-        const knownIds = new Set(known.map((row) => row.providerReference));
-        for (const reservation of known) {
-          if (reservation.kind === "MANAGEMENT" || reservation.status === "RELEASED") continue;
-          const current = (reservation.kind === "POSITION" ? state.positions : state.orders).find(
-            (row) => row.id === reservation.providerReference,
-          );
+        if (committed.length > 10000) throw new Error("Risk ledger capacity exceeded");
+        const visible = [
+          ...new Set(
+            [...state.positions, ...state.orders, ...previous.positions, ...previous.orders].map(
+              (row) => row.id,
+            ),
+          ),
+        ];
+        const referenced = visible.length
+          ? await tx.tradingRiskReservation.findMany({
+              where: {
+                accountId: token.accountId,
+                mode: "LIVE",
+                status: { in: ["COMMITTED", "RELEASED"] },
+                providerReference: { in: visible },
+              },
+              select: { providerReference: true },
+            })
+          : [];
+        const knownIds = new Set([...committed, ...referenced].map((row) => row.providerReference));
+        const outcomes = await classifyAttributedOutcomes(
+          tx,
+          token.accountId,
+          committed,
+          state,
+          now,
+        );
+        for (const reason of outcomes.reasons) reasons.add(reason);
+        transitions = outcomes;
+        for (const supervision of supervisions) {
+          const expected = z.object({ position: Position.nullable() }).parse(supervision.expected);
+          const position = state.positions.find((row) => row.id === supervision.positionId) ?? null;
           if (
-            !reservation.providerState ||
-            JSON.stringify(
-              reservation.kind === "POSITION"
-                ? Position.parse(reservation.providerState)
-                : Order.parse(reservation.providerState),
-            ) !== JSON.stringify(current)
+            JSON.stringify(position) !== JSON.stringify(expected.position) &&
+            !outcomes.exits.some((exit) => exit.position.id === supervision.positionId)
           )
-            reasons.add("ATTRIBUTED_EXPOSURE_CHANGED");
+            reasons.add("SUPERVISED_POSITION_CHANGED");
         }
         if (
           state.positions.some(
@@ -370,6 +414,8 @@ export async function observeBrokerState(
           revision: { increment: 1 },
         },
       });
+      if (!reasons.size && transitions)
+        await applyAttributedOutcomes(tx, connection.ownerUserId, token, transitions, now);
       // Refresh mission accounting only when exact attributed provider valuation is known.
       // A realized cash/exposure change needs history reconciliation; never infer zero profit.
       if (!reasons.size) {
@@ -385,6 +431,16 @@ export async function observeBrokerState(
               status: { in: ["COMMITTED", "RELEASED"] },
             },
           });
+          const realizedByPosition = await realizedPositionPnl(
+            tx,
+            token.accountId,
+            reservations.flatMap((row) =>
+              row.providerReference &&
+              !state.positions.some((position) => position.id === row.providerReference)
+                ? [row.providerReference]
+                : [],
+            ),
+          );
 
           let pnl = 0n;
           let verified = true;
@@ -392,12 +448,11 @@ export async function observeBrokerState(
             const valuation = state.account.positionValuations?.find(
               (row) => row.id === reservation.providerReference,
             );
-            const closed = history.verified.get(reservation.providerReference ?? "");
-            const realized = closed ? closedPositionPnl(closed) : null;
+            const realized = realizedByPosition.get(reservation.providerReference ?? "");
             if (valuation && reservation.status === "COMMITTED")
               pnl += financialUnits(valuation.profit);
             else if (
-              realized !== null &&
+              realized !== undefined &&
               !state.positions.some((position) => position.id === reservation.providerReference)
             )
               pnl += realized;
@@ -468,6 +523,206 @@ export async function observeBrokerState(
     },
     now,
   );
+}
+
+type Reservation = Awaited<
+  ReturnType<Prisma.TransactionClient["tradingRiskReservation"]["findMany"]>
+>[number];
+type PositionState = z.infer<typeof Position>;
+type OrderState = z.infer<typeof Order>;
+const max = (first: bigint, second: bigint) => (first > second ? first : second);
+
+/** A pending entry filled at a different price keeps its reservation; adverse slippage raises it. */
+function filledCapacity(order: OrderState, position: PositionState, reservation: Reservation) {
+  if (order.stopLoss === null) return null;
+  const stop = financialUnits(order.stopLoss);
+  const distance = (entry: string) =>
+    order.side === "BUY" ? financialUnits(entry) - stop : stop - financialUnits(entry);
+  const before = distance(order.price);
+  const after = distance(position.entry);
+  if (before <= 0n || after <= 0n) return null;
+  const price = financialUnits(order.price);
+  const entry = financialUnits(position.entry);
+  const scale = (value: string, numerator: bigint, denominator: bigint) =>
+    financialDecimal(
+      max(financialUnits(value), financialCeil(financialUnits(value) * numerator, denominator)),
+    );
+  return {
+    risk: scale(reservation.risk.toFixed(), after, before),
+    exposure: scale(reservation.exposure.toFixed(), entry, price),
+    margin: scale(reservation.margin.toFixed(), entry, price),
+  };
+}
+
+/**
+ * Broker-side outcomes the approved envelope already anticipated: protective stop/target
+ * exits, pending entries filling unchanged, and pending entries expiring at their stated time.
+ * Anything else that changed attributed exposure is drift requiring the owner.
+ */
+async function classifyAttributedOutcomes(
+  tx: Prisma.TransactionClient,
+  accountId: string,
+  committed: Reservation[],
+  state: BrokerState,
+  now: Date,
+) {
+  const reasons = new Set<string>();
+  const exits: Array<{
+    reservation: Reservation;
+    position: PositionState;
+    reason: "STOP_LOSS" | "TAKE_PROFIT";
+    realizedPnl: string;
+  }> = [];
+  const fills: Array<{
+    reservation: Reservation;
+    order: OrderState;
+    position: PositionState;
+    capacity: { risk: string; exposure: string; margin: string };
+  }> = [];
+  const expiries: Array<{ reservation: Reservation; order: OrderState }> = [];
+  const inFlight = new Set(
+    (
+      await tx.tradingProviderExecution.findMany({
+        where: { accountId, status: { in: ["SENT", "UNCERTAIN"] } },
+        select: { clientId: true },
+      })
+    ).map((row) => row.clientId),
+  );
+  for (const reservation of committed) {
+    const rows = reservation.kind === "POSITION" ? state.positions : state.orders;
+    const current = rows.find((row) => row.id === reservation.providerReference);
+    const expected =
+      reservation.kind === "POSITION"
+        ? Position.safeParse(reservation.providerState)
+        : Order.safeParse(reservation.providerState);
+    if (expected.success && JSON.stringify(expected.data) === JSON.stringify(current)) continue;
+    if (!expected.success || current) {
+      reasons.add("ATTRIBUTED_EXPOSURE_CHANGED");
+      continue;
+    }
+    if (reservation.kind === "POSITION") {
+      const position = Position.parse(expected.data);
+      const stored = await tx.tradingPositionHistory.findUnique({
+        where: { accountId_positionId: { accountId, positionId: position.id } },
+      });
+      const outgoing = stored
+        ? BrokerPositionHistorySchema.shape.deals
+            .parse(stored.deals)
+            .filter((deal) => deal.entry === "OUT")
+        : [];
+      // Our own uncertain close is resolved by provider reconciliation, not inferred here.
+      if (outgoing.length && outgoing.every((deal) => deal.clientId && inFlight.has(deal.clientId)))
+        continue;
+      const reason = outgoing[0]?.reason;
+      if (
+        stored?.complete &&
+        stored.realizedPnl !== null &&
+        (reason === "STOP_LOSS" || reason === "TAKE_PROFIT") &&
+        outgoing.every((deal) => deal.reason === reason) &&
+        (reason === "STOP_LOSS" ? position.stopLoss : position.takeProfit) !== null
+      )
+        exits.push({ reservation, position, reason, realizedPnl: stored.realizedPnl.toFixed() });
+      else reasons.add("ATTRIBUTED_POSITION_CLOSED_EXTERNALLY");
+      continue;
+    }
+    const order = Order.parse(expected.data);
+    const filled = state.positions.find((row) => row.id === order.id);
+    const capacity = filled ? filledCapacity(order, filled, reservation) : null;
+    if (
+      filled &&
+      capacity &&
+      filled.symbol === order.symbol &&
+      filled.side === order.side &&
+      filled.volume === order.volume &&
+      filled.stopLoss === order.stopLoss &&
+      filled.takeProfit === order.takeProfit &&
+      (filled.clientId === null || filled.clientId === order.clientId)
+    )
+      fills.push({ reservation, order, position: filled, capacity });
+    else if (
+      !filled &&
+      order.expiresAt !== null &&
+      Date.parse(order.expiresAt) <= now.getTime() + DEAL_CLOCK_SKEW_MS
+    )
+      expiries.push({ reservation, order });
+    else reasons.add("ATTRIBUTED_ORDER_CHANGED_EXTERNALLY");
+  }
+  return { reasons, exits, fills, expiries };
+}
+
+async function applyAttributedOutcomes(
+  tx: Prisma.TransactionClient,
+  ownerUserId: string,
+  token: BrokerLeaseToken,
+  outcomes: Awaited<ReturnType<typeof classifyAttributedOutcomes>>,
+  now: Date,
+) {
+  const record = async (
+    reservation: Reservation,
+    event: string,
+    entry: Record<string, string | number | null>,
+  ) => {
+    const mandate = await tx.tradingMandate.findUnique({ where: { id: reservation.mandateId } });
+    await tx.financialJournal.create({
+      data: {
+        ownerUserId,
+        accountId: token.accountId,
+        mode: "LIVE",
+        mandateId: reservation.mandateId,
+        goalId: mandate?.goalId,
+        event,
+        entry: { version: 1, generation: token.generation, ...entry },
+      },
+    });
+    if (mandate)
+      await tx.tradingMissionWake.upsert({
+        where: { wakeKey: `live:${event}:${reservation.id}` },
+        create: {
+          mandateId: mandate.id,
+          wakeKey: `live:${event}:${reservation.id}`,
+          kind: "ACCOUNT_EVENT",
+          dueAt: now,
+        },
+        update: {},
+      });
+  };
+  for (const exit of outcomes.exits) {
+    await tx.tradingRiskReservation.update({
+      where: { id: exit.reservation.id },
+      data: { status: "RELEASED", providerState: Prisma.JsonNull },
+    });
+    await tx.tradingPositionSupervision.updateMany({
+      where: { accountId: token.accountId, positionId: exit.position.id, status: "ACTIVE" },
+      data: { status: "CLOSED", expected: { position: null } },
+    });
+    await record(exit.reservation, "LIVE_PROTECTIVE_EXIT", {
+      positionId: exit.position.id,
+      reason: exit.reason,
+      realizedPnl: exit.realizedPnl,
+    });
+  }
+  for (const fill of outcomes.fills) {
+    await tx.tradingRiskReservation.update({
+      where: { id: fill.reservation.id },
+      data: { ...fill.capacity, kind: "POSITION", providerState: fill.position },
+    });
+    await record(fill.reservation, "LIVE_ORDER_FILLED", {
+      orderId: fill.order.id,
+      positionId: fill.position.id,
+      entry: fill.position.entry,
+      risk: fill.capacity.risk,
+    });
+  }
+  for (const expiry of outcomes.expiries) {
+    await tx.tradingRiskReservation.update({
+      where: { id: expiry.reservation.id },
+      data: { status: "RELEASED", providerState: Prisma.JsonNull },
+    });
+    await record(expiry.reservation, "LIVE_ORDER_EXPIRED", {
+      orderId: expiry.order.id,
+      expiresAt: expiry.order.expiresAt,
+    });
+  }
 }
 
 export function remainingVolume(before: string, closed: string): string {

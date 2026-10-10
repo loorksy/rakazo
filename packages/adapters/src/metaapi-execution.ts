@@ -1,7 +1,7 @@
 import type { ExecutionProvider, ExecutionRequest, ExecutionResult } from "@rakazo/adapter-kit";
 import { FinancialActionSchema } from "@rakazo/contracts";
 import { z } from "zod";
-import { brokerSdkNumber } from "./metaapi-normalize.js";
+import { brokerSdkNumber, normalizePositionHistory } from "./metaapi-normalize.js";
 
 type TradeOptions = { clientId: string; expiration?: { type: "ORDER_TIME_SPECIFIED"; time: Date } };
 type OpenTrade = (
@@ -32,6 +32,7 @@ export interface MetaApiExecutionPort {
   closePosition?: (id: string, options: TradeOptions) => Promise<unknown>;
   closePositionPartially?: (id: string, volume: number, options: TradeOptions) => Promise<unknown>;
   cancelOrder?: (id: string) => Promise<unknown>;
+  getDealsByPosition?(positionId: string): Promise<unknown>;
   getPositions(): Promise<unknown>;
   getOrders(): Promise<unknown>;
 }
@@ -178,6 +179,34 @@ export class MetaApiExecutionAdapter implements ExecutionProvider {
       action.mode !== "LIVE"
     )
       throw new Error("Invalid reconciliation identity");
+    if (action.operation === "CLOSE_POSITION") {
+      // Closing deals carry our client reference; that, not mere absence, attributes the close.
+      if (!this.rpc.getDealsByPosition) return unknown();
+      try {
+        const history = normalizePositionHistory(
+          await this.rpc.getDealsByPosition(action.positionId),
+          this.accountId,
+          action.positionId,
+        );
+        const ours = history.deals.filter(
+          (deal) => deal.entry === "OUT" && deal.clientId === request.clientId,
+        );
+        if (
+          !history.synchronized ||
+          ours.length !== 1 ||
+          (action.volume !== null && ours[0]!.volume !== action.volume) ||
+          (this.credential && JSON.stringify(history).includes(this.credential))
+        )
+          return unknown();
+        return {
+          status: "SUCCEEDED",
+          providerReference: action.positionId,
+          code: "PROVIDER_DEAL_REFERENCE_CONFIRMED",
+        };
+      } catch {
+        return unknown();
+      }
+    }
     // This SDK has no stable client reference for protection/cancel operations. Matching current
     // SL/TP or absence of a position is insufficient to attribute a previous mutation.
     if (action.operation !== "OPEN") return unknown();

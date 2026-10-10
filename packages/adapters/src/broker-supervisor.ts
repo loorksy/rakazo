@@ -31,7 +31,8 @@ import {
   withBrokerSessionFence,
 } from "@rakazo/db";
 import { z } from "zod";
-import { readBrokerHistory } from "./broker-history.js";
+import type { BrokerHistoryCache } from "./broker-history.js";
+import { createBrokerHistoryCache, readBrokerHistory } from "./broker-history.js";
 import { observeBrokerState, readBrokerState } from "./broker-state.js";
 import { observeMarketWatches, recoverMarketWakes } from "./market-watches.js";
 import { BrokerProviderError, sanitizedBrokerError } from "./metaapi-normalize.js";
@@ -77,6 +78,7 @@ interface Slot {
   simulationQuotes: Map<string, BrokerQuote>;
   simulationOverflow: boolean;
   financialDemands: Set<string>;
+  providerHistory: BrokerHistoryCache;
 }
 
 /** Account socket lifecycle inside the existing Worker; not an agent runtime or job scheduler. */
@@ -195,6 +197,7 @@ export class BrokerConnectionSupervisor {
               simulationQuotes: new Map(),
               simulationOverflow: false,
               financialDemands: new Set(),
+              providerHistory: createBrokerHistoryCache(),
             };
             this.slots.set(row.id, slot);
           }
@@ -295,13 +298,7 @@ export class BrokerConnectionSupervisor {
         where: { accountId: token.accountId, mode: "LIVE" },
       });
       if (liveActivity) {
-        await observeBrokerState(
-          this.prisma,
-          token,
-          await readBrokerState(slot.session),
-          this.now(),
-          await readBrokerHistory(this.prisma, slot.session),
-        );
+        await this.observeLive(slot, slot.session);
         await new ProviderDispatcher(this.prisma, this.now).tick(token, slot.session);
       }
       const requests = await this.prisma.brokerReadRequest.findMany({
@@ -394,6 +391,7 @@ export class BrokerConnectionSupervisor {
       await slot.session?.close().catch(() => undefined);
       slot.session = undefined;
       slot.history.clear();
+      slot.providerHistory = createBrokerHistoryCache();
       slot.observed = "";
       if (error instanceof StaleBrokerSessionError) {
         await this.drop(token.accountId, slot);
@@ -423,6 +421,25 @@ export class BrokerConnectionSupervisor {
         this.now(),
       ).catch(() => undefined);
     }
+  }
+  /** A pending result keeps the last explained snapshot; its age blocks new LIVE risk. */
+  private async observeLive(slot: Slot, session: BrokerReadSession) {
+    const state = await readBrokerState(session);
+    const history = await readBrokerHistory(
+      this.prisma,
+      session,
+      state,
+      slot.providerHistory,
+      this.now(),
+    );
+    return observeBrokerState(
+      this.prisma,
+      slot.token,
+      state,
+      this.now(),
+      history.histories,
+      history.missing,
+    );
   }
   private async executeRead(slot: Slot, command: z.infer<typeof BrokerReadCommandSchema>) {
     const session = slot.session;
@@ -517,13 +534,7 @@ export class BrokerConnectionSupervisor {
         // between periodic refreshes; bounded raw ticks cover that admission window.
         await this.updateSubscriptions(slot);
       } else {
-        await observeBrokerState(
-          this.prisma,
-          slot.token,
-          await readBrokerState(session),
-          this.now(),
-          await readBrokerHistory(this.prisma, session),
-        );
+        await this.observeLive(slot, session);
       }
       const facts = await session.preflight(action);
       const specification =
