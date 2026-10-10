@@ -72,7 +72,8 @@ export async function reviewFinancialAction(input: {
           args: { action: redacted.action },
           userTask:
             "Evaluate only this exact action within approved hard authority. Profit targets cannot enlarge risk.",
-          botDescription: "Main Trading Agent under owner-approved bounded mandate.",
+          botDescription:
+            "Professional trading Agent under its own owner-approved bounded mandate.",
           matchingRules: [],
           financial: redacted,
         },

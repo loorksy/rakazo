@@ -30,7 +30,7 @@ all hard bounds. Allocation is an accounting/exposure budget, not segregated cas
 
 `AccountRiskLedger` is protected backend accounting, not a second trading engine.
 It reads final canonical action and exact owner-approved mandate from persistence.
-The actor must claim the existing Main Trading Agent Run; a peer cannot inherit it.
+The actor must claim the exact authorized Agent Run; a peer cannot inherit it.
 The lock order is account connection, Run, guardrail, mandate/effect/reservation.
 All capacity writes must use the same account row lock. READ COMMITTED transactions
 with that lock serialize capacity reads and reservation creation for an account.

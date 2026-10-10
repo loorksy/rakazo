@@ -5,7 +5,7 @@ own broker sessions, start a scheduler, or place a trade. The existing Worker re
 calls `recoverInterrupted` before repairing mission wake jobs.
 
 An immutable proposal and fresh trusted preview create one stable effect identity. The
-v2 financial context binds owner, Main Trading Agent, account, mode, goal, mandate, plan
+v2 financial context binds owner, exact authorized Agent, account, mode, goal, mandate, plan
 version, proposal and canonical action fingerprint. The provider client reference is
 `rz_<10 hexadecimal characters>_<10 hexadecimal characters>`; it is independent of
 natural-language explanations and remains stable across attempts.
@@ -42,10 +42,10 @@ LIVE remains disabled pending the provider/reconciliation/readiness gate.
 
 ## Recovery across conversation executions
 
-A current owner/Main Run can inspect a started or terminal effect even when its previous
+A current owner/Agent Run can inspect a started or terminal effect even when its previous
 preview or mandate expired. Inspection grants no execution authority. Simulator
 reconciliation can run from a new Run after the previous Run's lease is no longer valid
-or its record was deleted. It takes the account and effect locks, checks current Main
+or its record was deleted. It takes the account and effect locks, checks current exact Agent
 ownership, advances the effect generation and records the previous/recovery Run IDs in
 the immutable journal. Same-Run takeover remains supported. A valid prior Run lease
 blocks cross-Run recovery; stale recovery Runs fail their captured execution fence.
@@ -59,7 +59,7 @@ cancelled; otherwise resolved NEEDS_RECONCILIATION becomes PAUSED, never auto-re
 ## Owner escalation
 
 The existing chat `ask`/`answerRunInput` transaction resolves a financial escalation by
-effect ID. Financial validation checks the private owner/Main principal, originating
+effect ID. Financial validation checks the private owner/Agent principal, originating
 conversation, exact immutable proposal/action/mandate fingerprints and unexpired effect.
 Only Approve once and Deny are supported; even an old card offering Always allow cannot
 create a financial tool rule. Approval stores the owner and timestamp and an immutable

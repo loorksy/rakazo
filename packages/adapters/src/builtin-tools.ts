@@ -166,7 +166,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "trade_prepare",
     description:
-      "Create an immutable exact broker trade proposal bound to a goal, mandate and plan version; preview using trusted fresh broker state and deterministic risk. Discover exact account/instrument IDs first. A preview does not grant authority, reserve risk or execute a trade. Only the Main Trading Agent can prepare actions. Changed material terms require a new proposal.",
+      "Create an immutable exact broker trade proposal bound to a goal, mandate and plan version; preview using trusted fresh broker state and deterministic risk. Discover exact account/instrument IDs first. A preview does not grant authority, reserve risk or execute a trade. Actions bind this exact Agent and its own mandate. Changed material terms require a new proposal.",
     inputSchema: z.toJSONSchema(TradePrepareCommandSchema, { io: "input" }),
   },
   {

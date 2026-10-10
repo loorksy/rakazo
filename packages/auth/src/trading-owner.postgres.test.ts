@@ -66,19 +66,13 @@ suite("trading owner enforcement (real PostgreSQL)", () => {
     expect(settings.ownerBootstrapCompleted).toBe(true);
     expect(settings.ownerBootstrapProofHash).toBeNull();
     expect(settings.signupsEnabled).toBe(false);
-    const bots = await db.prisma.bot.findMany();
-    expect(bots).toHaveLength(1);
-    expect(bots[0]).toMatchObject({
-      name: "Trading Agent",
-      userId: settings.ownerUserId,
-      spawnKey: "trading:main:v1",
-    });
+    expect(await db.prisma.bot.count()).toBe(0);
     const results = await Promise.all([
       provisionTradingOwner(db.prisma, settings.ownerUserId!),
       provisionTradingOwner(db.prisma, settings.ownerUserId!),
     ]);
     expect(results[0]).toEqual(results[1]);
-    expect(await db.prisma.bot.count()).toBe(1);
+    expect(await db.prisma.bot.count()).toBe(0);
   });
   it("concurrent registration admits exactly one human across database connections", async () => {
     const responses = await Promise.all([register("a@example.test"), register("b@example.test")]);

@@ -18,21 +18,22 @@ A missing/deleted previously claimed owner remains recovery state. Signup never
 reopens, even if all user rows disappear or a new bootstrap proof is configured.
 Normal owner deletion is disabled. Recovery requires trusted operator access.
 
-Admitted sessions provision the private environment, a Trading Agent with reserved
-spawn identity `trading:main:v1`, and its thread. Unique constraints make concurrent
-provisioning idempotent. Startup also provisions an existing owner's agent.
-The application session resolver requires this exact owner and private environment
-for RPC, events, files and Computer access. Existing stream authorization checks
-reuse that resolver. Unknown messaging senders do not auto-provision product access.
-Public Space creation and reopening signup are denied by the backend.
+Admitted sessions provision only the private owner environment. They do not create
+an Agent. The owner chooses the first Agent's name and focus after model setup,
+and can create multiple persistent professional Agents later. Existing Agents and
+threads survive upgrade; legacy spawn keys grant no privilege.
 
-The exact owner environment is persisted as `DeploymentSettings.ownerSpaceId`.
-An owner's other historical memberships cannot become the active product scope.
-Generic Bot tools/RPC cannot create the reserved Main Trading Agent spawn identity.
-Web/Electron onboarding reuses the server agent; it no longer creates Chief in the
-browser. Web and mobile offer a masked setup-key field only during bootstrap and
-remove signup invitations once registration closes. Normal create menus omit Space
-creation. Specialist Bots and their existing group collaboration remain available.
+The application session resolver requires the exact owner and persisted private
+environment for RPC, events, files and Computer access. Unknown messaging senders
+do not auto-provision human access. Public Space creation and reopening signup
+remain denied. No second human, invitations or financial human RBAC is introduced.
+
+All persistent Agents receive the shared trading product foundation at Run prompt
+composition, followed by their own identity/instructions and available capabilities.
+No giant domain prompt is copied into new Bot records. Agents remain peers with
+native Computer, Web, Files, Memory, Routines and collaboration. Their names and
+roles are owner-defined. Optional account reads use per-Agent/account grants;
+execution requires a separate exact owner-approved mandate.
 
 The PostgreSQL auth regression suite uses an explicitly selected fixture database
 whose name ends in `_test`. It verifies real concurrent signup, hidden user inserts,

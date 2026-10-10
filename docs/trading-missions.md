@@ -1,8 +1,7 @@
 # Trading goals, plans and mandate proposals
 
-The Main Trading Agent uses `trading_mission` to create an owner/account-scoped goal,
-append an immutable plan version and propose a final authorization envelope. Research
-peers cannot acquire this capability by messaging or handoff. Every model command
+Any owner-created professional Agent uses `trading_mission` to create an owner/account-scoped goal,
+append an immutable plan version and propose a final authorization envelope. Peer messaging and handoff never transfer financial authority. Every model command
 requires the current Run holder/generation, including reads.
 
 Goals, plans and mandates live in protected PostgreSQL state independently of chat,
@@ -13,7 +12,7 @@ updates. A revised plan does not change an already approved mandate.
 
 Profit targets are aspirational. Allocated capital is an accounting/exposure budget,
 not segregated broker funds. The model must inspect account/market evidence before
-proposing limits. Final scope is injected from the trusted goal/Main identity, not
+proposing limits. Final scope is injected from the trusted goal/Agent identity, not
 selected by the model. Account-specific instruments, currency, supervision identity,
 expiry and requested market scope are validated.
 

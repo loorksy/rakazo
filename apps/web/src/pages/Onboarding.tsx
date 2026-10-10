@@ -20,7 +20,6 @@ import {
   clampCatalogThinkingLevel,
   createModelProbe,
   initialModelProbeState,
-  MAIN_TRADING_AGENT_SPAWN_KEY,
   pickCatalogModelId,
 } from "@rakazo/core";
 import {
@@ -58,12 +57,6 @@ import { errorText } from "../lib/user-error";
 
 const CUSTOM_MODEL_OPTION = "__rakazo_custom_model__";
 const DEFAULT_THINKING_LEVEL_OPTION = "__rakazo_default_thinking__";
-async function ensureFirstBot(): Promise<{ id: string }> {
-  const bots = await rpc.bots.list();
-  const main = bots.find((bot) => bot.spawnKey === MAIN_TRADING_AGENT_SPAWN_KEY);
-  if (!main) throw new Error("Trading Agent provisioning is unavailable");
-  return { id: main.id };
-}
 
 function providerLabel(entry: ModelCatalogEntry): string {
   return entry.provider === "openai-codex" ? "ChatGPT" : (entry.providerName ?? entry.provider);
@@ -102,6 +95,8 @@ export function OnboardingPage() {
   const resetOpenAiCompatibleProbe = modelProbe.reset;
   const createStartedRef = useRef(false);
   const deploymentDefaultModelRef = useRef<string | null>(null);
+  const [agentName, setAgentName] = useState("");
+  const [agentFocus, setAgentFocus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [preflightTesting, setPreflightTesting] = useState(false);
@@ -478,7 +473,11 @@ export function OnboardingPage() {
     createStartedRef.current = true;
     setError(null);
     try {
-      const bot = await ensureFirstBot();
+      const bot = await rpc.bots.create({
+        name: agentName.trim(),
+        description: agentFocus.trim(),
+        notifyOnFinish: true,
+      });
       for (const serverId of integrationServers) {
         await rpc.mcp.assignments.approve({ botId: bot.id, serverId });
       }
@@ -497,11 +496,6 @@ export function OnboardingPage() {
       setError(errorText(err, t`Could not create your bot`));
     }
   }
-
-  useEffect(() => {
-    if (step !== "bot") return;
-    void createFirstBot();
-  }, [step]);
 
   return (
     <div className="min-h-full bg-background px-6 py-12">
@@ -984,19 +978,31 @@ export function OnboardingPage() {
           />
         ) : null}
         {step === "bot" ? (
-          <div>
-            {error ? (
-              <div>
-                <p className="text-sm text-destructive">{error}</p>
-                <Button className="mt-4" onClick={() => void createFirstBot()}>
-                  <Trans>Try again</Trans>
-                </Button>
-              </div>
-            ) : (
-              <p className="text-muted-foreground">
-                <Trans>Opening chat…</Trans>
-              </p>
-            )}
+          <div className="grid gap-4">
+            <h1 className="text-xl font-medium">
+              <Trans>Create Agent</Trans>
+            </h1>
+            <label htmlFor={`${fieldId}-agent-name`}>
+              <Trans>Name</Trans>
+              <Input
+                id={`${fieldId}-agent-name`}
+                value={agentName}
+                onChange={(event) => setAgentName(event.target.value)}
+                maxLength={60}
+              />
+            </label>
+            <label htmlFor={`${fieldId}-agent-focus`}>
+              <Trans>Focus</Trans>
+              <Input
+                id={`${fieldId}-agent-focus`}
+                value={agentFocus}
+                onChange={(event) => setAgentFocus(event.target.value)}
+              />
+            </label>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            <Button disabled={!agentName.trim()} onClick={() => void createFirstBot()}>
+              <Trans>Create Agent</Trans>
+            </Button>
           </div>
         ) : null}
       </div>

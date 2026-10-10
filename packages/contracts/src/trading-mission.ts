@@ -50,16 +50,21 @@ export const TradingPlanInputSchema = z.strictObject({
 });
 export type TradingPlanInput = z.infer<typeof TradingPlanInputSchema>;
 export const TradingMissionCommandSchema = z.discriminatedUnion("operation", [
-  z.strictObject({ operation: z.literal("list") }),
-  z.strictObject({ operation: z.literal("goal_create"), goal: TradingGoalInputSchema }),
+  z.strictObject({ botId: Id.optional(), operation: z.literal("list") }),
   z.strictObject({
+    botId: Id.optional(),
+    operation: z.literal("goal_create"),
+    goal: TradingGoalInputSchema,
+  }),
+  z.strictObject({
+    botId: Id.optional(),
     operation: z.literal("plan_create"),
     goalId: Id,
     expectedVersion: z.number().int().min(0),
     plan: TradingPlanInputSchema,
   }),
-  z.strictObject({ operation: z.literal("mandate_propose"), planId: Id }),
-  z.strictObject({ operation: z.literal("get"), goalId: Id }),
+  z.strictObject({ botId: Id.optional(), operation: z.literal("mandate_propose"), planId: Id }),
+  z.strictObject({ botId: Id.optional(), operation: z.literal("get"), goalId: Id }),
 ]);
 /** Authenticated human RPC only. No matching Bot tool exists. */
 export const MandateResolutionSchema = z.strictObject({

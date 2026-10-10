@@ -18,6 +18,7 @@ export const MarketWatchCommandSchema = z.discriminatedUnion("operation", [
   }),
   z.strictObject({
     operation: z.literal("create"),
+    botId: z.string().min(1).max(128).optional(),
     accountId: Ref,
     instrumentId: Ref,
     condition: MarketConditionSchema,

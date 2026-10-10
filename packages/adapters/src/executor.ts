@@ -81,7 +81,6 @@ import {
   isMessagingChannelRun,
   isOneShotRoutineCrons,
   isTerminal,
-  MAIN_TRADING_AGENT_SPAWN_KEY,
   messagingChannelId,
   messagingChannelPrivacyBlock,
   messagingDmSurfaceNote,
@@ -94,8 +93,10 @@ import {
   resolveActionApprovalDetail,
   sandboxCommandTimeoutMs,
   type ToolCallStreak,
+  TRADING_AGENT_OPERATING_CONTRACT,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
+  tradingSupportReviewRequired,
   truncatedPlainText,
   unattendedTriggerToolRequiresApproval,
   userTurnMessageForRun,
@@ -127,6 +128,7 @@ import {
   SpaceLimitError,
   searchHistory,
   type ThreadEvents,
+  tradingAccountReadAllowed,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { parse as parseShellCommand } from "shell-quote";
@@ -253,6 +255,7 @@ import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safe
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { FinancialExecution } from "./financial-execution.js";
+import { reviewTradingSupport } from "./financial-support-review.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
   COMPACTION_BATCH_SIZE,
@@ -4302,10 +4305,36 @@ export function createRunExecutor(deps: ExecutorDeps) {
             viaConnector,
             operation: typeof args.operation === "string" ? args.operation : undefined,
             accountReadsAllowed:
-              bot.spawnKey === MAIN_TRADING_AGENT_SPAWN_KEY &&
-              bot.spaceId === settings?.ownerSpaceId,
+              settings?.singleOwnerEnforced === true &&
+              name === "broker_read" &&
+              ["account", "positions", "orders", "preflight"].includes(String(args.operation))
+                ? await tradingAccountReadAllowed(deps.prisma, {
+                    ownerUserId: run.userId,
+                    botId: run.botId,
+                    accountId: String(args.accountId ?? ""),
+                  })
+                : false,
           });
           if (financialBoundary.decision === "DENY") return { error: financialBoundary.reason };
+          if (settings?.singleOwnerEnforced && tradingSupportReviewRequired(name, viaConnector)) {
+            const provider = await loadIndependentReviewer(
+              resolveAutoReviewChecker(),
+              deps.autoReview,
+            ).catch(() => undefined);
+            const allowed = await reviewTradingSupport({
+              toolName: name,
+              args,
+              userTask: redactSecrets(task.prompt, runSecrets),
+              provider,
+              context,
+              knownSecrets: runSecrets,
+            });
+            if (!allowed)
+              return {
+                error:
+                  "Trading support review could not exclude a financial bypass. Use structured trading tools for financial mutations; ordinary support work requires independent review.",
+              };
+          }
 
           // Domain-owned financial effects deliberately bypass generic tool replay/journaling,
           // after hard product policy. Financial review/risk/approval/effect admission is mandatory.
@@ -6713,7 +6742,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
               prompt,
               contextStrategy,
               instructions: userTurnInstructions({
-                botInstructions: runIdentityInstruction(bot, run.trigger),
+                botInstructions: runIdentityInstruction(
+                  bot,
+                  run.trigger,
+                  settings?.singleOwnerEnforced === true,
+                ),
                 groupContext,
                 messagingContext,
                 redactedMemoryContext: memoryContext
@@ -8031,17 +8064,24 @@ export function threadContextForRun<T>(
 export function runIdentityInstruction(
   bot: { name: string; title: string; description: string; instructions: string },
   trigger: string,
+  tradingProduct = false,
 ): string {
+  const foundation = tradingProduct ? `${TRADING_AGENT_OPERATING_CONTRACT}\n\n` : "";
   if (trigger !== "created") {
-    return bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`;
+    return tradingProduct
+      ? `${foundation}${bot.name}: ${bot.title}\n${bot.description}\n${bot.instructions}`
+      : bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`;
   }
   const instructions = bot.instructions.trim();
-  return [
-    `Name: ${bot.name.trim() || "(none)"}`,
-    `Title: ${bot.title.trim() || "(none)"}`,
-    `Description: ${bot.description.trim() || "(none)"}`,
-    instructions ? `Instructions:\n${instructions}` : "Instructions: (none)",
-  ].join("\n");
+  return (
+    foundation +
+    [
+      `Name: ${bot.name.trim() || "(none)"}`,
+      `Title: ${bot.title.trim() || "(none)"}`,
+      `Description: ${bot.description.trim() || "(none)"}`,
+      instructions ? `Instructions:\n${instructions}` : "Instructions: (none)",
+    ].join("\n")
+  );
 }
 
 export function runSendsFinishNotification(trigger: string): boolean {

@@ -18,7 +18,7 @@ function fixture(): ChartEvidence {
       id: "chart",
       ownerUserId: "owner",
       ownerBotId: "main",
-      scope: "MAIN",
+      scope: "PRIVATE",
       accountId: "account",
       instrumentId: "gold",
       brokerSymbol: "XAUUSDm",

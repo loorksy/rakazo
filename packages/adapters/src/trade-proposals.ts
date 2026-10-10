@@ -9,12 +9,7 @@ import {
   TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
-import {
-  accountRiskCapacity,
-  financialDecimal,
-  financialUnits,
-  MAIN_TRADING_AGENT_SPAWN_KEY,
-} from "@rakazo/core";
+import { accountRiskCapacity, financialDecimal, financialUnits } from "@rakazo/core";
 import {
   canonicalFinancialAction,
   financialActionFingerprint,
@@ -42,18 +37,19 @@ export class TradeProposals {
   ) {
     this.preflight = preflight;
   }
-  private async main(tx: Prisma.TransactionClient, actor: ChartActor) {
+  private async agent(tx: Prisma.TransactionClient, actor: ChartActor, botId: string | undefined) {
+    if (!botId) throw new Error("Exact Agent identity required");
     await fenceChartExecution(tx, actor);
     const settings = await tx.deploymentSettings.findUniqueOrThrow({ where: { id: "default" } });
     const bot = await tx.bot.findFirst({
       where: {
         userId: actor.ownerUserId,
         spaceId: settings.ownerSpaceId ?? "",
-        spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
-        ...(actor.botId ? { id: actor.botId } : {}),
+        id: botId,
+        archivedAt: null,
       },
     });
-    if (!bot) throw new Error("Only the Main Trading Agent may prepare financial actions");
+    if (!bot) throw new Error("Owner-scoped Agent required to prepare financial actions");
     return bot;
   }
   private async project(tx: Prisma.TransactionClient, row: Proposal): Promise<TradeProposalView> {
@@ -97,11 +93,24 @@ export class TradeProposals {
   ): Promise<TradeProposalView | TradeProposalView[]> {
     await requireTradingOwner(this.prisma, actor.ownerUserId);
     const command = TradePrepareCommandSchema.parse(raw);
+    let botId = actor.botId;
+    if (!botId) {
+      const row =
+        "proposalId" in command
+          ? await this.prisma.tradeProposal.findFirst({
+              where: { id: command.proposalId, ownerUserId: actor.ownerUserId },
+            })
+          : await this.prisma.tradingMandate.findFirst({
+              where: { id: command.mandateId, ownerUserId: actor.ownerUserId },
+            });
+      if (!row) throw new Error("Owner-scoped proposal or goal required");
+      botId = row.botId;
+    }
     // Validate current ownership before any trusted provider read; recheck the fence after IO.
     const input = await this.prisma.$transaction(async (tx) => {
       if (command.operation === "create")
         await tx.$queryRaw`SELECT id FROM trading_connections WHERE id = ${command.action.accountId} FOR UPDATE`;
-      const bot = await this.main(tx, actor);
+      const bot = await this.agent(tx, actor, botId);
       const scope = { ownerUserId: actor.ownerUserId, botId: bot.id };
       if (command.operation === "get" || command.operation === "preview") {
         const row = await tx.tradeProposal.findFirst({
@@ -158,7 +167,7 @@ export class TradeProposals {
               id,
               ownerUserId: actor.ownerUserId,
               accountId: account.id,
-              OR: [{ scope: { in: ["MAIN", "SHARED"] } }, { ownerBotId: bot.id }],
+              OR: [{ scope: "SHARED" }, { ownerBotId: bot.id }],
             },
           }))
         )
@@ -231,7 +240,7 @@ export class TradeProposals {
     );
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM trading_connections WHERE id = ${row.accountId} FOR UPDATE`;
-      await this.main(tx, actor);
+      await this.agent(tx, actor, botId);
       await tx.$queryRaw`SELECT id FROM trade_proposals WHERE id = ${row.id} FOR UPDATE`;
       const current = await tx.tradeProposal.findUniqueOrThrow({ where: { id: row.id } });
       if (current.revision !== command.expectedRevision)

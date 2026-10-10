@@ -54,7 +54,6 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
         userId: owner,
         name: "Fixture",
         color: "blue",
-        spawnKey: "trading:main:v1",
       },
     });
     await db.prisma.thread.create({
@@ -207,12 +206,28 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
     status = "ACTIVE",
   ) {
     const approved = TradingMandateEnvelopeSchema.parse({ ...envelope, ...envelopePatch });
+    const threadId =
+      approved.botId === "fixture-main" ? "fixture-thread" : `thread-${approved.botId}`;
+    if (approved.botId !== "fixture-main") {
+      await db.prisma.bot.create({
+        data: {
+          id: approved.botId,
+          userId: owner,
+          spaceId: "fixture-space",
+          name: approved.botId,
+          color: "blue",
+        },
+      });
+      await db.prisma.thread.create({
+        data: { id: threadId, botId: approved.botId, userId: owner, spaceId: "fixture-space" },
+      });
+    }
     const fp = tradingMandateFingerprint(approved);
     await db.prisma.tradingGoal.create({
       data: {
         id: `goal-${id}`,
         ownerUserId: owner,
-        botId: "fixture-main",
+        botId: approved.botId,
         accountId: "fixture-account",
         mode: approved.mode,
         definition: {
@@ -242,7 +257,7 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
       data: {
         id: id,
         ownerUserId: owner,
-        botId: "fixture-main",
+        botId: approved.botId,
         accountId: "fixture-account",
         mode: approved.mode,
         goalId: `goal-${id}`,
@@ -260,9 +275,9 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
     const task = await db.prisma.task.create({
       data: {
         spaceId: "fixture-space",
-        botId: "fixture-main",
+        botId: approved.botId,
         userId: owner,
-        threadId: "fixture-thread",
+        threadId,
         prompt: "Fixture",
         status: "running",
       },
@@ -271,9 +286,9 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
       data: {
         taskId: task.id,
         spaceId: "fixture-space",
-        botId: "fixture-main",
+        botId: approved.botId,
         userId: owner,
-        threadId: "fixture-thread",
+        threadId,
         trigger: "user",
         status: "running",
         leaseOwner: "fixture-worker",
@@ -297,7 +312,7 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
         financialContext: {
           version: 1,
           ownerUserId: owner,
-          botId: "fixture-main",
+          botId: approved.botId,
           accountId: "fixture-account",
           mode: approved.mode,
           actionFingerprint: actionFp,
@@ -308,15 +323,15 @@ suite("atomic account risk ledger (PostgreSQL)", () => {
     });
     const actor: ChartActor = {
       ownerUserId: owner,
-      botId: "fixture-main",
+      botId: approved.botId,
       execution: { runId: run.id, holder: "fixture-worker", generation: 1 },
     };
     return { actor, effect, mandateId: id };
   }
   const ledger = () => new AccountRiskLedger(db.prisma, () => now);
-  it("serializes simultaneous missions so only one can reserve the last account capacity", async () => {
+  it("atomically coordinates two independent Agents with distinct mandates on the same account", async () => {
     const a = await claimed("mission-a");
-    const b = await claimed("mission-b");
+    const b = await claimed("mission-b", { botId: "EURUSD" });
     const results = await Promise.allSettled([
       ledger().reserve(a.actor, a.effect.id, a.mandateId, facts),
       ledger().reserve(b.actor, b.effect.id, b.mandateId, facts),

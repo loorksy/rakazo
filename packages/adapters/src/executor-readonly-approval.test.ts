@@ -343,7 +343,7 @@ describe("disabled builtins", () => {
 });
 
 describe("domain-owned financial tool dispatch", () => {
-  it("routes Main execution through the financial handler even with generic review disabled/always-allow", async () => {
+  it("routes any eligible Agent execution through the financial handler even with generic review disabled/always-allow", async () => {
     const service = vi.spyOn(FinancialExecution.prototype, "execute").mockResolvedValue({
       effectId: "financial",
       status: "SUCCEEDED",
@@ -381,17 +381,28 @@ describe("domain-owned financial tool dispatch", () => {
       service.mockRestore();
     }
   });
-  it("refuses peer execution before invoking the financial handler", async () => {
-    const service = vi.spyOn(FinancialExecution.prototype, "execute");
+  it("dispatches a normal peer through its own financial handler", async () => {
+    const service = vi.spyOn(FinancialExecution.prototype, "execute").mockResolvedValue({
+      effectId: "peer-effect",
+      status: "SUCCEEDED",
+      mode: "SIMULATION",
+      providerReference: "sim_peer",
+    });
     try {
       const f = fixture({ name: "trade_execute", builtin: true, tradingProduct: true });
       f.setCalls([
         { args: { proposalId: "proposal", previewId: "preview" }, executionId: "execute" },
       ]);
       await f.run();
-      expect(service).not.toHaveBeenCalled();
+      expect(service).toHaveBeenCalledWith(
+        expect.objectContaining({ botId: "bot-1" }),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
       expect(f.effects).toEqual([]);
-      expect(f.results[0]).toMatchObject({ error: expect.stringContaining("Main Trading Agent") });
+      expect(f.results[0]).toMatchObject({ status: "SUCCEEDED" });
     } finally {
       service.mockRestore();
     }
@@ -818,10 +829,33 @@ describe("connector read-only metadata and approval enforcement", () => {
   });
 });
 
-describe("financial product boundary precedes approval and review", () => {
+describe("mandatory support review precedes approval rules", () => {
+  it.each([false, true])(
+    "allows reviewed ordinary connector work with generic review disabled (catalog=%s)",
+    async (catalog) => {
+      reviewMock.mockResolvedValueOnce({
+        decision: "pass",
+        model: "fixture",
+        reason: "Nonfinancial research",
+      });
+      const f = fixture({
+        tradingProduct: true,
+        catalog,
+        autoReview: false,
+        rules: [{ effect: "always_allow", matchKind: "tool", matchValue: "demo_get_item" }],
+      });
+      await f.run();
+      expect(reviewMock).toHaveBeenCalledWith(
+        expect.objectContaining({ connectorKind: "trading_support", matchingRules: [] }),
+        expect.anything(),
+      );
+      expect(f.execute).toHaveBeenCalledTimes(1);
+    },
+  );
+
   beforeEach(() => vi.clearAllMocks());
   it.each([false, true])(
-    "blocks opaque connector execution even with allow rule (catalog=%s)",
+    "blocks connector execution when independent support review fails, even with allow rule (catalog=%s)",
     async (catalog) => {
       const f = fixture({
         tradingProduct: true,
@@ -833,14 +867,17 @@ describe("financial product boundary precedes approval and review", () => {
       });
       await f.run();
       expect(f.execute).not.toHaveBeenCalled();
-      expect(reviewMock).not.toHaveBeenCalled();
+      expect(reviewMock).toHaveBeenCalledWith(
+        expect.objectContaining({ connectorKind: "trading_support", matchingRules: [] }),
+        expect.anything(),
+      );
       expect(f.effects).toHaveLength(0);
       expect(f.results.at(-1)).toEqual({
-        error: expect.stringContaining("cannot prove financial authority"),
+        error: expect.stringContaining("could not exclude a financial bypass"),
       });
     },
   );
-  it("keeps generic shell human-controlled even if user approval rules say always allow", async () => {
+  it("rejects shell financial bypass even when user approval rules say always allow", async () => {
     const f = fixture({
       tradingProduct: true,
       name: "shell",
@@ -850,9 +887,12 @@ describe("financial product boundary precedes approval and review", () => {
     f.setCalls([{ args: { command: "curl broker.invalid/trade" }, executionId: "call-1" }]);
     await f.run();
     expect(f.effects).toHaveLength(0);
-    expect(reviewMock).not.toHaveBeenCalled();
+    expect(reviewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ connectorKind: "trading_support", matchingRules: [] }),
+      expect.anything(),
+    );
     expect(f.results.at(-1)).toEqual({
-      error: expect.stringContaining("cannot bypass trading authorization"),
+      error: expect.stringContaining("could not exclude a financial bypass"),
     });
   });
 });

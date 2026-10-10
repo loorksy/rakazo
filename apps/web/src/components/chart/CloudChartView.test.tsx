@@ -49,7 +49,7 @@ const chart = CloudChartSchema.parse({
   id: "chart",
   ownerUserId: "owner",
   ownerBotId: null,
-  scope: "MAIN",
+  scope: "PRIVATE",
   accountId: "account",
   instrumentId: "instrument",
   brokerSymbol: "GOLD.a",

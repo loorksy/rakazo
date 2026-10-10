@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { financialBuiltinRead, financialToolPolicy } from "./financial-tool-policy.js";
+import {
+  financialBuiltinRead,
+  financialToolPolicy,
+  tradingSupportReviewRequired,
+} from "./financial-tool-policy.js";
 
 describe("hard financial tool boundary", () => {
   it("refreshes structured reads without classifying execution or internal writes as read-only", () => {
@@ -16,7 +20,7 @@ describe("hard financial tool boundary", () => {
       expect(financialBuiltinRead(name ?? "", operation)).toBe(false);
   });
   it.each(["trading_mission", "trade_prepare", "trade_execute", "trade_reconcile"])(
-    "%s belongs only to Main, not research peers",
+    "%s reaches its exact per-Agent mandate handler",
     (toolName) => {
       expect(
         financialToolPolicy({
@@ -25,7 +29,7 @@ describe("hard financial tool boundary", () => {
           viaConnector: false,
           accountReadsAllowed: false,
         }).decision,
-      ).toBe("DENY");
+      ).toBe("ALLOW");
       expect(
         financialToolPolicy({
           tradingProduct: true,
@@ -52,10 +56,10 @@ describe("hard financial tool boundary", () => {
     "add_mcp_server",
     "cloud_agent_launch",
     "cloud_agent_reply",
-  ])("denies opaque %s without attempting model review", (toolName) => {
+  ])("restores %s under its normal policy", (toolName) => {
     expect(
       financialToolPolicy({ tradingProduct: true, toolName, viaConnector: false }).decision,
-    ).toBe("DENY");
+    ).toBe("ALLOW");
   });
   it.each([
     "GET_balance",
@@ -63,10 +67,8 @@ describe("hard financial tool boundary", () => {
     "mcp_execute_tool",
     "connector_execute_tool",
     "harmless_name",
-  ])("does not trust connector naming: %s", (toolName) => {
-    expect(
-      financialToolPolicy({ tradingProduct: true, toolName, viaConnector: true }).decision,
-    ).toBe("DENY");
+  ])("independently reviews connector %s", (toolName) => {
+    expect(tradingSupportReviewRequired(toolName, true)).toBe(true);
   });
   it.each([
     "broker_read",

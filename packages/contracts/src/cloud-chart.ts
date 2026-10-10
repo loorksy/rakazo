@@ -107,7 +107,7 @@ export const CloudChartSchema = z.strictObject({
   id: Ref,
   ownerUserId: Ref,
   ownerBotId: Ref.nullable(),
-  scope: z.enum(["MAIN", "SHARED", "WORKER"]),
+  scope: z.enum(["PRIVATE", "SHARED", "WORKER"]),
   accountId: Ref,
   instrumentId: Ref,
   brokerSymbol: z.string().min(1).max(128),
@@ -127,10 +127,11 @@ export const ChartCommandSchema = z.discriminatedUnion("operation", [
   z.strictObject({ operation: z.literal("list") }),
   z.strictObject({
     operation: z.literal("create"),
+    botId: Ref.optional(),
     accountId: Ref,
     instrumentId: Ref,
     timeframe: BrokerTimeframeSchema,
-    scope: z.enum(["MAIN", "SHARED", "WORKER"]).default("MAIN"),
+    scope: z.enum(["PRIVATE", "SHARED", "WORKER"]).default("WORKER"),
   }),
   z.strictObject({ operation: z.literal("get"), chartId: Ref }),
   z.strictObject({

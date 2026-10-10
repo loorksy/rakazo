@@ -48,7 +48,7 @@ const chart = CloudChartSchema.parse({
   id: "persisted-chart",
   ownerUserId: "owner",
   ownerBotId: null,
-  scope: "MAIN",
+  scope: "PRIVATE",
   accountId: "account",
   instrumentId: "instrument",
   brokerSymbol: "GOLD.a",

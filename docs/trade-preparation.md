@@ -1,10 +1,10 @@
 # Exact trade proposals and broker previews
 
-`trade_prepare` is a Main Trading Agent capability in the existing tool executor.
+`trade_prepare` is a per-Agent capability in the existing tool executor.
 It creates an immutable canonical action bound to one account, exact broker symbol,
 goal, mandate and immutable plan version. No aliases or model-supplied risk facts are
 accepted. Repeated trusted request identities return the existing proposal; changed
-material terms require a new proposal. Research peers cannot acquire this authority.
+material terms require a new proposal. Each Agent prepares only its own mandate-bound actions; peer messages never transfer authority.
 
 The preview reads trusted provider preflight through the existing Worker-owned broker
 session. It rechecks the claimed Run after provider IO, checks the expected proposal

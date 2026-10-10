@@ -19,7 +19,7 @@ import { Button } from "@rakazo/ui-web";
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import { CloudChartView } from "./CloudChartView";
-export function CloudChartPanel() {
+export function CloudChartPanel({ botId }: { botId?: string }) {
   const [chart, setChart] = useState<CloudChart | null>(null);
   const [charts, setCharts] = useState<CloudChart[]>([]);
   const [connections, setConnections] = useState<TradingConnectionView[]>([]);
@@ -42,9 +42,11 @@ export function CloudChartPanel() {
     ])
       .then(([accounts, raw]) => {
         if (abort.signal.aborted) return;
-        const list = CloudChartSchema.array().parse(raw);
+        const list = CloudChartSchema.array()
+          .parse(raw)
+          .filter((row) => !botId || row.ownerBotId === botId || row.scope === "SHARED");
         setCharts(list);
-        setChart(list.find((row) => row.scope === "MAIN") ?? list[0] ?? null);
+        setChart(list.find((row) => row.ownerBotId === botId) ?? list[0] ?? null);
         const available = accounts.filter((row) => !row.revokedAt);
         setConnections(available);
         setAccountId(available[0]?.id ?? "");
@@ -53,7 +55,7 @@ export function CloudChartPanel() {
         if (!abort.signal.aborted) setError(true);
       });
     return () => abort.abort();
-  }, []);
+  }, [botId]);
   useEffect(() => {
     const abort = new AbortController();
     void rpc.trading
@@ -207,7 +209,8 @@ export function CloudChartPanel() {
               accountId,
               instrumentId,
               timeframe: "1h",
-              scope: "MAIN",
+              scope: botId ? "WORKER" : "PRIVATE",
+              ...(botId ? { botId } : {}),
             })
           }
         >

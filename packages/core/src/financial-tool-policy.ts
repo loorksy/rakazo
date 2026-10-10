@@ -1,9 +1,5 @@
 /** Hard product boundary before user rules, model review or tool approval replay. */
-const HUMAN_CONTROL_ONLY = new Set([
-  "read_file",
-  "list_files",
-  "write_file",
-  "attach_file",
+const REVIEWED_SUPPORT_TOOLS = new Set([
   "computer_act",
   "browser_act",
   "browser_navigate",
@@ -16,6 +12,11 @@ const HUMAN_CONTROL_ONLY = new Set([
   "cloud_agent_launch",
   "cloud_agent_reply",
 ]);
+
+/** Opaque mutation-capable tools retain their normal capabilities, behind mandatory independent review. */
+export function tradingSupportReviewRequired(toolName: string, viaConnector: boolean): boolean {
+  return viaConnector || REVIEWED_SUPPORT_TOOLS.has(toolName);
+}
 export type FinancialToolDecision =
   | { decision: "ALLOW" }
   | {
@@ -33,12 +34,7 @@ export function financialBuiltinRead(toolName: string, operation: unknown): bool
   );
 }
 
-/**
- * Browser sessions and arbitrary process/API/MCP capabilities cannot prove bounded financial
- * authority. In the trading product, those actions remain available to human takeover only.
- * There is deliberately no domain/name heuristic and no mandate exception for an opaque tool.
- * Trusted structured broker execution will have its own mandatory authorization/risk boundary.
- */
+/** Account visibility is separate from trading expertise. Mandate/risk admission belongs to the domain executor. */
 export function financialToolPolicy(input: {
   tradingProduct: boolean;
   toolName: string;
@@ -48,33 +44,15 @@ export function financialToolPolicy(input: {
 }): FinancialToolDecision {
   if (!input.tradingProduct) return { decision: "ALLOW" };
   if (
-    (input.toolName === "trading_mission" ||
-      input.toolName === "trade_prepare" ||
-      input.toolName === "trade_execute" ||
-      input.toolName === "trade_reconcile" ||
-      (input.toolName === "broker_read" &&
-        ["account", "positions", "orders", "preflight"].includes(input.operation ?? ""))) &&
+    input.toolName === "broker_read" &&
+    ["account", "positions", "orders", "preflight"].includes(input.operation ?? "") &&
     input.accountReadsAllowed !== true
   )
     return {
       decision: "DENY",
       code: "ACCOUNT_SCOPE_REQUIRED",
       reason:
-        "Account state is restricted to the Main Trading Agent. Research peers may inspect broker market data.",
-    };
-  if (input.viaConnector)
-    return {
-      decision: "DENY",
-      code: "UNVERIFIED_CONNECTOR",
-      reason:
-        "This connector cannot prove financial authority. Use trusted broker tools; use human takeover for other actions.",
-    };
-  if (HUMAN_CONTROL_ONLY.has(input.toolName))
-    return {
-      decision: "DENY",
-      code: "STRUCTURED_EXECUTION_REQUIRED",
-      reason:
-        "Automated Computer, process and credential actions cannot bypass trading authorization. Request human takeover or use trusted structured tools.",
+        "Account reads require owner-granted access or this exact Agent's active mandate for the requested account.",
     };
   return { decision: "ALLOW" };
 }

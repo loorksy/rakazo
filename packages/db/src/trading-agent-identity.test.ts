@@ -1,19 +1,19 @@
-import { expect, it } from "vitest";
-import { createRepos } from "./repos.js";
+import { expect, it, vi } from "vitest";
+import { provisionTradingOwner } from "./trading-owner.js";
 
-it("generic Bot creation cannot impersonate server-provisioned financial identity", async () => {
-  const repos = createRepos({} as never);
+it("owner environment provisioning does not create or privilege an Agent", async () => {
+  const bot = { upsert: vi.fn(), create: vi.fn() };
   await expect(
-    repos.createBot(
-      { userId: "owner", spaceId: "private", email: "owner@example.test", isDeploymentOwner: true },
+    provisionTradingOwner(
       {
-        name: "Impersonator",
-        title: "",
-        description: "",
-        instructions: "",
-        notifyOnFinish: false,
-        spawnKey: "trading:main:v1",
-      },
+        deploymentSettings: {
+          findUnique: async () => ({ singleOwnerEnforced: true, ownerUserId: "owner" }),
+        },
+        bot,
+      } as never,
+      "other-owner",
     ),
-  ).rejects.toThrow("provisioned by the server");
+  ).rejects.toThrow("Owner session required");
+  expect(bot.upsert).not.toHaveBeenCalled();
+  expect(bot.create).not.toHaveBeenCalled();
 });

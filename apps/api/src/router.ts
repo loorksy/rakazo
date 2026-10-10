@@ -160,7 +160,6 @@ import {
   expandSkillReferencesInPrompt,
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
-  MAIN_TRADING_AGENT_SPAWN_KEY,
   nextCronDateAcrossStrict,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
@@ -208,6 +207,7 @@ import {
   SpaceNotFoundError,
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
+  setTradingAccountAccess,
   touchGroupUpdatedAt,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -686,7 +686,7 @@ function botSecretMetadataDto(row: {
 }
 
 const BOT_INTRO_PROMPT =
-  "You were just created. In one reply, say what you understood your role to be from your title, description and instructions, and ask for anything you need to get started.";
+  "You were just created. In one reply, say what you understood your role to be from the shared product foundation and your name, title, description and instructions, and ask for anything you need to get started.";
 
 /**
  * A freshly created bot otherwise sits silent until someone hands it real work,
@@ -767,6 +767,9 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     trading: {
+      setAccountAccess: authed.trading.setAccountAccess.handler(({ context, input }) =>
+        setTradingAccountAccess(deps.prisma, context.actor.userId, input),
+      ),
       missions: authed.trading.missions.handler(async ({ context, input }) => {
         const result = await new TradingMissions(deps.prisma).command(
           { ownerUserId: context.actor.userId },
@@ -1108,10 +1111,7 @@ export function createRouter(deps: RouterDeps) {
         groupRepos.listGroups(actor, { archived: true }),
       ]);
       const { bots, groups, botSections } = navigation.current;
-      const active =
-        bots.find((bot) => bot.id === input.botId) ??
-        bots.find((bot) => bot.spawnKey === MAIN_TRADING_AGENT_SPAWN_KEY) ??
-        bots[0];
+      const active = bots.find((bot) => bot.id === input.botId) ?? bots[0];
       const [thread, routines] = active
         ? await Promise.all([
             resolveThreadTarget(deps.prisma, actor, { botId: active.id }).then((target) =>

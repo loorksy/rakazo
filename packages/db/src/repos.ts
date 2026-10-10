@@ -6,7 +6,7 @@ import {
   type MessageBlock,
   type SpaceBot,
 } from "@rakazo/contracts";
-import { MAIN_TRADING_AGENT_SPAWN_KEY, userVisibleMessages } from "@rakazo/core";
+import { userVisibleMessages } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";
@@ -398,8 +398,6 @@ export function createRepos(prisma: PrismaClient) {
         };
       },
     ): Promise<Bot> {
-      if (input.spawnKey === MAIN_TRADING_AGENT_SPAWN_KEY)
-        throw new IsolationError("The Main Trading Agent is provisioned by the server");
       let color = input.color;
       if (color === undefined) {
         const count = await prisma.bot.count({

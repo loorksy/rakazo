@@ -1,3 +1,35 @@
+# Current product correction
+
+The current product is one owner's professional multi-Agent trading system.
+There is no mandatory Main Agent, predefined Agent taxonomy or generic/trading
+Agent split. Historical checkpoints below describe the earlier implementation;
+their Main-only and blanket Computer restrictions are superseded by this correction.
+
+Shared trading instructions now compose into every persistent Agent Run, including
+new-Agent introductions, user tasks and routines. Owner provisioning creates only
+the private environment. Web/Electron onboarding lets the owner choose a name and
+focus. Native creation and contextual chart access remain available.
+
+Financial goal/plan/mandate/proposal/effect/simulation/wake paths bind the exact Agent,
+owner and account, without a spawn-key principal. Account reads have an explicit
+owner-granted per-Agent/account scope (or that Agent's own active mandate). Default
+market/chart/recommendation knowledge grants neither account reads nor execution.
+Owner chart creation can attach a chart to any eligible Agent. The legacy MAIN
+scope migrates to PRIVATE without widening access.
+
+All 117 forward migrations apply to a fresh fixture database. Expanded PostgreSQL
+coverage passes: 75 mission/account cases, 28 chart cases, 8 shared-account risk
+cases and 6 owner admission cases. The risk race uses distinct Agent IDs and
+separate mandates. Focused identity, support-review, executor, onboarding and chart
+UI suites pass. Web, API, Worker, adapters, database and mobile type checks and the
+web production build pass. No broker mutation or private broker credential is used.
+
+The full transformation is still unfinished. LIVE provider dispatch/readiness,
+real owner-position supervision/manual drift, explicit mission resume and
+pre-authorized non-FREEZE finishing effects require further implementation.
+Support review restores ordinary Computer use but is not a verified hostile-code
+containment guarantee. These results must not be reported as full completion.
+
 # Trading implementation checkpoint
 
 The product branch starts from upstream commit

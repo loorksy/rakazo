@@ -8,7 +8,6 @@ import {
 import {
   ChartConflictError,
   ChartPermissionError,
-  MAIN_TRADING_AGENT_SPAWN_KEY,
   marketConditionSide,
   observeMarketCondition,
 } from "@rakazo/core";
@@ -49,19 +48,26 @@ export class MarketWatches {
   ): Promise<MarketWatch | MarketWatch[]> {
     await requireTradingOwner(this.prisma, actor.ownerUserId);
     const command = MarketWatchCommandSchema.parse(raw);
+    if (actor.botId && "botId" in command && command.botId && command.botId !== actor.botId)
+      throw new ChartPermissionError();
     const settings = await this.prisma.deploymentSettings.findUniqueOrThrow({
       where: { id: "default" },
     });
-    const bot = await this.prisma.bot.findFirst({
-      where: {
-        userId: actor.ownerUserId,
-        spaceId: settings.ownerSpaceId ?? "",
-        ...(actor.botId ? { id: actor.botId } : { spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY }),
-      },
-      select: { id: true },
-    });
-    if (!bot || (actor.botId && !actor.execution)) throw new ChartPermissionError();
-    const scope = { ownerUserId: actor.ownerUserId, ...(actor.botId ? { botId: bot.id } : {}) };
+    const targetBotId = actor.botId ?? (command.operation === "create" ? command.botId : undefined);
+    const bot = targetBotId
+      ? await this.prisma.bot.findFirst({
+          where: {
+            userId: actor.ownerUserId,
+            spaceId: settings.ownerSpaceId ?? "",
+            id: targetBotId,
+            archivedAt: null,
+          },
+          select: { id: true },
+        })
+      : null;
+    if ((actor.botId && !actor.execution) || (!bot && command.operation === "create"))
+      throw new ChartPermissionError();
+    const scope = { ownerUserId: actor.ownerUserId, ...(actor.botId ? { botId: bot!.id } : {}) };
     if (command.operation === "list")
       return (
         await this.prisma.marketWatch.findMany({
@@ -107,7 +113,7 @@ export class MarketWatches {
         throw new Error("Active instrument capacity reached");
       const material = JSON.stringify(command);
       const creationKey = createHash("sha256")
-        .update(JSON.stringify([actor.ownerUserId, bot.id, operationKey ?? material]))
+        .update(JSON.stringify([actor.ownerUserId, bot!.id, operationKey ?? material]))
         .digest("hex");
       const prior = await tx.marketWatch.findUnique({ where: { creationKey } });
       if (prior) {
@@ -129,7 +135,7 @@ export class MarketWatches {
           data: {
             creationKey,
             ownerUserId: actor.ownerUserId,
-            botId: bot.id,
+            botId: bot!.id,
             accountId: command.accountId,
             instrumentId: command.instrumentId,
             condition: command.condition,

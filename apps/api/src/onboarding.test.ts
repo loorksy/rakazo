@@ -1,6 +1,6 @@
 import type * as db from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import { chooseFocus, markAppConnected } from "./onboarding.js";
+import { chooseFocus, markAppConnected, promptFocus } from "./onboarding.js";
 
 const posted = vi.hoisted(() => [] as Array<{ blocks: unknown[] }>);
 vi.mock("@rakazo/db", async (original) => ({
@@ -75,4 +75,13 @@ it("marks only the authorized connector when provider slugs collide", async () =
     where: { id: "cards" },
     data: { blocks: [blocks[0], { ...blocks[1], status: "connected" }] },
   });
+});
+
+it("does not offer a fixed specialization taxonomy in the trading product", async () => {
+  const { deps, actor } = fixture([]);
+  deps.prisma.deploymentSettings = {
+    findUnique: vi.fn(async () => ({ singleOwnerEnforced: true })),
+  } as never;
+  await promptFocus(deps, actor, "bot");
+  expect(posted).toEqual([]);
 });

@@ -109,5 +109,5 @@ Risk Engine refuses an increase. SDK numeric inputs must preserve decimal text o
 serialization round trip; larger unsafe integers are rejected.
 
 Main alone may read account/position/order/preflight state in the trading deployment.
-Research peers retain broker quote/history/specification discovery without financial
+Every Agent retains broker quote/history/specification discovery without financial
 account authority. The existing owner-only human RPC can inspect the account.

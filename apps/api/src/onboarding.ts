@@ -123,6 +123,9 @@ export async function promptFocus(
   botId: string,
 ): Promise<void> {
   const { bot, thread } = await requireBotThread(deps, actor, botId);
+  const settings = await deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } });
+  // Trading specialization is owner-defined in creation or conversation, never selected from a fixed taxonomy.
+  if (settings?.singleOwnerEnforced) return;
   const target = { spaceId: actor.spaceId, botId: bot.id, threadId: thread.id };
   const blocks: MessageBlock[] = [
     {

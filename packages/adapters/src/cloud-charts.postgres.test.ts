@@ -70,7 +70,7 @@ suite("durable chart workspace (PostgreSQL)", () => {
     }
   });
   async function create(
-    scope: "MAIN" | "SHARED" | "WORKER" = "MAIN",
+    scope: "PRIVATE" | "SHARED" | "WORKER" = "PRIVATE",
     actor: ChartActor = principal,
   ) {
     return CloudChartSchema.parse(
@@ -83,6 +83,37 @@ suite("durable chart workspace (PostgreSQL)", () => {
       }),
     );
   }
+  it("owner assigns a persistent chart to an ordinary Agent without a master intermediary", async () => {
+    const agent = await worker("Gold", false);
+    const other = await worker("Recommendations", false);
+    const chart = CloudChartSchema.parse(
+      await new CloudCharts(db.prisma).command(principal, {
+        operation: "create",
+        botId: "Gold",
+        accountId,
+        instrumentId,
+        timeframe: "1h",
+        scope: "WORKER",
+      }),
+    );
+    expect(chart.ownerBotId).toBe("Gold");
+    expect(
+      await new CloudCharts(db.prisma).command(agent, { operation: "get", chartId: chart.id }),
+    ).toMatchObject({ id: chart.id });
+    await expect(
+      new CloudCharts(db.prisma).command(other, { operation: "get", chartId: chart.id }),
+    ).rejects.toThrow();
+    await expect(
+      new CloudCharts(db.prisma).command(agent, {
+        operation: "create",
+        botId: "Recommendations",
+        accountId,
+        instrumentId,
+        timeframe: "1h",
+        scope: "WORKER",
+      }),
+    ).rejects.toThrow();
+  });
   async function worker(id = "fixture-main", main = true) {
     await db.prisma.bot.create({
       data: {
@@ -129,7 +160,7 @@ suite("durable chart workspace (PostgreSQL)", () => {
   }
   it("rejects stale rendered artifacts after takeover or chart revision change", async () => {
     const actor = await worker();
-    const chart = await create("MAIN", actor);
+    const chart = await create("PRIVATE", actor);
     await expect(
       db.prisma.$transaction((tx) => guardChartProjection(tx, actor, chart.id, chart.revision)),
     ).resolves.toBeUndefined();
@@ -415,7 +446,7 @@ suite("durable chart workspace (PostgreSQL)", () => {
   };
   it("restores backend state and exact instrument after a new DB client and survives thread deletion", async () => {
     const actor = await worker();
-    const chart = await create("MAIN", actor);
+    const chart = await create("PRIVATE", actor);
     const edited = CloudChartSchema.parse(
       await new CloudCharts(db.prisma).command(actor, {
         operation: "drawing_create",
@@ -465,7 +496,7 @@ suite("durable chart workspace (PostgreSQL)", () => {
   });
   it("requires the original run generation for every worker write even after rereading current state", async () => {
     const actor = await worker();
-    const chart = await create("MAIN", actor);
+    const chart = await create("PRIVATE", actor);
     await db.prisma.run.update({
       where: { id: actor.execution.runId },
       data: { leaseOwner: "b", leaseFence: 2 },
@@ -528,7 +559,10 @@ suite("durable chart workspace (PostgreSQL)", () => {
     await expect(
       new CloudCharts(db.prisma).command(b, { operation: "get", chartId: privateChart.id }),
     ).rejects.toThrow("not editable");
-    await expect(create("MAIN", a)).rejects.toThrow("not editable");
+    const ownChart = await create("PRIVATE", a);
+    await expect(
+      new CloudCharts(db.prisma).command(b, { operation: "get", chartId: ownChart.id }),
+    ).rejects.toThrow("not editable");
     const shared = await create("SHARED");
     const published = CloudChartSchema.parse(
       await new CloudCharts(db.prisma).command(a, {
@@ -575,7 +609,7 @@ suite("durable chart workspace (PostgreSQL)", () => {
   });
   it("projects only fresh operation events; reconnect begins with durable sync", async () => {
     const actor = await worker();
-    const chart = await create("MAIN", actor);
+    const chart = await create("PRIVATE", actor);
     const realtime = new InMemoryRealtimeFanout();
     const abort = new AbortController();
     const stream = followChartEvents({

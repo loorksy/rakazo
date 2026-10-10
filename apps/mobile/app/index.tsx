@@ -428,7 +428,7 @@ export default function Home() {
       const existing = await rpc<MobileBot[]>("bots/list").catch(() => null);
       const isFirstBot = existing !== null && existing.length === 0;
       const bot = await rpc<MobileBot>("bots/create", {
-        ...normalizeCreateBotProfile({ name: "New Bot", title: "", description: "" }),
+        ...normalizeCreateBotProfile({ name: "New Agent", title: "", description: "" }),
         notifyOnFinish: true,
         computerMode: "team",
       });

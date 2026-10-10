@@ -5,7 +5,7 @@ import type {
   CloudChart,
   TradingConnectionView,
 } from "@rakazo/contracts";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { Image, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { NativeActionButton } from "../components/native-action-button";
@@ -17,6 +17,7 @@ import { errorText } from "../lib/user-error";
 
 /** Contextual native chart surface. The trusted backend renders it; no browser or Computer is involved. */
 export default function ChartScreen() {
+  const { botId } = useLocalSearchParams<{ botId?: string }>();
   const styles = useThemedStyles(createStyles);
   const { t } = useI18n();
   const [charts, setCharts] = useState<CloudChart[]>([]);
@@ -41,7 +42,9 @@ export default function ChartScreen() {
       ])
         .then(([saved, connected]) => {
           if (!focused.current || generation.current !== current) return;
-          setCharts(saved);
+          setCharts(
+            saved.filter((row) => !botId || row.ownerBotId === botId || row.scope === "SHARED"),
+          );
           setAccounts(connected.filter((a) => !a.revokedAt));
         })
         .catch((failure) => {
@@ -51,7 +54,7 @@ export default function ChartScreen() {
         focused.current = false;
         generation.current += 1;
       };
-    }, []),
+    }, [botId]),
   );
 
   async function display(next: CloudChart) {
@@ -237,7 +240,8 @@ export default function ChartScreen() {
                         accountId,
                         instrumentId: symbol.id,
                         timeframe: "1h",
-                        scope: "MAIN",
+                        scope: botId ? "WORKER" : "PRIVATE",
+                        ...(botId ? { botId } : {}),
                       }));
                     setCharts((saved) =>
                       saved.some((c) => c.id === next.id) ? saved : [...saved, next],

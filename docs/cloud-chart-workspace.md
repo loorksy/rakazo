@@ -10,7 +10,7 @@ semantic viewport, preferences, drawings and indicator-instance slots. Records h
 no cascading relation to conversations, Bots or Runs. Closing the client or deleting
 a conversation does not delete chart state. Credentials never appear in the record.
 
-The owner may use every chart. The Main Trading Agent may use MAIN/SHARED charts;
+The owner may use every chart. Every relevant Agent may create its own PRIVATE/WORKER charts and use SHARED charts;
 other owner Bots may use SHARED or their own WORKER chart. Bots must belong to the
 private owner environment. Every Bot mutation locks and verifies its current Run
 lease/fence before changing a chart. A stale execution cannot regain write authority

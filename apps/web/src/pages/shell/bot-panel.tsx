@@ -129,9 +129,9 @@ export function CreateBotForm({
     <div data-testid="create-bot-form">
       <div className="mb-4 flex items-center justify-between">
         <span className="text-[13.5px] text-muted-foreground">
-          <Trans>New bot</Trans>
+          <Trans>Create Agent</Trans>
         </span>
-        <Button variant="ghost" size="icon-sm" aria-label={t`Cancel new bot`} onClick={onCancel}>
+        <Button variant="ghost" size="icon-sm" aria-label={t`Cancel new Agent`} onClick={onCancel}>
           <X size={16} strokeWidth={1.8} />
         </Button>
       </div>
@@ -151,7 +151,7 @@ export function CreateBotForm({
           value={name}
           maxLength={BOT_NAME_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
-          placeholder={t`Name this bot`}
+          placeholder={t`Name this Agent`}
           className="mt-2"
         />
       </label>
@@ -162,7 +162,7 @@ export function CreateBotForm({
           value={title}
           maxLength={BOT_TITLE_MAX_LENGTH}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={t`Describe what this bot does`}
+          placeholder={t`What should this Agent focus on?`}
           className="mt-2"
         />
       </label>
@@ -173,7 +173,7 @@ export function CreateBotForm({
           value={description}
           maxLength={BOT_DESCRIPTION_MAX_LENGTH}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder={t`What this bot is for`}
+          placeholder={t`Markets and working instructions`}
           rows={4}
           className="mt-2"
         />

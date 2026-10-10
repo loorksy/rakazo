@@ -1,6 +1,5 @@
 import type { FinancialEffectContext } from "@rakazo/contracts";
 import { FinancialEffectContextSchema, TradingMandateEnvelopeSchema } from "@rakazo/contracts";
-import { MAIN_TRADING_AGENT_SPAWN_KEY } from "@rakazo/core";
 import {
   financialActionFingerprint,
   tradingMandateFingerprint,
@@ -49,7 +48,6 @@ export async function validateFinancialApproval(
         id: input.botId,
         userId: input.userId,
         spaceId: input.spaceId,
-        spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
       },
     }))
   )

@@ -6,12 +6,7 @@ import {
   TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
-import {
-  accountRiskCapacity,
-  financialDecimal,
-  financialUnits,
-  MAIN_TRADING_AGENT_SPAWN_KEY,
-} from "@rakazo/core";
+import { accountRiskCapacity, financialDecimal, financialUnits } from "@rakazo/core";
 import {
   canonicalFinancialAction,
   financialActionFingerprint,
@@ -67,15 +62,14 @@ export class AccountRiskLedger {
     const deployment = await tx.deploymentSettings.findUniqueOrThrow({
       where: { id: "default" },
     });
-    const main = await tx.bot.findFirst({
+    const agent = await tx.bot.findFirst({
       where: {
         id: actor.botId,
         userId: actor.ownerUserId,
         spaceId: deployment.ownerSpaceId ?? "",
-        spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
       },
     });
-    if (!main) throw new Error("Only the Main Trading Agent may reserve execution risk");
+    if (!agent) throw new Error("Owner-scoped Agent required to reserve execution risk");
     const mandate = await tx.tradingMandate.findUnique({ where: { id: mandateId } });
     if (
       !mandate ||

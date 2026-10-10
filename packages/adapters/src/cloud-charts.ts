@@ -13,7 +13,6 @@ import {
   ChartPermissionError,
   changeChartState,
   indicatorParameters,
-  MAIN_TRADING_AGENT_SPAWN_KEY,
 } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
@@ -43,22 +42,22 @@ export class CloudCharts {
   ) {}
   private async actor(input: ChartActor) {
     await requireTradingOwner(this.prisma, input.ownerUserId);
-    if (!input.botId) return { id: input.ownerUserId, user: true, main: true };
+    if (!input.botId) return { id: input.ownerUserId, user: true };
     const settings = await this.prisma.deploymentSettings.findUnique({ where: { id: "default" } });
     if (!settings?.ownerSpaceId) throw new ChartPermissionError();
     const bot = await this.prisma.bot.findFirst({
       where: { id: input.botId, userId: input.ownerUserId, spaceId: settings.ownerSpaceId },
-      select: { spawnKey: true },
+      select: { id: true },
     });
     if (!bot || !input.execution) throw new ChartPermissionError();
-    return { id: input.botId, user: false, main: bot.spawnKey === MAIN_TRADING_AGENT_SPAWN_KEY };
+    return { id: input.botId, user: false };
   }
   private permit(row: ChartRow, actor: Awaited<ReturnType<CloudCharts["actor"]>>) {
     if (
       actor.user ||
       row.scope === "SHARED" ||
       (row.scope === "WORKER" && row.ownerBotId === actor.id) ||
-      (row.scope === "MAIN" && actor.main)
+      (row.scope === "PRIVATE" && row.ownerBotId === actor.id)
     )
       return;
     throw new ChartPermissionError();
@@ -109,7 +108,7 @@ export class CloudCharts {
           (row) =>
             actor.user ||
             row.scope === "SHARED" ||
-            (row.scope === "MAIN" && actor.main) ||
+            (row.scope === "PRIVATE" && row.ownerBotId === actor.id) ||
             row.ownerBotId === actor.id,
         )
         .map(project);
@@ -125,10 +124,27 @@ export class CloudCharts {
     const result = await this.prisma.$transaction(async (tx) => {
       await fenceChartExecution(tx, input);
       if (cmd.operation === "create") {
+        if (input.botId && cmd.botId && input.botId !== cmd.botId) throw new ChartPermissionError();
+        const ownerBotId = input.botId ?? cmd.botId ?? null;
+        if (ownerBotId) {
+          const settings = await tx.deploymentSettings.findUniqueOrThrow({
+            where: { id: "default" },
+          });
+          if (
+            !(await tx.bot.findFirst({
+              where: {
+                id: ownerBotId,
+                userId: input.ownerUserId,
+                spaceId: settings.ownerSpaceId ?? "",
+                archivedAt: null,
+              },
+            }))
+          )
+            throw new ChartPermissionError();
+        }
         await tx.$queryRaw`SELECT id FROM deployment_settings WHERE id = 'default' FOR UPDATE`;
         if ((await tx.cloudChart.count({ where: { ownerUserId: input.ownerUserId } })) >= 100)
           throw new ChartPermissionError();
-        if (cmd.scope === "MAIN" && !actor.main) throw new ChartPermissionError();
         const instrument = await this.instrument(
           tx,
           input.ownerUserId,
@@ -139,7 +155,7 @@ export class CloudCharts {
           await tx.cloudChart.create({
             data: {
               ownerUserId: input.ownerUserId,
-              ownerBotId: input.botId ?? null,
+              ownerBotId,
               scope: cmd.scope,
               accountId: cmd.accountId,
               instrumentId: cmd.instrumentId,

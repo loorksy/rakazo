@@ -15,7 +15,14 @@ import {
   TradingMandateViewSchema,
   TradingPlanViewSchema,
 } from "@rakazo/contracts";
-import { answerRunInput, claimBrokerSession, createDb, withBrokerSessionFence } from "@rakazo/db";
+import {
+  answerRunInput,
+  claimBrokerSession,
+  createDb,
+  setTradingAccountAccess,
+  tradingAccountReadAllowed,
+  withBrokerSessionFence,
+} from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrokerConnectionSupervisor } from "./broker-supervisor.js";
 import type { ChartActor } from "./cloud-charts.js";
@@ -179,7 +186,6 @@ suite("owner-only durable trading goals/plans/mandates", () => {
         userId: owner,
         name: "Fixture",
         color: "blue",
-        spawnKey: "trading:main:v1",
       },
     });
     await db.prisma.thread.create({
@@ -237,6 +243,76 @@ suite("owner-only durable trading goals/plans/mandates", () => {
       await db.pool.end();
     }
   });
+  it("owner grants and revokes exact Agent/account reads without execution or peer transfer", async () => {
+    const scope = { ownerUserId: owner, botId: "main", accountId: "account" };
+    expect(await tradingAccountReadAllowed(db.prisma, scope)).toBe(false);
+    const granted = await setTradingAccountAccess(db.prisma, owner, {
+      botId: "main",
+      accountId: "account",
+      accountRead: true,
+      expectedRevision: 0,
+    });
+    expect(granted.revision).toBe(1);
+    expect(await tradingAccountReadAllowed(db.prisma, scope)).toBe(true);
+    expect(await db.prisma.tradingMandate.count()).toBe(0);
+    await db.prisma.bot.create({
+      data: {
+        id: "Recommendations",
+        userId: owner,
+        spaceId: "space",
+        name: "Recommendations",
+        color: "blue",
+      },
+    });
+    expect(await tradingAccountReadAllowed(db.prisma, { ...scope, botId: "Recommendations" })).toBe(
+      false,
+    );
+    await expect(
+      setTradingAccountAccess(db.prisma, "peer-human", {
+        botId: "main",
+        accountId: "account",
+        accountRead: true,
+        expectedRevision: 1,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      setTradingAccountAccess(db.prisma, owner, {
+        botId: "main",
+        accountId: "account",
+        accountRead: false,
+        expectedRevision: 0,
+      }),
+    ).rejects.toThrow("revision");
+    await setTradingAccountAccess(db.prisma, owner, {
+      botId: "main",
+      accountId: "account",
+      accountRead: false,
+      expectedRevision: 1,
+    });
+    expect(await tradingAccountReadAllowed(db.prisma, scope)).toBe(false);
+  });
+
+  it("the owner binds a goal to any peer explicitly, never to a first or privileged Bot", async () => {
+    await db.prisma.bot.create({
+      data: { id: "Night", userId: owner, spaceId: "space", name: "Night Manager", color: "blue" },
+    });
+    const ownGoal = TradingGoalViewSchema.parse(
+      await missions.command(human, { operation: "goal_create", botId: "Night", goal }),
+    );
+    const stored = await db.prisma.tradingGoal.findUniqueOrThrow({ where: { id: ownGoal.id } });
+    expect(stored.botId).toBe("Night");
+    await expect(
+      missions.command(actor, { operation: "get", goalId: ownGoal.id }),
+    ).rejects.toThrow();
+    await expect(
+      missions.command(actor, { operation: "goal_create", botId: "Night", goal }),
+    ).rejects.toThrow("identity");
+    await expect(missions.command(human, { operation: "goal_create", goal })).rejects.toThrow(
+      "exact Agent",
+    );
+    expect(await missions.command(human, { operation: "list" })).toHaveLength(1);
+  });
+
   async function proposed(riskProposal = draft) {
     const created = TradingGoalViewSchema.parse(
       await missions.command(actor, { operation: "goal_create", goal }, "request"),

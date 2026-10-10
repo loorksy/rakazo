@@ -14,7 +14,6 @@ import {
   applySimulationAction,
   financialDecimal,
   financialUnits,
-  MAIN_TRADING_AGENT_SPAWN_KEY,
   valueSimulationBook,
 } from "@rakazo/core";
 import {
@@ -48,11 +47,10 @@ export class SimulationBroker {
           id: actor.botId,
           userId: actor.ownerUserId,
           spaceId: settings.ownerSpaceId ?? "",
-          spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
         },
       }))
     )
-      throw new Error("Main simulation principal required");
+      throw new Error("Owner-scoped simulation principal required");
     if (
       !(await tx.tradingConnection.findFirst({
         where: { id: accountId, ownerUserId: actor.ownerUserId, revokedAt: null },

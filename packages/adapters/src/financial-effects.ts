@@ -10,7 +10,6 @@ import {
   TradingGoalInputSchema,
   TradingMandateEnvelopeSchema,
 } from "@rakazo/contracts";
-import { MAIN_TRADING_AGENT_SPAWN_KEY } from "@rakazo/core";
 import {
   canonicalFinancialAction,
   financialActionFingerprint,
@@ -51,11 +50,10 @@ export class FinancialEffects {
           id: actor.botId,
           userId: actor.ownerUserId,
           spaceId: settings.ownerSpaceId ?? "",
-          spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
         },
       }))
     )
-      throw new Error("Main financial principal required");
+      throw new Error("Owner-scoped financial principal required");
     return actor.execution;
   }
   private async owned(

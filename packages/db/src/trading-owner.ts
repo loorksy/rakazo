@@ -1,11 +1,10 @@
 import type { Actor } from "@rakazo/contracts";
-import { BOT_COLORS } from "@rakazo/contracts";
+import { TradingMandateEnvelopeSchema } from "@rakazo/contracts";
+import { ownerSessionAllowed } from "@rakazo/core";
 import {
-  MAIN_TRADING_AGENT_SPAWN_KEY,
-  ownerSessionAllowed,
-  TRADING_AGENT_OPERATING_CONTRACT,
-} from "@rakazo/core";
-import { ownerBootstrapProofDigest } from "@rakazo/core/node/financial-action";
+  ownerBootstrapProofDigest,
+  tradingMandateFingerprint,
+} from "@rakazo/core/node/financial-action";
 import { bootstrapUserSpace } from "./bootstrap-user.js";
 import type { PrismaClient } from "./client.js";
 import { IsolationError, requireMembership } from "./scope.js";
@@ -63,7 +62,7 @@ export async function requireTradingOwner(
 export async function provisionTradingOwner(
   prisma: PrismaClient,
   userId: string,
-): Promise<{ spaceId: string; botId: string }> {
+): Promise<{ spaceId: string }> {
   await requireTradingOwner(prisma, userId);
   const { spaceId } = await bootstrapUserSpace(
     prisma,
@@ -74,38 +73,12 @@ export async function provisionTradingOwner(
     },
     { claimDeploymentOwner: false },
   );
-  const bot = await prisma.bot.upsert({
-    where: { spaceId_spawnKey: { spaceId, spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY } },
-    create: {
-      spaceId,
-      userId,
-      name: "Trading Agent",
-      title: "Trading Agent",
-      color: BOT_COLORS[4],
-      spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
-      pinned: true,
-      position: -1,
-      instructions: TRADING_AGENT_OPERATING_CONTRACT,
-      thread: { create: { spaceId, userId } },
-    },
-    update: {},
-  });
-  await prisma.bot.updateMany({
-    where: { id: bot.id, color: "blue" },
-    data: { color: BOT_COLORS[4] },
-  });
-  // Recover a missing thread without rewriting user history or instructions.
-  await prisma.thread.upsert({
-    where: { botId: bot.id },
-    create: { botId: bot.id, spaceId, userId },
-    update: {},
-  });
   const bound = await prisma.deploymentSettings.updateMany({
     where: { id: "default", ownerUserId: userId, singleOwnerEnforced: true },
     data: { ownerSpaceId: spaceId },
   });
   if (bound.count !== 1) throw new IsolationError("Owner changed during provisioning");
-  return { spaceId, botId: bot.id };
+  return { spaceId };
 }
 
 /** One private owner environment; a requested foreign/extra Space fails closed. */
@@ -120,4 +93,103 @@ export async function requireTradingMembership(
   const actor = await requireMembership(prisma, userId, settings.ownerSpaceId);
   if (requestedSpaceId && requestedSpaceId !== actor.spaceId) throw new IsolationError();
   return actor;
+}
+
+/** Market knowledge is universal; account reads are owner-granted or bounded by this Agent's mandate. */
+export async function tradingAccountReadAllowed(
+  prisma: PrismaClient,
+  input: {
+    ownerUserId: string;
+    botId: string;
+    accountId: string;
+  },
+): Promise<boolean> {
+  await requireTradingOwner(prisma, input.ownerUserId);
+  const settings = await prisma.deploymentSettings.findUniqueOrThrow({ where: { id: "default" } });
+  const bot = await prisma.bot.findFirst({
+    where: {
+      id: input.botId,
+      userId: input.ownerUserId,
+      spaceId: settings.ownerSpaceId ?? "",
+      archivedAt: null,
+    },
+  });
+  if (
+    !bot ||
+    !(await prisma.tradingConnection.findFirst({
+      where: { id: input.accountId, ownerUserId: input.ownerUserId, revokedAt: null },
+    }))
+  )
+    return false;
+  const access = await prisma.tradingAgentAccountAccess.findUnique({
+    where: { botId_accountId: { botId: input.botId, accountId: input.accountId } },
+  });
+  if (access?.ownerUserId === input.ownerUserId && access.accountRead) return true;
+  const mandate = await prisma.tradingMandate.findFirst({
+    where: {
+      ownerUserId: input.ownerUserId,
+      botId: input.botId,
+      accountId: input.accountId,
+      approvedByUserId: input.ownerUserId,
+      approvedAt: { not: null },
+      status: "ACTIVE",
+      expiresAt: { gt: new Date() },
+    },
+  });
+  const envelope = TradingMandateEnvelopeSchema.safeParse(mandate?.envelope);
+  return Boolean(
+    mandate &&
+      envelope.success &&
+      mandate.approvedFingerprint === mandate.fingerprint &&
+      mandate.fingerprint === tradingMandateFingerprint(envelope.data),
+  );
+}
+
+/** Human RPC only; tools and peer messages cannot grant account access. */
+export async function setTradingAccountAccess(
+  prisma: PrismaClient,
+  ownerUserId: string,
+  input: {
+    botId: string;
+    accountId: string;
+    accountRead: boolean;
+    expectedRevision: number;
+  },
+) {
+  await requireTradingOwner(prisma, ownerUserId);
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM trading_connections WHERE id = ${input.accountId} FOR UPDATE`;
+    const settings = await tx.deploymentSettings.findUniqueOrThrow({ where: { id: "default" } });
+    if (
+      !(await tx.bot.findFirst({
+        where: {
+          id: input.botId,
+          userId: ownerUserId,
+          spaceId: settings.ownerSpaceId ?? "",
+          archivedAt: null,
+        },
+      })) ||
+      !(await tx.tradingConnection.findFirst({
+        where: { id: input.accountId, ownerUserId, revokedAt: null },
+      }))
+    )
+      throw new IsolationError();
+    const key = { botId: input.botId, accountId: input.accountId };
+    const current = await tx.tradingAgentAccountAccess.findUnique({
+      where: { botId_accountId: key },
+    });
+    if ((current?.revision ?? 0) !== input.expectedRevision)
+      throw new Error("Account access revision conflict");
+    const row = await tx.tradingAgentAccountAccess.upsert({
+      where: { botId_accountId: key },
+      create: { ...key, ownerUserId, accountRead: input.accountRead },
+      update: { accountRead: input.accountRead, revision: { increment: 1 } },
+    });
+    return {
+      botId: row.botId,
+      accountId: row.accountId,
+      accountRead: row.accountRead,
+      revision: row.revision,
+    };
+  });
 }

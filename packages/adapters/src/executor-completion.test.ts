@@ -305,6 +305,45 @@ describe("runReplyGuidance", () => {
     expect(runIdentityInstruction(bot, "user")).toBe(bot.instructions);
   });
 
+  it.each(["created", "user", "routine"])(
+    "Gold inherits the product foundation on %s without custom instructions",
+    (trigger) => {
+      const gold = { name: "Gold", title: "", description: "", instructions: "" };
+      const text = runIdentityInstruction(gold, trigger, true);
+      expect(text).toContain("professional Agent");
+      expect(text).toContain("Gold");
+      for (const capability of [
+        "Cloud Charts",
+        "Computer",
+        "Web",
+        "Files",
+        "Routines",
+        "recommendations",
+      ])
+        expect(text).toContain(capability);
+      expect(text).toContain("Only the owner can approve");
+      expect(text).toContain("Agents are peers");
+      expect(gold.instructions).toBe("");
+    },
+  );
+
+  it("preserves an analysis-only specialization without granting execution", () => {
+    const text = runIdentityInstruction(
+      {
+        name: "Recommendations",
+        title: "",
+        description: "",
+        instructions: "Analyze gold and give me trading recommendations. Do not trade.",
+      },
+      "user",
+      true,
+    );
+    expect(text).toContain("Do not trade.");
+    expect(text).toContain("Analysis-only work is a complete and valid role");
+    expect(text).toContain("plan is not a mandate");
+    expect(text).toContain("transfer neither mandates");
+  });
+
   it("does not send a finish notification for the creation intro", () => {
     expect(runSendsFinishNotification("created")).toBe(false);
     expect(runSendsFinishNotification("user")).toBe(true);

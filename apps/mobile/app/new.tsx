@@ -64,7 +64,7 @@ export default function NewBot() {
         scheduleFocusPrompt(bot.id, isFirstBot);
       })();
     } catch (err) {
-      setError(errorText(err, t("Could not create bot")));
+      setError(errorText(err, t("Could not create Agent")));
     } finally {
       setPending(false);
     }
@@ -85,7 +85,7 @@ export default function NewBot() {
           value={name}
           maxLength={BOT_NAME_MAX_LENGTH}
           onChangeText={setName}
-          placeholder={t("Name this bot")}
+          placeholder={t("Name this Agent")}
           placeholderTextColor={tokens.mutedForeground}
           style={{
             marginTop: 8,
@@ -102,7 +102,7 @@ export default function NewBot() {
           value={title}
           maxLength={BOT_TITLE_MAX_LENGTH}
           onChangeText={setTitle}
-          placeholder={t("Describe what this bot does")}
+          placeholder={t("What should this Agent focus on?")}
           placeholderTextColor={tokens.mutedForeground}
           style={{
             marginTop: 8,

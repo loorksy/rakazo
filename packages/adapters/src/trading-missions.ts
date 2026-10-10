@@ -15,7 +15,6 @@ import {
   TradingMissionCommandSchema,
   TradingPlanInputSchema,
 } from "@rakazo/contracts";
-import { MAIN_TRADING_AGENT_SPAWN_KEY } from "@rakazo/core";
 import { tradingMandateFingerprint } from "@rakazo/core/node/financial-action";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { requireTradingOwner } from "@rakazo/db";
@@ -62,16 +61,17 @@ export class TradingMissions {
     private readonly prisma: PrismaClient,
     private readonly now: () => Date = () => new Date(),
   ) {}
-  private async main(tx: Prisma.TransactionClient, ownerUserId: string) {
+  private async agent(tx: Prisma.TransactionClient, ownerUserId: string, botId: string) {
     const settings = await tx.deploymentSettings.findUniqueOrThrow({ where: { id: "default" } });
     const bot = await tx.bot.findFirst({
       where: {
+        id: botId,
+        archivedAt: null,
         userId: ownerUserId,
         spaceId: settings.ownerSpaceId ?? "",
-        spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
       },
     });
-    if (!bot) throw new Error("Main Trading Agent unavailable");
+    if (!bot) throw new Error("Owner-scoped Agent unavailable");
     return bot;
   }
   async command(
@@ -83,9 +83,34 @@ export class TradingMissions {
     const command = TradingMissionCommandSchema.parse(raw);
     return this.prisma.$transaction(async (tx) => {
       await fenceChartExecution(tx, actor);
-      const bot = await this.main(tx, actor.ownerUserId);
-      if (actor.botId && actor.botId !== bot.id)
-        throw new Error("Research peers cannot acquire mandate authority");
+      if (actor.botId && command.botId && command.botId !== actor.botId)
+        throw new Error("Peer messages cannot transfer financial identity");
+      if (command.operation === "list" && !actor.botId && !command.botId)
+        return (
+          await tx.tradingGoal.findMany({
+            where: { ownerUserId: actor.ownerUserId },
+            orderBy: { createdAt: "desc" },
+            take: 100,
+          })
+        ).map(projectGoal);
+      let botId = actor.botId ?? command.botId;
+      if (!botId && "goalId" in command) {
+        const goal = await tx.tradingGoal.findFirst({
+          where: { id: command.goalId, ownerUserId: actor.ownerUserId },
+        });
+        botId = goal?.botId;
+      }
+      if (!botId && "planId" in command) {
+        const plan = await tx.tradingPlan.findUnique({ where: { id: command.planId } });
+        if (plan)
+          botId = (
+            await tx.tradingGoal.findFirst({
+              where: { id: plan.goalId, ownerUserId: actor.ownerUserId },
+            })
+          )?.botId;
+      }
+      if (!botId) throw new Error("Choose the exact Agent for this goal");
+      const bot = await this.agent(tx, actor.ownerUserId, botId);
       const scope = { ownerUserId: actor.ownerUserId, botId: bot.id };
       if (command.operation === "list")
         return (
@@ -309,7 +334,7 @@ export class TradingMissions {
       const objective = TradingGoalInputSchema.parse(goal.definition);
       if (mandate.mode === "LIVE")
         throw new Error("LIVE readiness incomplete; live activation is disabled");
-      const bot = await this.main(tx, ownerUserId);
+      const bot = await this.agent(tx, ownerUserId, mandate.botId);
       if (bot.id !== mandate.botId)
         throw new Error("Authorized Bot identity changed; propose a new mandate");
       const account = await tx.tradingConnection.findFirst({

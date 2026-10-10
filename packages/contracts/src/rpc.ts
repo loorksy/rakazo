@@ -180,6 +180,23 @@ const spaceName = z.string().trim().min(1).max(60);
 
 export const appContract = {
   trading: {
+    setAccountAccess: oc
+      .input(
+        z.strictObject({
+          botId: Id,
+          accountId: Id,
+          accountRead: z.boolean(),
+          expectedRevision: z.number().int().nonnegative(),
+        }),
+      )
+      .output(
+        z.strictObject({
+          botId: Id,
+          accountId: Id,
+          accountRead: z.boolean(),
+          revision: z.number().int().positive(),
+        }),
+      ),
     missions: oc.input(TradingMissionCommandSchema).output(TradingMissionResponseSchema),
     resolveMandate: oc.input(MandateResolutionSchema).output(TradingMandateViewSchema),
     controlMandate: oc.input(MandateControlSchema).output(TradingMandateViewSchema),

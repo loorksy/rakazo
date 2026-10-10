@@ -28,6 +28,7 @@ model TradingConnection {
   instruments       BrokerInstrument[]
   requests          BrokerReadRequest[]
   subscriptions     BrokerMarketSubscription[]
+  agentAccess       TradingAgentAccountAccess[]
 
   @@unique([ownerUserId, provider, providerAccountId])
   @@index([ownerUserId, revokedAt])
@@ -483,6 +484,7 @@ model SpaceVoicePreference {
 }
 
 model Bot {
+  tradingAccountAccess TradingAgentAccountAccess[]
   screenGeneration Int @default(0)
   id                String            @id @default(cuid())
   spaceId           String
@@ -1529,7 +1531,7 @@ model CloudChart {
   formatVersion Int      @default(1)
   ownerUserId   String
   ownerBotId    String?
-  scope         String   @default("MAIN")
+  scope         String   @default("WORKER")
   accountId     String
   instrumentId  String
   brokerSymbol  String
@@ -1814,4 +1816,18 @@ model SimulationMarketReceipt {
   @@unique([accountId, targetId, type], map: "simulation_receipt_identity")
   @@index([accountId, createdAt], map: "simulation_receipt_account_created")
   @@map("simulation_market_receipts")
+}
+
+// Read permissions never confer financial mutation authority; mandates bind the exact Agent.
+model TradingAgentAccountAccess {
+  botId String
+  accountId String
+  ownerUserId String
+  accountRead Boolean @default(false)
+  revision Int @default(1)
+  updatedAt DateTime @updatedAt
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  account TradingConnection @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@id([botId, accountId])
+  @@map("trading_agent_account_access")
 }

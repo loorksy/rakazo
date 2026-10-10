@@ -6,7 +6,6 @@ import {
   TradingMandateEnvelopeSchema,
   TradingPlanInputSchema,
 } from "@rakazo/contracts";
-import { MAIN_TRADING_AGENT_SPAWN_KEY } from "@rakazo/core";
 import { tradingMandateFingerprint } from "@rakazo/core/node/financial-action";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { createDurableBotWake } from "./durable-bot-wake.js";
@@ -177,7 +176,6 @@ export async function wakeTradingMission(
         where: {
           id: mandate.botId,
           userId: mandate.ownerUserId,
-          spawnKey: MAIN_TRADING_AGENT_SPAWN_KEY,
           spaceId: settings?.ownerSpaceId ?? "",
         },
       });

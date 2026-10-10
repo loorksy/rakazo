@@ -9,20 +9,25 @@ Auto Review, approval replay, effect recording or provider/tool execution. Every
 Bot and peer uses the same check. A mandate cannot bypass it. Non-trading upstream
 deployments retain their original behavior.
 
-Opaque browser/Computer interaction, process launch, shell, generic filesystem
-access, credential injection, external cloud agents and arbitrary connector/MCP
-execution are denied to automated control. Tool descriptions, read-only hints,
-innocent names and user always-allow rules cannot prove a financial envelope.
-This conservative first boundary intentionally rejects harmless opaque actions as
-well as financial ones. It does not claim that domain-name filtering can stop a
-broker portal, authenticated terminal or disguised MCP mutation.
+Computer, Browser, Terminal, Files and integrations remain available. File and
+research tools retain normal product policy. Opaque mutation-capable Computer,
+shell, browser, credential, cloud-agent and connector calls require an independent
+`trading_support` review before generic approval rules, replay or execution.
+A missing reviewer, timeout, error, ask or denial blocks automated dispatch; only
+an independent pass proceeds to normal Rakazo policy. Always-allow rules and
+turning off generic Auto Review cannot skip this check. Human takeover remains.
 
-Computer remains available to the owner through human takeover; the Bot can
-observe it. Automated public research uses the existing credential-free web
-search/fetch interfaces. Chart and broker reads, structured chart/indicator work,
-market watches and delegation remain available. Narrower verified research-only
-Computer/connector capabilities are not implemented at this checkpoint. Ordinary
-Computer tools cannot inspect or write browser credential storage through files.
+The support reviewer is explicitly instructed to deny financial mutations and
+broker credential disclosure through generic routes, including broker portal
+buttons, exchange order forms, shell/API code and generic MCP/OpenAPI calls.
+Financial actions must use the structured Trading Core path with their own
+mandate, deterministic risk, independent financial review and durable effects.
+Support tools never acquire a financial authorization envelope.
+
+This restores research workflows without a blanket Computer shutdown. The
+support review is a model-based inspection boundary, not deterministic proof of
+arbitrary program behavior. A hostile-code/network containment guarantee remains
+unverified; passing these fixture tests does not establish LIVE readiness.
 
 Broker API secrets continue to be protected connection references resolved only
 inside Worker adapters. They are not AgentSecret/BotSecret credentials, browser
