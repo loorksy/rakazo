@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import type { BrokerReadSession, ExecutionRequest } from "@rakazo/adapter-kit";
+import type { BrokerReadSession, ExecutionRequest, SandboxProvider } from "@rakazo/adapter-kit";
 import type {
   FinancialAction,
   FinancialRiskFacts,
@@ -17,6 +17,8 @@ import {
   tradingMandateFingerprint,
 } from "@rakazo/core/node/financial-action";
 import { claimBrokerSession, createDb, withBrokerSessionFence } from "@rakazo/db";
+import { createLogger, createTestSink } from "@rakazo/logging";
+import { makeWorkerUtils } from "graphile-worker";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BrokerStateSchema,
@@ -32,6 +34,7 @@ import { ScriptedAutoReviewProvider } from "./scripted-auto-review.js";
 import { TradeProposals } from "./trade-proposals.js";
 import { TradingMissions } from "./trading-missions.js";
 import { TradingOwnerControls } from "./trading-owner-controls.js";
+import { TradingRuntimeHealthProbe } from "./trading-runtime-health.js";
 
 const url = process.env.LIVE_TEST_DATABASE_URL;
 const suite = url ? describe.sequential : describe.skip;
@@ -563,7 +566,7 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
           evidenceRefs: [],
           chartRefs: [],
         },
-        `prepare:${financialActionFingerprint(material)}`,
+        `prepare:${scope.mandateId}:${financialActionFingerprint(material)}`,
       ),
     );
     const preview = TradeProposalViewSchema.parse(
@@ -913,6 +916,99 @@ suite("controlled LIVE provider acceptance (PostgreSQL fixtures only)", () => {
     ).rejects.toThrow();
     expect(await db.prisma.tradingProviderExecution.count()).toBe(0);
   });
+  it("trusted runtime probe checks actual migrated database, Graphile, risk and containment health", async () => {
+    const utilities = await makeWorkerUtils({ pgPool: db.pool });
+    await utilities.migrate();
+    await utilities.release();
+    const sink = createTestSink();
+    let active = true;
+    const sandbox = {
+      financialContainment: async () => ({
+        active,
+        revision: "financial-egress-v1",
+        checkedAt: new Date().toISOString(),
+      }),
+    } as unknown as SandboxProvider;
+    const probe = new TradingRuntimeHealthProbe(
+      db.prisma,
+      sandbox,
+      () => ({ active: true, streams: 1, quoteAgeMs: 10, chartDataLagMs: 20 }),
+      createLogger({ service: "fixture", sinks: [sink], level: "info" }),
+    );
+    await probe.tick();
+    expect(
+      await db.prisma.tradingRuntimeHealth.findUnique({ where: { id: "default" } }),
+    ).toMatchObject({
+      containmentActive: true,
+      riskHealthy: true,
+      effectsHealthy: true,
+      emergencyStopHealthy: true,
+      observabilityHealthy: true,
+      jobLagMs: 0,
+    });
+    expect(JSON.stringify(sink.events)).toContain("quoteAgeMs");
+    expect(JSON.stringify(sink.events)).not.toContain("fixture-unused-ref");
+    active = false;
+    await probe.tick();
+    expect(
+      await db.prisma.tradingRuntimeHealth.findUnique({ where: { id: "default" } }),
+    ).toMatchObject({ containmentActive: false, containmentRevision: null });
+    await probe.close();
+    expect(
+      await db.prisma.tradingRuntimeHealth.findUnique({ where: { id: "default" } }),
+    ).toMatchObject({ effectsHealthy: false });
+  });
+  it("mixed manual and Agent exposure on a netting account pauses management and new entries", async () => {
+    const fixture = await ready();
+    const row = await prepare();
+    await row.send();
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(fixture.execute).toHaveBeenCalledTimes(1);
+    fixture.state.account.accountMode = "NETTING";
+    fixture.state.positions[0]!.volume = "0.04";
+    expect(
+      (await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).length,
+    ).toBeGreaterThan(0);
+    expect(
+      await db.prisma.tradingMandate.findUnique({ where: { id: row.mandateId } }),
+    ).toMatchObject({ status: "NEEDS_ATTENTION" });
+    const next = await prepare("new-entry-after-owner-merge");
+    await expect(next.send()).rejects.toThrow();
+    await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+    expect(fixture.execute).toHaveBeenCalledTimes(1);
+  });
+  it.each(["-100", "300"])(
+    "provider valuation %s creates a durable terminal wake without closing exposure",
+    async (profit) => {
+      const fixture = await ready();
+      const row = await prepare();
+      await row.send();
+      await new ProviderDispatcher(db.prisma, () => now).tick(fixture.token, fixture.session);
+      fixture.state.account.positionValuations = [{ id: fixture.state.positions[0]!.id, profit }];
+      expect(await observeBrokerState(db.prisma, fixture.token, fixture.state, now)).toEqual([]);
+      const status = profit === "-100" ? "RISK_STOPPED" : "TARGET_REACHED";
+      expect(
+        await db.prisma.tradingMandate.findUnique({ where: { id: row.mandateId } }),
+      ).toMatchObject({ status });
+      expect(
+        await db.prisma.tradingMissionWake.count({
+          where: {
+            mandateId: row.mandateId,
+            kind: "ACCOUNT_EVENT",
+            wakeKey: { startsWith: `live:${status}:` },
+          },
+        }),
+      ).toBe(1);
+      expect(
+        await db.prisma.financialJournal.count({
+          where: { mandateId: row.mandateId, event: `LIVE_${status}` },
+        }),
+      ).toBe(1);
+      await observeBrokerState(db.prisma, fixture.token, fixture.state, now);
+      expect(fixture.state.positions).toHaveLength(1);
+      expect(fixture.execute).toHaveBeenCalledTimes(1);
+    },
+  );
   it.each(["TP", "PARTIAL_CLOSE", "FULL_CLOSE", "NEW_POSITION", "NETTING_MERGE", "ACCOUNT_CASH"])(
     "detects external %s and pauses exact authority",
     async (kind) => {

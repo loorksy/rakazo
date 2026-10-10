@@ -425,17 +425,15 @@ export async function observeBrokerState(
           const stopped = pnl <= -financialUnits(envelope.maxMissionLoss);
           const target =
             objective.targetProfit !== null && pnl >= financialUnits(objective.targetProfit);
+          const terminal = stopped ? "RISK_STOPPED" : target ? "TARGET_REACHED" : null;
           await tx.tradingMandate.update({
             where: { id: mandate.id },
             data: {
               observedAt: now,
               missionPnl: financialDecimal(pnl),
               dailyPnl: financialDecimal(pnl),
-              ...(target && mandate.status === "ACTIVE"
-                ? { status: "TARGET_REACHED", revision: { increment: 1 } }
-                : {}),
-              ...(stopped && mandate.status === "ACTIVE"
-                ? { status: "RISK_STOPPED", revision: { increment: 1 } }
+              ...(terminal && mandate.status === "ACTIVE"
+                ? { status: terminal, revision: { increment: 1 } }
                 : {}),
               observedState: {
                 version: 1,
@@ -445,6 +443,25 @@ export async function observeBrokerState(
               },
             },
           });
+          if (terminal && mandate.status === "ACTIVE") {
+            const wakeKey = `live:${terminal}:${mandate.id}:${mandate.revision + 1}`;
+            await tx.tradingMissionWake.upsert({
+              where: { wakeKey },
+              create: { mandateId: mandate.id, wakeKey, kind: "ACCOUNT_EVENT", dueAt: now },
+              update: {},
+            });
+            await tx.financialJournal.create({
+              data: {
+                ownerUserId: mandate.ownerUserId,
+                accountId: token.accountId,
+                mode: "LIVE",
+                mandateId: mandate.id,
+                goalId: mandate.goalId,
+                event: `LIVE_${terminal}`,
+                entry: { version: 1, pnl: financialDecimal(pnl), generation: token.generation },
+              },
+            });
+          }
         }
       }
       return [...reasons];

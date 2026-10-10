@@ -194,6 +194,21 @@ describe("MetaApi read-only SDK boundary", () => {
     });
     await session.close();
   });
+  it("rejects a credential reflected into otherwise normalized Agent-visible account data", async () => {
+    const f = fixture();
+    const session = await f.connect();
+    f.rpc.getAccountInformation.mockResolvedValueOnce({
+      ...accountInfo,
+      currency: "fixture-secret",
+    });
+    await expect(session.account()).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      message: "Broker operation failed: INVALID_RESPONSE",
+    });
+    const account = await session.account();
+    expect(JSON.stringify(account)).not.toContain("fixture-secret");
+    await session.close();
+  });
   it("shares subscriptions atomically across listeners and closes without stale callbacks", async () => {
     const f = fixture();
     const session = await f.connect();

@@ -167,3 +167,19 @@ overlap earlier runs and are not cumulative. No real-money automated tests or
 private live-provider verification were performed. Full repository verification
 and final completion review remain in progress; this stage does not claim that
 the entire transformation is complete.
+
+## Further safety verification stage (2026-10-10)
+
+Trusted gateway attestation now rejects modified commands, mounts, privilege
+settings and credential-bearing environment variables; Computer attestation
+requires an explicit nonzero numeric user. LIVE target/loss transitions create
+durable journal records and mission wakes without implicitly closing exposure.
+Provider history is accepted only for an existing exact reservation attribution.
+
+The expanded LIVE PostgreSQL fixture suite passed 42 tests, including mixed manual
+and Agent netting exposure and both terminal accounting transitions. A focused
+71-test provider/history/gateway run passed, including reflected-credential
+rejection. An additional runtime probe test and the full PostgreSQL/repository
+runs are in progress. The repeated real Docker containment run encountered a
+fixture startup timeout under concurrent verification and will be rerun; the
+earlier six-test passing run remains recorded above. No completion claim is made.

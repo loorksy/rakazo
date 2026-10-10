@@ -87,7 +87,19 @@ export async function recordBrokerHistories(
   let conflict = false;
   for (const raw of histories) {
     const history = BrokerPositionHistorySchema.parse(raw);
+    const attribution = await tx.tradingRiskReservation.findFirst({
+      where: {
+        ownerUserId,
+        accountId,
+        mode: "LIVE",
+        kind: "POSITION",
+        status: { in: ["COMMITTED", "RELEASED"] },
+        providerReference: history.positionId,
+      },
+      select: { id: true },
+    });
     if (
+      !attribution ||
       history.accountId !== accountId ||
       !history.synchronized ||
       history.deals.some(

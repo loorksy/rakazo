@@ -5,6 +5,42 @@ export const researchGatewayName = (owner: string) => `rakazo-research-${owner}`
 export const researchPublicVolume = (owner: string) => `rakazo-research-public-${owner}`;
 export const researchPrivateVolume = (owner: string) => `rakazo-research-private-${owner}`;
 
+export function trustedResearchGateway(
+  info: Docker.ContainerInspectInfo,
+  owner: string,
+  image: string,
+) {
+  const mounts = info.Mounts;
+  return (
+    info.Image === image &&
+    info.Config.Labels?.["rakazo.financialContainment"] === FINANCIAL_EGRESS_REVISION &&
+    info.Config.Labels?.["rakazo.researchOwner"] === owner &&
+    JSON.stringify(info.Config.Cmd) ===
+      JSON.stringify(["./node_modules/.bin/tsx", "src/financial-egress-entry.ts"]) &&
+    info.Config.WorkingDir === "/app/infra/sandboxes/supervisor" &&
+    !info.HostConfig.Privileged &&
+    info.HostConfig.PidMode !== "host" &&
+    info.HostConfig.ReadonlyRootfs &&
+    info.HostConfig.CapDrop?.includes("ALL") === true &&
+    info.HostConfig.SecurityOpt?.includes("no-new-privileges:true") === true &&
+    mounts.length === 2 &&
+    mounts.some(
+      (mount) =>
+        mount.Name === researchPublicVolume(owner) &&
+        mount.Destination === "/var/lib/rakazo-egress/public",
+    ) &&
+    mounts.some(
+      (mount) =>
+        mount.Name === researchPrivateVolume(owner) &&
+        mount.Destination === "/var/lib/rakazo-egress/private",
+    ) &&
+    // Image runtime metadata is allowed; inherited service credentials are not.
+    (info.Config.Env ?? []).every((entry) =>
+      /^(PATH|NODE_VERSION|YARN_VERSION|PNPM_HOME|COREPACK_HOME|NODE_ENV)=/.test(entry),
+    )
+  );
+}
+
 /** Uses the supervisor's own trusted image and exposes no mutation or shell control API. */
 export async function ensureResearchGateway(
   docker: Docker,
@@ -72,14 +108,7 @@ export async function ensureResearchGateway(
     });
     info = await container.inspect();
   }
-  if (
-    info.Image !== image ||
-    info.Config.Labels?.["rakazo.financialContainment"] !== FINANCIAL_EGRESS_REVISION ||
-    info.HostConfig.Privileged ||
-    info.HostConfig.PidMode === "host" ||
-    !info.HostConfig.ReadonlyRootfs ||
-    !info.HostConfig.CapDrop?.includes("ALL")
-  )
+  if (!trustedResearchGateway(info, owner, image))
     throw new Error("Research gateway identity unverified");
   if (!info.State.Running) await container.start();
   const network = docker.getNetwork(networkName);
@@ -110,7 +139,7 @@ export async function verifyFinancialNetworks(
     .catch(() => undefined);
   if (
     !gateway ||
-    gateway.Image !== image ||
+    !trustedResearchGateway(gateway, owner, image) ||
     !gateway.State.Running ||
     gateway.State.Health?.Status !== "healthy" ||
     gateway.Config.Labels?.["rakazo.financialContainment"] !== FINANCIAL_EGRESS_REVISION
@@ -129,8 +158,7 @@ export async function verifyFinancialNetworks(
       info.HostConfig.PidMode === "host" ||
       !info.HostConfig.CapDrop?.includes("ALL") ||
       !info.HostConfig.SecurityOpt?.includes("no-new-privileges:true") ||
-      info.Config.User === "0" ||
-      info.Config.User.startsWith("0:")
+      !/^[1-9][0-9]*(?::[0-9]+)?$/.test(info.Config.User)
     )
       return false;
     const network = await docker.getNetwork(networks[0]!).inspect();
