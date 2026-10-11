@@ -842,4 +842,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "No authority": "Нет полномочий",
   "No broker account is connected.": "Брокерский счёт не подключён.",
   "Not allowed": "Не разрешено",
+  "View report": "Открыть отчёт",
+  "Position size is unavailable without account read.":
+    "Размер позиции недоступен без чтения счёта.",
 };

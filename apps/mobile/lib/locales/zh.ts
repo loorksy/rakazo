@@ -816,4 +816,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "No authority": "无权限",
   "No broker account is connected.": "未连接经纪商账户。",
   "Not allowed": "不允许",
+  "View report": "查看报告",
+  "Position size is unavailable without account read.": "没有账户读取权限时无法计算仓位。",
 };

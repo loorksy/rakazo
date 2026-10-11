@@ -138,6 +138,7 @@ import {
 import { createPortal } from "react-dom";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArtifactFileCard } from "../components/ArtifactFileCard";
+import { TradingCardView } from "../components/trading/TradingCardView";
 import { AskCard } from "../components/AskCard";
 import { ActiveBotGlyph, CollaborationMarker } from "../components/ai/CollaborationMarker";
 import { CloudAgentCard } from "../components/CloudAgentCard";
@@ -6760,6 +6761,13 @@ const MessageView = memo(function MessageView({
           return (
             <div key={i} className="flex justify-start">
               <ChartBlockView name={block.name} spec={block.spec} data={block.data} />
+            </div>
+          );
+        }
+        if (block.kind === "trading_card") {
+          return (
+            <div key={i} className="flex justify-start">
+              <TradingCardView card={block.card} />
             </div>
           );
         }

@@ -17,6 +17,7 @@ import {
 import { CHART_DRAWING_CAPABILITIES } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
 import { useEffect, useRef, useState } from "react";
+import type { ChartFocus } from "../../lib/chart-focus";
 import { rpc } from "../../lib/rpc";
 import { CloudChartView } from "./CloudChartView";
 export function CloudChartPanel({
@@ -44,6 +45,17 @@ export function CloudChartPanel({
   const [busy, setBusy] = useState(false);
   const current = useRef(chart);
   current.current = chart;
+  const focusRef = useRef<ChartFocus | null>(null);
+  useEffect(() => {
+    const onFocus = (event: Event) => {
+      const detail = (event as CustomEvent<ChartFocus>).detail;
+      if (!detail?.instrumentId || !detail.accountId) return;
+      focusRef.current = detail;
+      setAccountId(detail.accountId);
+    };
+    window.addEventListener("rakazo-chart-focus", onFocus);
+    return () => window.removeEventListener("rakazo-chart-focus", onFocus);
+  }, []);
   useEffect(() => {
     const abort = new AbortController();
     void Promise.all([
@@ -99,7 +111,12 @@ export function CloudChartPanel({
         if (abort.signal.aborted) return;
         const rows = BrokerInstrumentDirectorySchema.parse(raw);
         setDirectory(rows);
-        setInstrumentId(rows[0]?.id ?? "");
+        const focus = focusRef.current;
+        setInstrumentId(
+          focus && rows.some((row) => row.id === focus.instrumentId)
+            ? focus.instrumentId
+            : (rows[0]?.id ?? ""),
+        );
       })
       .catch(() => {
         if (!abort.signal.aborted) setInstrumentsError(true);
@@ -175,6 +192,22 @@ export function CloudChartPanel({
       setBusy(false);
     }
   }
+  const openedFocus = useRef("");
+  useEffect(() => {
+    const focus = focusRef.current;
+    if (!focus || instrumentId !== focus.instrumentId || busy) return;
+    if (chart?.instrumentId === instrumentId && chart.accountId === accountId) return;
+    if (openedFocus.current === instrumentId) return;
+    openedFocus.current = instrumentId;
+    void command({
+      operation: "create",
+      accountId,
+      instrumentId,
+      timeframe: BrokerTimeframeSchema.parse(focus.timeframe ?? "1h"),
+      scope: botId ? "WORKER" : "PRIVATE",
+      ...(botId ? { botId } : {}),
+    });
+  }, [instrumentId, accountId, chart?.instrumentId, chart?.accountId, busy, botId]);
   const selectClass =
     "min-w-0 rounded-lg border border-border bg-card px-2 py-1 text-sm text-foreground";
   return (
@@ -209,18 +242,23 @@ export function CloudChartPanel({
           </Button>
         ) : null}
         {accountsLoaded && connections.length > 0 ? (
-          <select
-            aria-label="Broker account"
-            className={selectClass}
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-          >
-            {connections.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.state === "CONNECTED" ? row.label : `${row.label} · ${t`Disconnected`}`}
-              </option>
-            ))}
-          </select>
+          <details className="text-sm">
+            <summary>
+              <Trans>Settings</Trans>
+            </summary>
+            <select
+              aria-label="Broker account"
+              className={selectClass}
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+            >
+              {connections.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.state === "CONNECTED" ? row.label : `${row.label} · ${t`Disconnected`}`}
+                </option>
+              ))}
+            </select>
+          </details>
         ) : null}
         {accountsLoaded &&
         connections.length > 0 &&
@@ -245,7 +283,7 @@ export function CloudChartPanel({
             <Trans>No broker instruments.</Trans>
           </p>
         ) : null}
-        {directory.length > 0 ? (
+        {directory.length > 0 && !chart ? (
           <select
             aria-label="Broker instrument"
             className={selectClass}
@@ -268,7 +306,7 @@ export function CloudChartPanel({
             <Trans>Retry</Trans>
           </Button>
         ) : null}
-        {instrumentId ? (
+        {instrumentId && !chart ? (
           <Button
             variant="outline"
             size="sm"

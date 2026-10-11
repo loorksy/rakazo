@@ -269,6 +269,14 @@ msgstr ""
 msgid "Account name"
 msgstr ""
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Account read allowed"
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Account read is not granted"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Accounts"
 msgstr ""
@@ -633,6 +641,10 @@ msgstr "参数"
 msgid "Artifacts"
 msgstr ""
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Ask"
+msgstr ""
+
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Ask before {0}"
@@ -794,6 +806,10 @@ msgstr ""
 #: src/pages/shell/bot-credentials.tsx
 msgid "Bearer token"
 msgstr "Bearer token"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Bid"
+msgstr ""
 
 #: src/pages/SettingsOverlay.tsx
 msgid "Billing"
@@ -1326,6 +1342,7 @@ msgid "Connect Treg"
 msgstr "连接 Treg"
 
 #: src/components/integrations/IntegrationSetup.tsx
+#: src/components/trading/TradingCardView.tsx
 #: src/pages/McpOAuthCallback.tsx
 #: src/pages/MemorySettingsOverlay.tsx
 #: src/pages/ModelSettingsOverlay.tsx
@@ -2172,6 +2189,7 @@ msgid "Disconnect {disconnectName}?"
 msgstr ""
 
 #: src/components/chart/CloudChartPanel.tsx
+#: src/components/trading/TradingCardView.tsx
 msgid "Disconnected"
 msgstr ""
 
@@ -2352,12 +2370,24 @@ msgstr "请输入 1 到 1000 之间的整数作为图像限制。"
 msgid "Enter an API key before testing."
 msgstr "测试前请输入 API 密钥。"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Entry"
+msgstr ""
+
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Entry timing"
 msgstr ""
 
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Environment key"
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Estimated loss"
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Estimated profit"
 msgstr ""
 
 #: src/pages/ExternalConversationSettings.tsx
@@ -2393,6 +2423,10 @@ msgstr "每月"
 msgid "Every week"
 msgstr "每周"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Execute"
+msgstr ""
+
 #: src/components/TradingAccountAccess.tsx
 msgid "Execution"
 msgstr ""
@@ -2403,6 +2437,10 @@ msgstr ""
 
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Execution discipline"
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Execution stays on the trusted financial path. This card cannot place an order."
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
@@ -3612,6 +3650,7 @@ msgid "Open <0>{0}</0> to finish signing in."
 msgstr ""
 
 #: src/components/chart/CloudChartPanel.tsx
+#: src/components/trading/TradingCardView.tsx
 msgid "Open chart"
 msgstr ""
 
@@ -3794,6 +3833,10 @@ msgstr "插件"
 msgid "Position limit"
 msgstr ""
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Position size is unavailable without account read."
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
 msgstr "POST 到"
@@ -3809,6 +3852,10 @@ msgstr "预览 {0}"
 
 #: src/pages/Artifacts.tsx
 msgid "Preview isn't available for this file type — download it to view it."
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Price"
 msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
@@ -4190,6 +4237,10 @@ msgstr "请检查提供方设置并重新测试。"
 msgid "Revoke"
 msgstr "撤销"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Risk / reward"
+msgstr ""
+
 #: src/components/TradingMandateCard.tsx
 msgid "Risk-increase permissions"
 msgstr ""
@@ -4464,6 +4515,7 @@ msgid "Server URL"
 msgstr "服务器 URL"
 
 #: src/components/call/CallCard.tsx
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/Shell.tsx
@@ -4686,6 +4738,7 @@ msgstr ""
 msgid "Steps"
 msgstr "步骤"
 
+#: src/components/trading/TradingCardView.tsx
 #: src/pages/Shell.tsx
 msgid "Stop"
 msgstr "停止"
@@ -4762,6 +4815,7 @@ msgstr "正在切换…"
 msgid "System"
 msgstr "系统"
 
+#: src/components/trading/TradingCardView.tsx
 #: src/components/TradingMandateCard.tsx
 msgid "Target"
 msgstr ""
@@ -4912,6 +4966,10 @@ msgstr "此操作将永久删除您的账户和数据。"
 #: src/pages/shell/dialogs.tsx
 msgid "This permanently removes every message and stops current work. The chat remains available."
 msgstr "将永久删除全部消息并停止当前工作。聊天仍可使用。"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "This preview changed. The previous approval no longer applies."
+msgstr ""
 
 #: src/lib/model-connection-preflight.ts
 msgid "This provider cannot be tested without saving."
@@ -5236,6 +5294,10 @@ msgstr ""
 #: src/pages/RoutineRunHistory.tsx
 msgid "View chat"
 msgstr "查看聊天"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "View report"
+msgstr ""
 
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/Shell.tsx

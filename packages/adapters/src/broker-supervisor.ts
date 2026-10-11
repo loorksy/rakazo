@@ -590,7 +590,8 @@ export class BrokerConnectionSupervisor {
       }
       return this.readDirectory(command.accountId);
     }
-    if (command.operation === "instrument_search") throw new BrokerProviderError("INVALID_REQUEST");
+    if (command.operation === "instrument_search" || command.operation === "instrument_pin")
+      throw new BrokerProviderError("INVALID_REQUEST");
     const instrument = await this.prisma.brokerInstrument.findFirst({
       where: { id: command.instrumentId, accountId: command.accountId, active: true },
     });

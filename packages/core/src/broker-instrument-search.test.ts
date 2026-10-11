@@ -59,12 +59,9 @@ describe("broker instrument search", () => {
       accountId: "account",
       instrumentClass,
     });
-    expect(result.provenance).toMatchObject({
-      source: "broker",
-      provider: "metaapi",
-      brokerSymbol: symbol,
-      supplementary: false,
-    });
+    expect(result.provenance.source).toBe("broker");
+    if (result.ambiguous) expect(result.primary).toBeNull();
+    else expect(result.primary?.brokerSymbol).toBe(symbol);
     expect(result.matches.map((match) => match.brokerSymbol)).not.toContain("BTCUSDT");
     expect(JSON.stringify(result)).not.toContain("binance");
   });

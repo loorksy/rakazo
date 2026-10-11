@@ -89,6 +89,7 @@ import { AskActions } from "../components/AskActions";
 import { BotAvatar } from "../components/bot-avatar";
 import { ChoiceCard } from "../components/ChoiceCard";
 import { ComputerCard } from "../components/ComputerCard";
+import { MobileTradingCard } from "../components/trading-card";
 import { ComposerReplyPreview } from "../components/composer-reply-preview";
 import { FailedSendBubble } from "../components/failed-send-bubble";
 import { GlassSurface } from "../components/glass-surface";
@@ -3845,6 +3846,11 @@ const MessageBubble = memo(function MessageBubble({
   );
   return (
     <View style={{ gap: 8, width: "100%" }}>
+      {message.blocks.map((block, index) =>
+        block.kind === "trading_card" ? (
+          <MobileTradingCard key={`card-${index}`} card={block.card} />
+        ) : null,
+      )}
       {segments.map((segment, index) => (
         <MessageTextCard
           key={`${message.id}-content-${index}`}

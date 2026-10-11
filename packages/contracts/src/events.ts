@@ -2,6 +2,7 @@ import * as z from "zod";
 import { botSecretDestinationSchema } from "./bot-secrets.js";
 import { Id } from "./ids.js";
 import { McpTransportSchema } from "./mcp.js";
+import { TradingCardSchema } from "./trading-cards.js";
 
 export const ProductEventType = z.enum([
   "thread.message.created",
@@ -94,6 +95,7 @@ export type SecretAskPurpose = z.infer<typeof SecretAskPurpose>;
 
 export const MessageBlock = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("trading_mandate"), goalId: Id, mandateId: Id }),
+  z.object({ kind: z.literal("trading_card"), card: TradingCardSchema }),
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({
     kind: z.literal("card"),

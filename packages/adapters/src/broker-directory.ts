@@ -3,6 +3,7 @@ import {
   type BrokerDirectoryRecord,
   type InstrumentSearchResult,
   instrumentDirectoryFresh,
+  instrumentExposure,
   searchBrokerDirectory,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
@@ -126,7 +127,63 @@ const readArgs = z.object({
 });
 
 /** Tool-facing shape. The chart RPC still receives the persisted directory. */
-export function presentBrokerRead(args: unknown, result: unknown): unknown {
+export async function hydrateSearchResult(
+  prisma: Pick<PrismaClient, "brokerInstrument" | "brokerReadRequest">,
+  ownerUserId: string,
+  result: InstrumentSearchResult,
+  signal?: AbortSignal,
+): Promise<InstrumentSearchResult> {
+  const candidate = result.matches.find((match) => match.instrumentClass === "OTHER");
+  if (!candidate || signal?.aborted) return result;
+  const stored = await prisma.brokerInstrument.findUnique({
+    where: { id: candidate.instrumentId },
+    select: { specification: true, verifiedAt: true, brokerSymbol: true },
+  });
+  const fresh =
+    stored?.verifiedAt !== null &&
+    stored?.verifiedAt !== undefined &&
+    Date.now() - stored.verifiedAt.getTime() < 24 * 60 * 60 * 1000 &&
+    stored.specification !== null;
+  if (!fresh) {
+    const deadline = new Date(Date.now() + 6000);
+    const row = await prisma.brokerReadRequest.create({
+      data: {
+        accountId: result.accountId,
+        ownerUserId,
+        operation: "specification",
+        parameters: {
+          accountId: result.accountId,
+          instrumentId: candidate.instrumentId,
+          operation: "specification",
+        },
+        deadline,
+      },
+    });
+    const started = Date.now();
+    while (Date.now() < deadline.getTime() && !signal?.aborted) {
+      const state = await prisma.brokerReadRequest.findUnique({ where: { id: row.id } });
+      if (state?.status === "SUCCEEDED" || state?.status === "FAILED") break;
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      if (Date.now() - started > 6000) break;
+    }
+  }
+  const next = await prisma.brokerInstrument.findUnique({
+    where: { id: candidate.instrumentId },
+    select: { specification: true, brokerSymbol: true },
+  });
+  const specification = specificationOf(next?.specification);
+  const classified = instrumentExposure(candidate.brokerSymbol, specification ?? undefined);
+  return {
+    ...result,
+    matches: result.matches.map((match) =>
+      match.instrumentId === candidate.instrumentId
+        ? { ...match, instrumentClass: classified.instrumentClass }
+        : match,
+    ),
+  };
+}
+
+export function presentBrokerRead(args: unknown, result: unknown, supplementary = false): unknown {
   const parsed = readArgs.safeParse(args);
   const operation = parsed.success ? parsed.data.operation : undefined;
   const accountId = parsed.success ? (parsed.data.accountId ?? "") : "";
@@ -142,7 +199,7 @@ export function presentBrokerRead(args: unknown, result: unknown): unknown {
         accountId,
         instrumentId: null,
         brokerSymbol: null,
-        supplementary: false as const,
+        supplementary,
       },
       guidance:
         "The broker directory is persisted and was not included. Call instrument_search with the owner's words, then use the returned instrumentId.",
@@ -159,7 +216,7 @@ export function presentBrokerRead(args: unknown, result: unknown): unknown {
         accountId,
         instrumentId,
         brokerSymbol: null,
-        supplementary: false as const,
+        supplementary,
       },
     };
   }
@@ -174,7 +231,7 @@ export function presentBrokerRead(args: unknown, result: unknown): unknown {
       accountId: typeof record.accountId === "string" ? record.accountId : accountId,
       instrumentId: typeof record.instrumentId === "string" ? record.instrumentId : instrumentId,
       brokerSymbol: typeof record.brokerSymbol === "string" ? record.brokerSymbol : null,
-      supplementary: false as const,
+      supplementary,
     },
   };
 }

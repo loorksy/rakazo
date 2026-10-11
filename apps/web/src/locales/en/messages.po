@@ -269,6 +269,14 @@ msgstr "Account label"
 msgid "Account name"
 msgstr "Account name"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Account read allowed"
+msgstr "Account read allowed"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Account read is not granted"
+msgstr "Account read is not granted"
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Accounts"
 msgstr "Accounts"
@@ -633,6 +641,10 @@ msgstr "Arguments"
 msgid "Artifacts"
 msgstr "Artifacts"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Ask"
+msgstr "Ask"
+
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Ask before {0}"
@@ -794,6 +806,10 @@ msgstr "Basic auth ({username})"
 #: src/pages/shell/bot-credentials.tsx
 msgid "Bearer token"
 msgstr "Bearer token"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Bid"
+msgstr "Bid"
 
 #: src/pages/SettingsOverlay.tsx
 msgid "Billing"
@@ -1326,6 +1342,7 @@ msgid "Connect Treg"
 msgstr "Connect Treg"
 
 #: src/components/integrations/IntegrationSetup.tsx
+#: src/components/trading/TradingCardView.tsx
 #: src/pages/McpOAuthCallback.tsx
 #: src/pages/MemorySettingsOverlay.tsx
 #: src/pages/ModelSettingsOverlay.tsx
@@ -2172,6 +2189,7 @@ msgid "Disconnect {disconnectName}?"
 msgstr "Disconnect {disconnectName}?"
 
 #: src/components/chart/CloudChartPanel.tsx
+#: src/components/trading/TradingCardView.tsx
 msgid "Disconnected"
 msgstr "Disconnected"
 
@@ -2352,6 +2370,10 @@ msgstr "Enter a whole number from 1 to 1000 for the image limit."
 msgid "Enter an API key before testing."
 msgstr "Enter an API key before testing."
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Entry"
+msgstr "Entry"
+
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Entry timing"
 msgstr "Entry timing"
@@ -2359,6 +2381,14 @@ msgstr "Entry timing"
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Environment key"
 msgstr "Environment key"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Estimated loss"
+msgstr "Estimated loss"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Estimated profit"
+msgstr "Estimated profit"
 
 #: src/pages/ExternalConversationSettings.tsx
 #: src/pages/RoutineSchedule.tsx
@@ -2393,6 +2423,10 @@ msgstr "Every month"
 msgid "Every week"
 msgstr "Every week"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Execute"
+msgstr "Execute"
+
 #: src/components/TradingAccountAccess.tsx
 msgid "Execution"
 msgstr "Execution"
@@ -2404,6 +2438,10 @@ msgstr "Execution also requires account readiness and an exact approved mandate.
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Execution discipline"
 msgstr "Execution discipline"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Execution stays on the trusted financial path. This card cannot place an order."
+msgstr "Execution stays on the trusted financial path. This card cannot place an order."
 
 #: src/pages/PluginsOverlay.tsx
 msgid "Executor token"
@@ -3612,6 +3650,7 @@ msgid "Open <0>{0}</0> to finish signing in."
 msgstr "Open <0>{0}</0> to finish signing in."
 
 #: src/components/chart/CloudChartPanel.tsx
+#: src/components/trading/TradingCardView.tsx
 msgid "Open chart"
 msgstr "Open chart"
 
@@ -3794,6 +3833,10 @@ msgstr "Plugin"
 msgid "Position limit"
 msgstr "Position limit"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Position size is unavailable without account read."
+msgstr "Position size is unavailable without account read."
+
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
 msgstr "POST to"
@@ -3810,6 +3853,10 @@ msgstr "Preview {0}"
 #: src/pages/Artifacts.tsx
 msgid "Preview isn't available for this file type — download it to view it."
 msgstr "Preview isn't available for this file type — download it to view it."
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Price"
+msgstr "Price"
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Private"
@@ -4190,6 +4237,10 @@ msgstr "Review provider settings and test again."
 msgid "Revoke"
 msgstr "Revoke"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Risk / reward"
+msgstr "Risk / reward"
+
 #: src/components/TradingMandateCard.tsx
 msgid "Risk-increase permissions"
 msgstr "Risk-increase permissions"
@@ -4464,6 +4515,7 @@ msgid "Server URL"
 msgstr "Server URL"
 
 #: src/components/call/CallCard.tsx
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/Shell.tsx
@@ -4686,6 +4738,7 @@ msgstr "Status"
 msgid "Steps"
 msgstr "Steps"
 
+#: src/components/trading/TradingCardView.tsx
 #: src/pages/Shell.tsx
 msgid "Stop"
 msgstr "Stop"
@@ -4762,6 +4815,7 @@ msgstr "Switching…"
 msgid "System"
 msgstr "System"
 
+#: src/components/trading/TradingCardView.tsx
 #: src/components/TradingMandateCard.tsx
 msgid "Target"
 msgstr "Target"
@@ -4912,6 +4966,10 @@ msgstr "This permanently deletes your account and data."
 #: src/pages/shell/dialogs.tsx
 msgid "This permanently removes every message and stops current work. The chat remains available."
 msgstr "This permanently removes every message and stops current work. The chat remains available."
+
+#: src/components/trading/TradingCardView.tsx
+msgid "This preview changed. The previous approval no longer applies."
+msgstr "This preview changed. The previous approval no longer applies."
 
 #: src/lib/model-connection-preflight.ts
 msgid "This provider cannot be tested without saving."
@@ -5236,6 +5294,10 @@ msgstr "Version"
 #: src/pages/RoutineRunHistory.tsx
 msgid "View chat"
 msgstr "View chat"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "View report"
+msgstr "View report"
 
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/Shell.tsx

@@ -29,6 +29,7 @@ export * from "./runs.js";
 export * from "./search.js";
 export * from "./terminal.js";
 export * from "./trading.js";
+export * from "./trading-cards.js";
 export * from "./trading-account-access.js";
 export * from "./trading-mission.js";
 export * from "./trading-proposal.js";

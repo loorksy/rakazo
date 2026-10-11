@@ -29,6 +29,8 @@ export interface InstrumentSearchResult {
   accountId: string;
   query: string;
   matches: InstrumentSearchMatch[];
+  /** Set only when one broker instrument is unambiguous. */
+  primary: InstrumentSearchMatch | null;
   ambiguous: boolean;
   fresh: boolean;
   syncedAt: string | null;
@@ -161,11 +163,12 @@ export function searchBrokerDirectory(input: {
   }));
   const ambiguous = ranked.length > 1 && ranked[1]!.score >= ranked[0]!.score - 5;
   const unavailable = input.unavailable === true || input.records.length === 0;
-  const first = matches[0];
+  const primary = !unavailable && !ambiguous ? (matches[0] ?? null) : null;
   return {
     accountId: input.accountId,
     query: input.query,
     matches: unavailable ? [] : matches,
+    primary,
     ambiguous: unavailable ? false : ambiguous,
     fresh: input.fresh,
     syncedAt: input.syncedAt,
@@ -182,8 +185,8 @@ export function searchBrokerDirectory(input: {
       source: "broker",
       provider: input.provider,
       accountId: input.accountId,
-      instrumentId: unavailable ? null : (first?.instrumentId ?? null),
-      brokerSymbol: unavailable ? null : (first?.brokerSymbol ?? null),
+      instrumentId: primary?.instrumentId ?? null,
+      brokerSymbol: primary?.brokerSymbol ?? null,
       supplementary: false,
     },
   };

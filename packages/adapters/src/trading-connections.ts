@@ -14,6 +14,7 @@ import {
   brokerInstrumentSearch,
   emptyDirectorySearch,
   enqueueDirectoryRefresh,
+  hydrateSearchResult,
   loadBrokerDirectory,
 } from "./broker-directory.js";
 import { BrokerProviderError, publicBrokerFailureCode } from "./metaapi-normalize.js";
@@ -282,15 +283,20 @@ export async function requestBrokerRead(
       await enqueueDirectoryRefresh(prisma, ownerUserId, command.accountId, now);
     }
     return z.json().parse(
-      brokerInstrumentSearch({
-        accountId: command.accountId,
-        provider: directory.provider,
-        query: command.query,
-        records: directory.records,
-        limit: command.limit,
-        fresh: directory.fresh,
-        syncedAt: directory.syncedAt,
-      }),
+      await hydrateSearchResult(
+        prisma,
+        ownerUserId,
+        brokerInstrumentSearch({
+          accountId: command.accountId,
+          provider: directory.provider,
+          query: command.query,
+          records: directory.records,
+          limit: command.limit,
+          fresh: directory.fresh,
+          syncedAt: directory.syncedAt,
+        }),
+        signal,
+      ),
     );
   }
   if (command.operation === "instruments") {

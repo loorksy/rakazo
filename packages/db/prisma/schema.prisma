@@ -90,6 +90,19 @@ model BrokerReadRequest {
   @@map("broker_read_requests")
 }
 
+/// One primary broker instrument for a run. Comparisons stay labeled and do not replace it.
+model TradingRunMarket {
+  runId          String   @id
+  accountId      String
+  instrumentId   String
+  brokerSymbol   String
+  provider       String
+  accountRead    Boolean  @default(false)
+  pinnedAt       DateTime @default(now())
+
+  @@map("trading_run_markets")
+}
+
 model BrokerMarketSubscription {
   id          String   @id @default(cuid())
   accountId   String

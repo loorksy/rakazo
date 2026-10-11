@@ -839,4 +839,7 @@ export const DE_MESSAGES: Record<string, string> = {
   "No authority": "Keine Befugnis",
   "No broker account is connected.": "Kein Brokerkonto ist verbunden.",
   "Not allowed": "Nicht erlaubt",
+  "View report": "Bericht anzeigen",
+  "Position size is unavailable without account read.":
+    "Die Positionsgröße ist ohne Kontolesen nicht verfügbar.",
 };

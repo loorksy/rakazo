@@ -76,6 +76,8 @@ describe("trading playbook retrieval", () => {
     ["USTECm", "INDEX"],
     ["US30m", "INDEX"],
     ["USOIL", "ENERGY"],
+    ["BTCAUDm", "CRYPTO"],
+    ["USTEC_x100m", "INDEX"],
     ["UKOILm", "ENERGY"],
   ] as const)(
     "classifies %s as %s without borrowing another market's rules",

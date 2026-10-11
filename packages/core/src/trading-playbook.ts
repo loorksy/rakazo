@@ -126,7 +126,26 @@ const CRYPTO_BASES = new Set([
   "XLM",
   "XRP",
 ]);
-const CRYPTO_QUOTES = ["USDT", "USDC", "USD", "EUR", "BTC", "ETH", "JPY", "GBP"];
+const CRYPTO_QUOTES = [
+  "USDT",
+  "USDC",
+  "USD",
+  "EUR",
+  "BTC",
+  "ETH",
+  "JPY",
+  "GBP",
+  "AUD",
+  "CAD",
+  "CHF",
+  "CNH",
+  "HKD",
+  "NZD",
+  "SGD",
+  "THB",
+  "TRY",
+  "ZAR",
+];
 const INDEX_ROOTS = [
   "AUS200",
   "DE30",
@@ -184,7 +203,8 @@ function normalizeCurrency(value: string | null | undefined): string | null {
 
 function decoration(rest: string): boolean {
   if (AFFIXES.has(rest)) return true;
-  return /^[0-9]{1,4}(?:M|PRO|RAW|ECN|I|R|S|X|Z)?$/.test(rest);
+  if (/^[0-9]{1,4}(?:M|PRO|RAW|ECN|I|R|S|X|Z)?$/.test(rest)) return true;
+  return /^X[0-9]{1,4}M?$/.test(rest);
 }
 
 function rooted(letters: string, roots: readonly string[]): string | null {

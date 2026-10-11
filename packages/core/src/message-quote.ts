@@ -146,6 +146,10 @@ function replyBlockText(block: MessageBlock): string {
   switch (block.kind) {
     case "trading_mandate":
       return "Trading mandate";
+    case "trading_card":
+      return "market" in block.card && block.card.market
+        ? block.card.market.brokerSymbol
+        : block.card.type;
     case "text":
     case "ask":
     case "channel_message":

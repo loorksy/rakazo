@@ -70,6 +70,7 @@ export * from "./thread-subscription.js";
 export * from "./time-separators.js";
 export * from "./tool-activity.js";
 export * from "./trading-playbook.js";
+export * from "./trading-run-market.js";
 export * from "./trading-simulation.js";
 export * from "./user-error.js";
 export * from "./voice-chat-groups.js";

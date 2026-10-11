@@ -394,6 +394,8 @@ import { TradeProposals } from "./trade-proposals.js";
 import { requestBrokerRead, TradingConnections } from "./trading-connections.js";
 import { enqueueMissionWakes } from "./trading-mission-wakes.js";
 import { TradingMissions } from "./trading-missions.js";
+import { tradingPresentationBlocks } from "./trading-presentation.js";
+import { markRunAccountRead, pinRunMarket, readRunMarket } from "./trading-run-market.js";
 import {
   botMessageOutcomeFromMidTurn,
   clampUserProgressMessage,
@@ -5461,6 +5463,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "chart_workspace") {
             try {
+              if (args.operation === "set_timeframe")
+                return finish({
+                  error:
+                    "Use chart_inspect for another timeframe. The owner's open chart timeframe stays unchanged.",
+                });
+              const pinned = await readRunMarket(deps.prisma, run.id);
+              if (
+                pinned &&
+                typeof args.instrumentId === "string" &&
+                args.instrumentId !== pinned.instrumentId
+              )
+                return finish({
+                  error: `This run is pinned to ${pinned.brokerSymbol}. Open that instrument, not another symbol.`,
+                });
               return finish(
                 await new CloudCharts(deps.prisma, deps.realtime).command(
                   {
@@ -5490,6 +5506,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
               })
               .safeParse(args);
             if (!parsed.success) return finish({ error: "A broker symbol is required" });
+            const pinnedPlaybook = await readRunMarket(deps.prisma, run.id);
+            if (
+              pinnedPlaybook &&
+              pinnedPlaybook.brokerSymbol !== parsed.data.symbol &&
+              args.supplementary !== true
+            )
+              return finish({
+                error: `This run is pinned to ${pinnedPlaybook.brokerSymbol}. Compare another symbol only as supplementary evidence.`,
+              });
             const config = await readDeploymentConfig(deps.prisma).catch(() => null);
             const listed = await deps.prisma.brokerInstrument.findMany({
               where: { brokerSymbol: parsed.data.symbol, active: true },
@@ -5551,6 +5576,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
               })),
             });
           }
+          if (name === "present_trading") {
+            const pinned = await readRunMarket(deps.prisma, run.id);
+            const stored = await deps.prisma.tradingRunMarket.findUnique({
+              where: { runId: run.id },
+            });
+            const presented = tradingPresentationBlocks(args, pinned, stored?.accountRead === true);
+            if ("error" in presented) return finish({ error: presented.error });
+            await publishMessage(deps, run, "bot", presented.blocks);
+            return finish({ presented: true, cards: presented.blocks.length - 1 });
+          }
           if (name === "trading_accounts" || name === "broker_read") {
             try {
               if (name === "trading_accounts")
@@ -5560,8 +5595,67 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     run.botId,
                   ),
                 );
-              const result = await requestBrokerRead(deps.prisma, run.userId, args, context.signal);
-              return finish(presentBrokerRead(args, result));
+              const operation = typeof args.operation === "string" ? args.operation : "";
+              const supplementary = args.supplementary === true;
+              const instrumentId = typeof args.instrumentId === "string" ? args.instrumentId : "";
+              const accountId = typeof args.accountId === "string" ? args.accountId : "";
+              if (
+                instrumentId &&
+                accountId &&
+                ["quote", "candles", "specification", "preflight", "instrument_pin"].includes(
+                  operation,
+                )
+              ) {
+                const instrument = await deps.prisma.brokerInstrument.findFirst({
+                  where: { id: instrumentId, accountId, active: true },
+                  select: { id: true, brokerSymbol: true, accountId: true },
+                });
+                if (!instrument)
+                  return finish({
+                    error:
+                      "Use instrument_search, then the returned instrumentId. A broker symbol is not an instrument id.",
+                    code: "INVALID_REQUEST",
+                  });
+                const connection = await deps.prisma.tradingConnection.findFirst({
+                  where: { id: accountId, revokedAt: null },
+                  select: { provider: true },
+                });
+                const gate = await pinRunMarket(deps.prisma, {
+                  runId: run.id,
+                  accountId,
+                  instrumentId: instrument.id,
+                  brokerSymbol: instrument.brokerSymbol,
+                  provider: connection?.provider ?? "broker",
+                  supplementary,
+                });
+                if (!gate.ok) return finish({ error: gate.message, code: "INVALID_REQUEST" });
+                if (operation === "instrument_pin")
+                  return finish({
+                    pinned: true,
+                    accountId: gate.market.accountId,
+                    instrumentId: gate.market.instrumentId,
+                    brokerSymbol: gate.market.brokerSymbol,
+                    provider: gate.market.provider,
+                    supplementary: gate.supplementary,
+                  });
+              }
+              const read = () => requestBrokerRead(deps.prisma, run.userId, args, context.signal);
+              let result: unknown;
+              try {
+                result = await read();
+              } catch (error) {
+                const failure = brokerReadFailure(error);
+                if (
+                  (failure.code === "TIMEOUT" || failure.code === "PROVIDER_UNAVAILABLE") &&
+                  ["quote", "candles", "specification"].includes(operation)
+                ) {
+                  await new Promise<void>((resolve) => setTimeout(resolve, 400));
+                  result = await read();
+                } else throw error;
+              }
+              if (["account", "positions", "orders"].includes(operation))
+                await markRunAccountRead(deps.prisma, run.id);
+              return finish(presentBrokerRead(args, result, supplementary));
             } catch (error) {
               return finish(
                 name === "broker_read"

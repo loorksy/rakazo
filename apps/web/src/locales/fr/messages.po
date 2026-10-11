@@ -269,6 +269,14 @@ msgstr "Libellé du compte"
 msgid "Account name"
 msgstr ""
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Account read allowed"
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Account read is not granted"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx
 msgid "Accounts"
 msgstr "Comptes"
@@ -633,6 +641,10 @@ msgstr "Arguments"
 msgid "Artifacts"
 msgstr "Artefacts"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Ask"
+msgstr ""
+
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx
 msgid "Ask before {0}"
@@ -794,6 +806,10 @@ msgstr ""
 #: src/pages/shell/bot-credentials.tsx
 msgid "Bearer token"
 msgstr "Jeton porteur"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Bid"
+msgstr ""
 
 #: src/pages/SettingsOverlay.tsx
 msgid "Billing"
@@ -1326,6 +1342,7 @@ msgid "Connect Treg"
 msgstr "Connecter Treg"
 
 #: src/components/integrations/IntegrationSetup.tsx
+#: src/components/trading/TradingCardView.tsx
 #: src/pages/McpOAuthCallback.tsx
 #: src/pages/MemorySettingsOverlay.tsx
 #: src/pages/ModelSettingsOverlay.tsx
@@ -2172,6 +2189,7 @@ msgid "Disconnect {disconnectName}?"
 msgstr ""
 
 #: src/components/chart/CloudChartPanel.tsx
+#: src/components/trading/TradingCardView.tsx
 msgid "Disconnected"
 msgstr ""
 
@@ -2352,12 +2370,24 @@ msgstr "Saisissez un nombre entier de 1 à 1000 pour la limite d'images."
 msgid "Enter an API key before testing."
 msgstr "Saisissez une clé API avant de tester."
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Entry"
+msgstr ""
+
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Entry timing"
 msgstr ""
 
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Environment key"
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Estimated loss"
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Estimated profit"
 msgstr ""
 
 #: src/pages/ExternalConversationSettings.tsx
@@ -2393,6 +2423,10 @@ msgstr "Chaque mois"
 msgid "Every week"
 msgstr "Chaque semaine"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Execute"
+msgstr ""
+
 #: src/components/TradingAccountAccess.tsx
 msgid "Execution"
 msgstr ""
@@ -2403,6 +2437,10 @@ msgstr ""
 
 #: src/pages/OwnerSettingsPanels.tsx
 msgid "Execution discipline"
+msgstr ""
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Execution stays on the trusted financial path. This card cannot place an order."
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx
@@ -3612,6 +3650,7 @@ msgid "Open <0>{0}</0> to finish signing in."
 msgstr ""
 
 #: src/components/chart/CloudChartPanel.tsx
+#: src/components/trading/TradingCardView.tsx
 msgid "Open chart"
 msgstr ""
 
@@ -3794,6 +3833,10 @@ msgstr "Plugin"
 msgid "Position limit"
 msgstr ""
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Position size is unavailable without account read."
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx
 msgid "POST to"
 msgstr "POST vers"
@@ -3810,6 +3853,10 @@ msgstr "Aperçu de {0}"
 #: src/pages/Artifacts.tsx
 msgid "Preview isn't available for this file type — download it to view it."
 msgstr "L'aperçu n'est pas disponible pour ce type de fichier — téléchargez-le pour le consulter."
+
+#: src/components/trading/TradingCardView.tsx
+msgid "Price"
+msgstr ""
 
 #: src/pages/shell/bot-panel.tsx
 msgid "Private"
@@ -4190,6 +4237,10 @@ msgstr "Vérifiez les paramètres du fournisseur et testez à nouveau."
 msgid "Revoke"
 msgstr "Révoquer"
 
+#: src/components/trading/TradingCardView.tsx
+msgid "Risk / reward"
+msgstr ""
+
 #: src/components/TradingMandateCard.tsx
 msgid "Risk-increase permissions"
 msgstr ""
@@ -4464,6 +4515,7 @@ msgid "Server URL"
 msgstr "URL du serveur"
 
 #: src/components/call/CallCard.tsx
+#: src/components/chart/CloudChartPanel.tsx
 #: src/pages/MessagingSettingsOverlay.tsx
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/Shell.tsx
@@ -4686,6 +4738,7 @@ msgstr ""
 msgid "Steps"
 msgstr "Étapes"
 
+#: src/components/trading/TradingCardView.tsx
 #: src/pages/Shell.tsx
 msgid "Stop"
 msgstr "Arrêter"
@@ -4762,6 +4815,7 @@ msgstr "Basculement en cours…"
 msgid "System"
 msgstr "Système"
 
+#: src/components/trading/TradingCardView.tsx
 #: src/components/TradingMandateCard.tsx
 msgid "Target"
 msgstr ""
@@ -4912,6 +4966,10 @@ msgstr "Cela supprime définitivement votre compte et vos données."
 #: src/pages/shell/dialogs.tsx
 msgid "This permanently removes every message and stops current work. The chat remains available."
 msgstr "Ceci supprime définitivement tous les messages et arrête les travaux en cours. La conversation reste disponible."
+
+#: src/components/trading/TradingCardView.tsx
+msgid "This preview changed. The previous approval no longer applies."
+msgstr ""
 
 #: src/lib/model-connection-preflight.ts
 msgid "This provider cannot be tested without saving."
@@ -5236,6 +5294,10 @@ msgstr "Version"
 #: src/pages/RoutineRunHistory.tsx
 msgid "View chat"
 msgstr "Voir la conversation"
+
+#: src/components/trading/TradingCardView.tsx
+msgid "View report"
+msgstr ""
 
 #: src/pages/SettingsOverlay.tsx
 #: src/pages/Shell.tsx
