@@ -5620,13 +5620,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   where: { id: accountId, revokedAt: null },
                   select: { provider: true },
                 });
+                if (operation !== "instrument_pin") {
+                  const existing = await readRunMarket(deps.prisma, run.id);
+                  if (!existing)
+                    return finish({
+                      error:
+                        "Call instrument_pin with one instrumentId from instrument_search before reading quotes, candles, or specifications.",
+                      code: "INVALID_REQUEST",
+                    });
+                }
                 const gate = await pinRunMarket(deps.prisma, {
                   runId: run.id,
                   accountId,
                   instrumentId: instrument.id,
                   brokerSymbol: instrument.brokerSymbol,
                   provider: connection?.provider ?? "broker",
-                  supplementary,
+                  supplementary: operation === "instrument_pin" ? false : supplementary,
                 });
                 if (!gate.ok) return finish({ error: gate.message, code: "INVALID_REQUEST" });
                 if (operation === "instrument_pin")
@@ -5636,7 +5645,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     instrumentId: gate.market.instrumentId,
                     brokerSymbol: gate.market.brokerSymbol,
                     provider: gate.market.provider,
-                    supplementary: gate.supplementary,
+                    supplementary: false,
                   });
               }
               const read = () => requestBrokerRead(deps.prisma, run.userId, args, context.signal);
