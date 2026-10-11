@@ -15,6 +15,10 @@ vi.mock("../../lib/rpc", () => ({
       list: vi.fn().mockResolvedValue([]),
     },
     me: vi.fn().mockResolvedValue(null),
+    trading: {
+      accountAccess: vi.fn().mockResolvedValue([]),
+      setAccountAccess: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 vi.mock("@lingui/react/macro", () => {
