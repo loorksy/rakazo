@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import type { BrokerEvent, BrokerProvider, BrokerReadSession } from "@rakazo/adapter-kit";
-import { BrokerQuoteSchema, TradingCapabilitiesSchema } from "@rakazo/contracts";
+import { BrokerQuoteSchema, CloudChartSchema, TradingCapabilitiesSchema } from "@rakazo/contracts";
+import { selectPlaybook } from "@rakazo/core";
 import {
   claimBrokerSession,
   createDb,
@@ -13,10 +14,11 @@ import {
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { followBrokerData } from "./broker-stream.js";
 import { BrokerConnectionSupervisor } from "./broker-supervisor.js";
+import { CloudCharts } from "./cloud-charts.js";
 import { InMemoryRealtimeFanout } from "./realtime.js";
 import { withSecretPersistence } from "./secret-persistence.js";
 import { EncryptedSecretStore } from "./secrets.js";
-import { TradingConnections } from "./trading-connections.js";
+import { requestBrokerRead, TradingConnections } from "./trading-connections.js";
 
 const databaseUrl = process.env.BROKER_TEST_DATABASE_URL;
 const suite = databaseUrl ? describe.sequential : describe.skip;
@@ -31,7 +33,7 @@ suite("protected broker sessions (PostgreSQL)", () => {
   const supervisors: BrokerConnectionSupervisor[] = [];
   const reset = async () =>
     db.prisma
-      .$executeRaw`TRUNCATE market_watches, organization, trading_connections, broker_session_leases, broker_read_requests, broker_instruments, broker_market_subscriptions, deployment_settings CASCADE`;
+      .$executeRaw`TRUNCATE cloud_charts, market_watches, organization, trading_connections, broker_session_leases, broker_read_requests, broker_instruments, broker_market_subscriptions, deployment_settings CASCADE`;
   beforeAll(async () => {
     if (!databaseUrl || !new URL(databaseUrl).pathname.endsWith("_test"))
       throw new Error("Dedicated fixture database ending _test required");
@@ -519,8 +521,8 @@ suite("protected broker sessions (PostgreSQL)", () => {
     const f = providerFixture();
     await f.supervisor.tick();
     await f.supervisor.drain();
-    const instrument = await db.prisma.brokerInstrument.create({
-      data: { accountId, brokerSymbol: "GOLD.a", displayName: "Gold" },
+    const instrument = await db.prisma.brokerInstrument.findFirstOrThrow({
+      where: { accountId, brokerSymbol: "GOLD.a" },
     });
     const request = () =>
       db.prisma.brokerReadRequest.create({
@@ -692,5 +694,122 @@ suite("protected broker sessions (PostgreSQL)", () => {
     });
     await expect(invalid.next()).rejects.toThrow("INVALID_REQUEST");
     await realtime.close();
+  });
+
+  it("searches the persisted directory and opens the same instrument on a chart", async () => {
+    const symbols = ["EURUSDm", "GBPJPYraw", "XAUUSDm", "BTCUSDTm", "NAS100", "USOIL"];
+    for (const brokerSymbol of symbols)
+      await db.prisma.brokerInstrument.create({
+        data: { accountId, brokerSymbol, displayName: brokerSymbol },
+      });
+    await db.prisma.tradingConnection.update({
+      where: { id: accountId },
+      data: { instrumentDirectorySyncedAt: initialTime },
+    });
+    const queries = [
+      ["EURUSD", "EURUSDm", "FX"],
+      ["pound yen", "GBPJPYraw", "FX"],
+      ["XAUUSDm", "XAUUSDm", "METAL"],
+      ["bitcoin", "BTCUSDTm", "CRYPTO"],
+      ["NAS100", "NAS100", "INDEX"],
+      ["oil", "USOIL", "ENERGY"],
+    ] as const;
+    for (const [query, brokerSymbol, instrumentClass] of queries) {
+      const found = await requestBrokerRead(db.prisma, owner, {
+        operation: "instrument_search",
+        accountId,
+        query,
+      });
+      expect(found).toMatchObject({
+        accountId,
+        unavailable: false,
+        provenance: { source: "broker", supplementary: false },
+      });
+      const matches = found as {
+        matches: Array<{ instrumentId: string; brokerSymbol: string; instrumentClass: string }>;
+      };
+      expect(matches.matches[0]).toMatchObject({ brokerSymbol, instrumentClass });
+      expect(matches.matches.every((match) => symbols.includes(match.brokerSymbol))).toBe(true);
+      const chart = CloudChartSchema.parse(
+        await new CloudCharts(db.prisma).command(
+          { ownerUserId: owner },
+          {
+            operation: "create",
+            accountId,
+            instrumentId: matches.matches[0]!.instrumentId,
+            timeframe: "1h",
+            scope: "PRIVATE",
+          },
+        ),
+      );
+      expect(chart).toMatchObject({
+        accountId,
+        instrumentId: matches.matches[0]!.instrumentId,
+        brokerSymbol,
+      });
+      const playbook = selectPlaybook({ symbol: brokerSymbol, intent: "RECOMMEND" });
+      expect(playbook.exposure?.instrumentClass).toBe(instrumentClass);
+      expect(playbook.rules.some((rule) => rule.id === "XAU.SAFE_HAVEN")).toBe(
+        instrumentClass === "METAL",
+      );
+    }
+    const listed = await requestBrokerRead(db.prisma, owner, {
+      operation: "instruments",
+      accountId,
+    });
+    expect(Array.isArray(listed)).toBe(true);
+    expect(
+      (listed as Array<{ brokerSymbol: string }>).map((row) => row.brokerSymbol).sort(),
+    ).toEqual([...symbols].sort());
+    const euro = (listed as Array<{ id: string; brokerSymbol: string }>).find(
+      (row) => row.brokerSymbol === "EURUSDm",
+    );
+    if (!euro) throw new Error("Missing euro instrument");
+    const f = providerFixture();
+    const quote = await db.prisma.brokerReadRequest.create({
+      data: {
+        accountId,
+        ownerUserId: owner,
+        operation: "quote",
+        parameters: { accountId, operation: "quote", instrumentId: euro.id },
+        deadline: new Date(initialTime.getTime() + 120000),
+      },
+    });
+    const candles = await db.prisma.brokerReadRequest.create({
+      data: {
+        accountId,
+        ownerUserId: owner,
+        operation: "candles",
+        parameters: {
+          accountId,
+          operation: "candles",
+          instrumentId: euro.id,
+          timeframe: "1h",
+          limit: 20,
+        },
+        deadline: new Date(initialTime.getTime() + 120000),
+      },
+    });
+    await f.supervisor.tick();
+    await f.supervisor.drain();
+    expect(f.session.quote).toHaveBeenCalledWith("EURUSDm", euro.id);
+    expect(f.session.candles).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: "EURUSDm", instrumentId: euro.id }),
+    );
+    expect(
+      (await db.prisma.brokerReadRequest.findUniqueOrThrow({ where: { id: quote.id } })).status,
+    ).toBe("SUCCEEDED");
+    expect(
+      (await db.prisma.brokerReadRequest.findUniqueOrThrow({ where: { id: candles.id } })).status,
+    ).toBe("SUCCEEDED");
+    await expect(
+      requestBrokerRead(db.prisma, owner, {
+        operation: "instrument_search",
+        accountId,
+        query: "EURUSD",
+        symbol: "BTCUSDT",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await db.prisma.cloudChart.deleteMany({ where: { accountId } });
   });
 });

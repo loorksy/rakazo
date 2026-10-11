@@ -82,6 +82,12 @@ export function TradingSettingsPanel() {
         return t`News-candle detection`;
       case "xauusd-behavior":
         return t`Gold-specific behavior`;
+      case "crypto-context":
+        return t`Crypto context`;
+      case "index-context":
+        return t`Index context`;
+      case "energy-context":
+        return t`Energy context`;
       default:
         return id;
     }

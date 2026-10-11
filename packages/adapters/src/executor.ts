@@ -203,6 +203,7 @@ import {
   sameSecretDestination,
   shellCommandEnvironment,
 } from "./bot-secrets.js";
+import { brokerReadFailure, presentBrokerRead } from "./broker-directory.js";
 import { createBrowserProvider } from "./browser-provider-factory.js";
 import {
   browserActFromTool,
@@ -5552,16 +5553,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "trading_accounts" || name === "broker_read") {
             try {
-              const result =
-                name === "trading_accounts"
-                  ? await new TradingConnections(deps.prisma, deps.secretStore).agentCatalog(
-                      run.userId,
-                      run.botId,
-                    )
-                  : await requestBrokerRead(deps.prisma, run.userId, args, context.signal);
-              return finish(result);
+              if (name === "trading_accounts")
+                return finish(
+                  await new TradingConnections(deps.prisma, deps.secretStore).agentCatalog(
+                    run.userId,
+                    run.botId,
+                  ),
+                );
+              const result = await requestBrokerRead(deps.prisma, run.userId, args, context.signal);
+              return finish(presentBrokerRead(args, result));
             } catch (error) {
-              return finish({ error: sanitizedBrokerError(error).message });
+              return finish(
+                name === "broker_read"
+                  ? brokerReadFailure(error)
+                  : { error: sanitizedBrokerError(error).message },
+              );
             }
           }
           if (name === "web_fetch") {

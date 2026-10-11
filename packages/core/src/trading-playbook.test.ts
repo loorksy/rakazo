@@ -69,6 +69,35 @@ describe("trading playbook retrieval", () => {
     expect(instrumentExposure("EURUSDEUR").instrumentClass).toBe("OTHER");
     expect(instrumentExposure("EURUSDEUR").currencies).toEqual([]);
   });
+  it.each([
+    ["BTCUSDTm", "CRYPTO"],
+    ["ETHUSDm", "CRYPTO"],
+    ["NAS100", "INDEX"],
+    ["USTECm", "INDEX"],
+    ["US30m", "INDEX"],
+    ["USOIL", "ENERGY"],
+    ["UKOILm", "ENERGY"],
+  ] as const)(
+    "classifies %s as %s without borrowing another market's rules",
+    (symbol, instrumentClass) => {
+      const selected = selectPlaybook({ symbol, intent: "RECOMMEND" });
+      expect(selected.exposure?.instrumentClass).toBe(instrumentClass);
+      expect(selected.rules.some((rule) => rule.scope === "XAUUSD")).toBe(false);
+      expect(selected.rules.some((rule) => rule.id === "FX.EXPOSURE")).toBe(false);
+      expect(selected.rules.map((rule) => rule.id)).toContain("STRUCTURE.RECLAIM");
+    },
+  );
+
+  it("uses a broker specification to classify an otherwise opaque symbol", () => {
+    expect(
+      instrumentExposure("BROKER-CRYPTO", { baseCurrency: "BTC", quoteCurrency: "USDT" })
+        .instrumentClass,
+    ).toBe("CRYPTO");
+    expect(instrumentExposure("LISTED", { description: "Example share" }).instrumentClass).toBe(
+      "EQUITY",
+    );
+  });
+
   it("does not give EURUSD any gold-only rule", () => {
     const selected = selectPlaybook({ symbol: "EURUSD", intent: "ANALYZE" });
     expect(selected.rules.some((rule) => rule.scope === "XAUUSD")).toBe(false);

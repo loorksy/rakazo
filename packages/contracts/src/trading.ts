@@ -310,6 +310,13 @@ export const BrokerReadCommandSchema = z.discriminatedUnion("operation", [
   z.strictObject({ ...brokerReadIdentity, operation: z.literal("positions") }),
   z.strictObject({ ...brokerReadIdentity, operation: z.literal("orders") }),
   z.strictObject({ ...brokerReadIdentity, operation: z.literal("instruments") }),
+  z.strictObject({
+    ...brokerReadIdentity,
+    operation: z.literal("instrument_search"),
+    query: z.string().trim().min(1).max(80),
+    limit: z.number().int().min(1).max(20).optional(),
+  }),
+  z.strictObject({ ...brokerReadIdentity, operation: z.literal("instrument_refresh") }),
   z.strictObject({ ...brokerReadIdentity, operation: z.literal("capabilities") }),
   z.strictObject({ ...instrumentRead, operation: z.literal("specification") }),
   z.strictObject({ ...instrumentRead, operation: z.literal("quote") }),

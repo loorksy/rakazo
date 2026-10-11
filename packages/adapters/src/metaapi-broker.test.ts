@@ -192,6 +192,24 @@ describe("MetaApi read-only SDK boundary", () => {
     await expect(session.positions()).rejects.toMatchObject({
       message: "Broker operation failed: UNAVAILABLE",
     });
+    f.rpc.getPositions.mockRejectedValueOnce({
+      statusCode: 503,
+      message: "sentinel-must-never-leak",
+    });
+    await expect(session.positions()).rejects.toMatchObject({
+      code: "PROVIDER_UNAVAILABLE",
+      message: "Broker operation failed: PROVIDER_UNAVAILABLE",
+    });
+    f.rpc.getPositions.mockRejectedValueOnce({
+      code: "ETIMEDOUT",
+      message: "sentinel-must-never-leak",
+    });
+    await expect(session.positions()).rejects.toMatchObject({ code: "TIMEOUT" });
+    f.rpc.getPositions.mockRejectedValueOnce({
+      statusCode: 404,
+      message: "sentinel-must-never-leak",
+    });
+    await expect(session.positions()).rejects.toMatchObject({ code: "INVALID_REQUEST" });
     await session.close();
   });
   it("rejects a credential reflected into otherwise normalized Agent-visible account data", async () => {

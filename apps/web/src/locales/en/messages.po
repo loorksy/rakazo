@@ -1974,6 +1974,10 @@ msgid "Cron expression"
 msgstr "Cron expression"
 
 #: src/pages/OwnerSettingsPanels.tsx
+msgid "Crypto context"
+msgstr "Crypto context"
+
+#: src/pages/OwnerSettingsPanels.tsx
 msgid "Current"
 msgstr "Current"
 
@@ -2308,6 +2312,10 @@ msgstr "Encryption key"
 #: src/pages/BillingSettingsPanel.tsx
 msgid "Ends {day}"
 msgstr "Ends {day}"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Energy context"
+msgstr "Energy context"
 
 #: src/pages/ExternalConversationSettings.tsx
 msgid "Engage when... Ignore..."
@@ -2719,6 +2727,10 @@ msgstr "Inactive"
 #: src/pages/shell/message-cards.tsx
 msgid "Inbox & email"
 msgstr "Inbox & email"
+
+#: src/pages/OwnerSettingsPanels.tsx
+msgid "Index context"
+msgstr "Index context"
 
 #: src/components/chart/CloudChartPanel.tsx
 msgid "Indicator"

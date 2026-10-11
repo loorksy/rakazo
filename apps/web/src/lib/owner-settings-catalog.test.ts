@@ -64,6 +64,9 @@ const ownerSettingsLabels = [
   "Entry timing",
   "Retests",
   "Gold-specific behavior",
+  "Crypto context",
+  "Index context",
+  "Energy context",
   "Only applied to gold instruments",
   "News protection",
   "Rules are selected contextually. They are not all sent on every Agent turn.",
@@ -105,9 +108,7 @@ describe("owner settings catalogs", () => {
     expect(i18n._("M1co_O")).toBe("Configured");
     for (const message of ownerSettingsLabels) {
       const id = productionMessageId(message);
-      const rendered = message.includes("{0}")
-        ? i18n._({ id, values: { 0: 7 } })
-        : i18n._(id);
+      const rendered = message.includes("{0}") ? i18n._({ id, values: { 0: 7 } }) : i18n._(id);
       expect(rendered).toBe(message.includes("{0}") ? message.replace("{0}", "7") : message);
       expect(rendered).not.toBe(id);
     }

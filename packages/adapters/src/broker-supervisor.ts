@@ -20,7 +20,7 @@ import {
   MarketConditionSchema,
   SimulationBookStateSchema,
 } from "@rakazo/contracts";
-import { observeMarketCondition } from "@rakazo/core";
+import { instrumentDirectoryFresh, observeMarketCondition } from "@rakazo/core";
 import type { BrokerLeaseToken, PrismaClient } from "@rakazo/db";
 import {
   claimBrokerSession,
@@ -79,6 +79,7 @@ interface Slot {
   simulationOverflow: boolean;
   financialDemands: Set<string>;
   providerHistory: BrokerHistoryCache;
+  directoryGeneration?: number;
 }
 
 /** Account socket lifecycle inside the existing Worker; not an agent runtime or job scheduler. */
@@ -311,6 +312,9 @@ export class BrokerConnectionSupervisor {
         await this.observeLive(slot, slot.session);
         await new ProviderDispatcher(this.prisma, this.now).tick(token, slot.session);
       }
+      await this.maintainDirectory(slot).catch((error: unknown) => {
+        if (error instanceof StaleBrokerSessionError) throw error;
+      });
       const requests = await this.prisma.brokerReadRequest.findMany({
         where: { accountId: token.accountId, status: "PENDING" },
         orderBy: { createdAt: "asc" },
@@ -329,7 +333,7 @@ export class BrokerConnectionSupervisor {
         );
         if (!claimed.count) continue;
         try {
-          if (request.deadline <= this.now()) throw new BrokerProviderError("UNAVAILABLE");
+          if (request.deadline <= this.now()) throw new BrokerProviderError("TIMEOUT");
           const command = BrokerReadCommandSchema.parse(request.parameters);
           const connection = await this.prisma.tradingConnection.findUniqueOrThrow({
             where: { id: token.accountId },
@@ -451,6 +455,117 @@ export class BrokerConnectionSupervisor {
       history.missing,
     );
   }
+  private async directoryIsFresh(accountId: string, generation: number, synced?: number) {
+    if (synced !== generation) return false;
+    const row = await this.prisma.tradingConnection.findUnique({
+      where: { id: accountId },
+      select: { instrumentDirectorySyncedAt: true },
+    });
+    return instrumentDirectoryFresh(row?.instrumentDirectorySyncedAt ?? null, this.now());
+  }
+  private async maintainDirectory(slot: Slot) {
+    if (!slot.session) return;
+    if (
+      await this.directoryIsFresh(
+        slot.token.accountId,
+        slot.token.generation,
+        slot.directoryGeneration,
+      )
+    )
+      return;
+    await this.syncDirectory(slot);
+  }
+  /** One bounded write per batch. Search reads the persisted rows and does not wait on this. */
+  private async syncDirectory(slot: Slot) {
+    const session = slot.session;
+    if (!session) throw new BrokerProviderError("DISCONNECTED");
+    const symbols = await session.symbols();
+    if (symbols.length === 0) throw new BrokerProviderError("PROVIDER_UNAVAILABLE");
+    const accountId = slot.token.accountId;
+    for (let offset = 0; offset < symbols.length; offset += 100) {
+      const batch = symbols.slice(offset, offset + 100);
+      await withBrokerSessionFence(
+        this.prisma,
+        slot.token,
+        async (tx) => {
+          const existing = await tx.brokerInstrument.findMany({
+            where: { accountId, brokerSymbol: { in: batch } },
+            select: { brokerSymbol: true },
+          });
+          const known = new Set(existing.map((row) => row.brokerSymbol));
+          const missing = batch.filter((brokerSymbol) => !known.has(brokerSymbol));
+          if (missing.length)
+            await tx.brokerInstrument.createMany({
+              data: missing.map((brokerSymbol) => ({
+                accountId,
+                brokerSymbol,
+                displayName: brokerSymbol,
+              })),
+            });
+          await tx.brokerInstrument.updateMany({
+            where: { accountId, brokerSymbol: { in: batch }, active: false },
+            data: { active: true },
+          });
+        },
+        this.now(),
+      );
+    }
+    await withBrokerSessionFence(
+      this.prisma,
+      slot.token,
+      async (tx) => {
+        await tx.brokerInstrument.updateMany({
+          where: { accountId, brokerSymbol: { notIn: symbols } },
+          data: { active: false },
+        });
+        await tx.tradingConnection.update({
+          where: { id: accountId },
+          data: { instrumentDirectorySyncedAt: this.now() },
+        });
+      },
+      this.now(),
+    );
+    slot.directoryGeneration = slot.token.generation;
+  }
+  private async readDirectory(accountId: string) {
+    const rows = await this.prisma.brokerInstrument.findMany({
+      where: { accountId, active: true },
+      orderBy: { brokerSymbol: "asc" },
+      take: 10000,
+      select: {
+        id: true,
+        accountId: true,
+        brokerSymbol: true,
+        displayName: true,
+        verifiedAt: true,
+      },
+    });
+    return z.json().parse(
+      rows.map((instrument) => ({
+        ...instrument,
+        verifiedAt: instrument.verifiedAt?.toISOString() ?? null,
+      })),
+    );
+  }
+  /** Bounded backoff for a transient market read. Not an agent retry loop. */
+  private async readMarket<T>(operation: () => Promise<T>): Promise<T> {
+    const delays = [0, 200, 600];
+    let last: unknown;
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      const delay = delays[attempt] ?? 0;
+      if (delay > 0) await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      try {
+        return await operation();
+      } catch (error) {
+        last = error;
+        if (error instanceof StaleBrokerSessionError) throw error;
+        const code = sanitizedBrokerError(error).code;
+        if (code !== "TIMEOUT" && code !== "PROVIDER_UNAVAILABLE" && code !== "UNAVAILABLE")
+          throw error;
+      }
+    }
+    throw last;
+  }
   private async executeRead(slot: Slot, command: z.infer<typeof BrokerReadCommandSchema>) {
     const session = slot.session;
     if (!session) throw new BrokerProviderError("DISCONNECTED");
@@ -458,66 +573,24 @@ export class BrokerConnectionSupervisor {
     if (command.operation === "positions") return z.json().parse(await session.positions());
     if (command.operation === "orders") return z.json().parse(await session.orders());
     if (command.operation === "capabilities") return z.json().parse(await session.capabilities());
-    if (command.operation === "instruments") {
-      const symbols = await session.symbols();
-      const result: Array<{
-        id: string;
-        accountId: string;
-        brokerSymbol: string;
-        displayName: string;
-        verifiedAt: string | null;
-      }> = [];
-      // Bound each transaction: large broker directories must not hold a lock beyond a lease lifetime.
-      for (let offset = 0; offset < symbols.length; offset += 100) {
-        const rows = await withBrokerSessionFence(
-          this.prisma,
-          slot.token,
-          async (tx) => {
-            const batch = [];
-            for (const symbol of symbols.slice(offset, offset + 100))
-              batch.push(
-                await tx.brokerInstrument.upsert({
-                  where: {
-                    accountId_brokerSymbol: { accountId: command.accountId, brokerSymbol: symbol },
-                  },
-                  create: {
-                    accountId: command.accountId,
-                    brokerSymbol: symbol,
-                    displayName: symbol,
-                  },
-                  update: { active: true },
-                  select: {
-                    id: true,
-                    accountId: true,
-                    brokerSymbol: true,
-                    displayName: true,
-                    verifiedAt: true,
-                  },
-                }),
-              );
-            return batch;
-          },
-          this.now(),
-        );
-        result.push(
-          ...rows.map((instrument) => ({
-            ...instrument,
-            verifiedAt: instrument.verifiedAt?.toISOString() ?? null,
-          })),
-        );
+    if (command.operation === "instruments" || command.operation === "instrument_refresh") {
+      if (
+        !(await this.directoryIsFresh(
+          command.accountId,
+          slot.token.generation,
+          slot.directoryGeneration,
+        ))
+      )
+        await this.syncDirectory(slot);
+      if (command.operation === "instrument_refresh") {
+        const count = await this.prisma.brokerInstrument.count({
+          where: { accountId: command.accountId, active: true },
+        });
+        return { accountId: command.accountId, refreshed: true, count };
       }
-      await withBrokerSessionFence(
-        this.prisma,
-        slot.token,
-        (tx) =>
-          tx.brokerInstrument.updateMany({
-            where: { accountId: command.accountId, brokerSymbol: { notIn: symbols } },
-            data: { active: false },
-          }),
-        this.now(),
-      );
-      return z.json().parse(result);
+      return this.readDirectory(command.accountId);
     }
+    if (command.operation === "instrument_search") throw new BrokerProviderError("INVALID_REQUEST");
     const instrument = await this.prisma.brokerInstrument.findFirst({
       where: { id: command.instrumentId, accountId: command.accountId, active: true },
     });
@@ -568,7 +641,9 @@ export class BrokerConnectionSupervisor {
       return z.json().parse(facts);
     }
     if (command.operation === "specification") {
-      const specification = await session.specification(instrument.brokerSymbol);
+      const specification = await this.readMarket(() =>
+        session.specification(instrument.brokerSymbol),
+      );
       await withBrokerSessionFence(
         this.prisma,
         slot.token,
@@ -590,7 +665,9 @@ export class BrokerConnectionSupervisor {
         symbol: instrument.brokerSymbol,
         expires: this.now().getTime() + 60000,
       });
-      return z.json().parse(await session.quote(instrument.brokerSymbol, instrument.id));
+      return z
+        .json()
+        .parse(await this.readMarket(() => session.quote(instrument.brokerSymbol, instrument.id)));
     }
     const key = JSON.stringify([
       instrument.id,
@@ -600,13 +677,15 @@ export class BrokerConnectionSupervisor {
     ]);
     const cached = slot.history.get(key);
     if (cached && cached.expires > this.now().getTime()) return z.json().parse(cached.candles);
-    const candles = await session.candles({
-      symbol: instrument.brokerSymbol,
-      instrumentId: instrument.id,
-      timeframe: command.timeframe,
-      before: command.before,
-      limit: command.limit,
-    });
+    const candles = await this.readMarket(() =>
+      session.candles({
+        symbol: instrument.brokerSymbol,
+        instrumentId: instrument.id,
+        timeframe: command.timeframe,
+        before: command.before,
+        limit: command.limit,
+      }),
+    );
     // Shared by observers, indicators and visual inspection in this account's fenced session.
     // Historical pages are rebuildable; live pages expire rapidly and never authorize execution.
     slot.history.delete(key);

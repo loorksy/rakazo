@@ -95,6 +95,24 @@ describe("hard financial tool boundary", () => {
       }).decision,
     ).toBe("ALLOW");
   });
+  it.each([
+    "instruments",
+    "instrument_search",
+    "specification",
+    "quote",
+    "candles",
+    "capabilities",
+  ])("allows broker market data %s without account-read permission", (operation) => {
+    expect(
+      financialToolPolicy({
+        tradingProduct: true,
+        toolName: "broker_read",
+        viaConnector: false,
+        operation,
+        accountReadsAllowed: false,
+      }).decision,
+    ).toBe("ALLOW");
+  });
   it.each(["account", "positions", "orders", "preflight"])(
     "does not delegate %s authority to research peers",
     (operation) => {

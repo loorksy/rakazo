@@ -1,11 +1,18 @@
 import { financialDecimal, financialUnits } from "./financial-decimal.js";
 
 /** Shared product knowledge. Not a Bot prompt and not financial authority. */
-export const TRADING_PLAYBOOK_VERSION = "2026.10.10";
+export const TRADING_PLAYBOOK_VERSION = "2026.10.11";
 
 export const PLAYBOOK_INTENTS = ["ANALYZE", "RECOMMEND", "MONITOR", "MANAGE"] as const;
 export type PlaybookIntent = (typeof PLAYBOOK_INTENTS)[number];
-export type PlaybookScope = "UNIVERSAL" | "NORMALIZED" | "FX" | "XAUUSD";
+export type PlaybookScope =
+  | "UNIVERSAL"
+  | "NORMALIZED"
+  | "FX"
+  | "XAUUSD"
+  | "CRYPTO"
+  | "INDEX"
+  | "ENERGY";
 export type PlaybookNews = "NONE" | "PRE" | "RELEASE" | "POST" | "UNSCHEDULED" | "ANY";
 
 export interface PlaybookRule {
@@ -27,10 +34,20 @@ export interface PlaybookRule {
   guidance: string;
 }
 
+export type InstrumentClass =
+  | "FX"
+  | "METAL"
+  | "CRYPTO"
+  | "INDEX"
+  | "ENERGY"
+  | "COMMODITY"
+  | "EQUITY"
+  | "OTHER";
+
 export interface InstrumentExposure {
   /** Broker root symbol, suffixes removed. The broker symbol stays authoritative for execution. */
   root: string;
-  instrumentClass: "FX" | "METAL" | "OTHER";
+  instrumentClass: InstrumentClass;
   currencies: string[];
   themes: string[];
 }
@@ -78,6 +95,64 @@ const METALS: Record<string, { currencies: string[]; themes: string[] }> = {
 };
 
 const PAIR_CODES = ["USD", "EUR", "GBP", "JPY", "CHF", "AUD", "NZD", "CAD", "CNH", "XAU", "XAG"];
+/** Known crypto bases. A match never invents a broker symbol. */
+const CRYPTO_BASES = new Set([
+  "AAVE",
+  "ADA",
+  "APT",
+  "ARB",
+  "ATOM",
+  "AVAX",
+  "BCH",
+  "BNB",
+  "BTC",
+  "DOGE",
+  "DOT",
+  "ETC",
+  "ETH",
+  "FIL",
+  "INJ",
+  "LINK",
+  "LTC",
+  "NEAR",
+  "OP",
+  "PEPE",
+  "SHIB",
+  "SOL",
+  "SUI",
+  "TON",
+  "TRX",
+  "UNI",
+  "XLM",
+  "XRP",
+]);
+const CRYPTO_QUOTES = ["USDT", "USDC", "USD", "EUR", "BTC", "ETH", "JPY", "GBP"];
+const INDEX_ROOTS = [
+  "AUS200",
+  "DE30",
+  "DE40",
+  "DJ30",
+  "EU50",
+  "FRA40",
+  "GER30",
+  "GER40",
+  "HK50",
+  "JPN225",
+  "NAS100",
+  "NASDAQ",
+  "NI225",
+  "SP500",
+  "SPX500",
+  "STOXX50",
+  "UK100",
+  "US100",
+  "US2000",
+  "US30",
+  "US500",
+  "USTEC",
+];
+const ENERGY_ROOTS = ["BRENT", "NATGAS", "UKOIL", "USOIL", "WTI", "XBRUSD", "XNGUSD", "XTIUSD"];
+const COMMODITY_ROOTS = ["COCOA", "COFFEE", "COPPER", "CORN", "SOYBEAN", "SUGAR", "WHEAT"];
 /** Short broker decorations around a pair. Not a list of tradable symbols. */
 const AFFIXES = new Set([
   "",
@@ -102,7 +177,23 @@ function normalizeCurrency(value: string | null | undefined): string | null {
   const code = value?.trim().toUpperCase() ?? "";
   if (code === "GOLD") return "XAU";
   if (code === "SILVER") return "XAG";
+  if (PAIR_CODES.includes(code) || CRYPTO_BASES.has(code) || CRYPTO_QUOTES.includes(code))
+    return code;
   return /^[A-Z]{3}$/.test(code) ? code : null;
+}
+
+function decoration(rest: string): boolean {
+  if (AFFIXES.has(rest)) return true;
+  return /^[0-9]{1,4}(?:M|PRO|RAW|ECN|I|R|S|X|Z)?$/.test(rest);
+}
+
+function rooted(letters: string, roots: readonly string[]): string | null {
+  const ordered = [...roots].sort((left, right) => right.length - left.length);
+  for (const root of ordered) {
+    if (!letters.startsWith(root)) continue;
+    if (decoration(letters.slice(root.length))) return root;
+  }
+  return null;
 }
 
 function fromPair(root: string, base: string, quote: string): InstrumentExposure {
@@ -121,12 +212,28 @@ function fromPair(root: string, base: string, quote: string): InstrumentExposure
       ],
     };
   }
+  if (CRYPTO_BASES.has(base)) {
+    return {
+      root,
+      instrumentClass: "CRYPTO",
+      currencies: [base, quote],
+      themes: ["crypto", ...(CURRENCY_CONTEXT[quote]?.themes ?? [])],
+    };
+  }
   return {
     root,
     instrumentClass: "FX",
     currencies: [base, quote],
     themes: [...(CURRENCY_CONTEXT[base]?.themes ?? []), ...(CURRENCY_CONTEXT[quote]?.themes ?? [])],
   };
+}
+
+function fromClass(
+  root: string,
+  instrumentClass: InstrumentClass,
+  themes: string[],
+): InstrumentExposure {
+  return { root, instrumentClass, currencies: [], themes };
 }
 
 /**
@@ -136,32 +243,53 @@ function fromPair(root: string, base: string, quote: string): InstrumentExposure
  */
 export function instrumentExposure(
   symbol: string,
-  specification?: { baseCurrency?: string | null; quoteCurrency?: string | null },
+  specification?: {
+    baseCurrency?: string | null;
+    quoteCurrency?: string | null;
+    description?: string | null;
+  },
 ): InstrumentExposure {
   const root = symbol.split(/[^A-Za-z0-9]/)[0]?.toUpperCase() ?? "";
   const specifiedBase = normalizeCurrency(specification?.baseCurrency);
   const specifiedQuote = normalizeCurrency(specification?.quoteCurrency);
   if (specifiedBase && specifiedQuote)
     return fromPair(root || symbol.toUpperCase(), specifiedBase, specifiedQuote);
-  const letters = symbol.toUpperCase().replace(/[^A-Z]/g, "");
-  const matches: Array<{ base: string; quote: string; affix: string }> = [];
+  const letters = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const matches: Array<{ base: string; quote: string }> = [];
   for (let index = 0; index + 6 <= letters.length; index++) {
     const base = letters.slice(index, index + 3);
     const quote = letters.slice(index + 3, index + 6);
     if (!PAIR_CODES.includes(base) || !PAIR_CODES.includes(quote) || base === quote) continue;
-    const affix = `${letters.slice(0, index)} ${letters.slice(index + 6)}`;
-    const [prefix, suffix] = affix.split(" ");
-    if (AFFIXES.has(prefix ?? "") && AFFIXES.has(suffix ?? ""))
-      matches.push({ base, quote, affix });
+    const prefix = letters.slice(0, index);
+    const suffix = letters.slice(index + 6);
+    if (decoration(prefix) && decoration(suffix)) matches.push({ base, quote });
   }
-  if (letters.startsWith("GOLD") && AFFIXES.has(letters.slice(4)))
+  if (letters.startsWith("GOLD") && decoration(letters.slice(4)))
     return fromPair(root || letters, "XAU", "USD");
-  if (letters.startsWith("SILVER") && AFFIXES.has(letters.slice(6)))
+  if (letters.startsWith("SILVER") && decoration(letters.slice(6)))
     return fromPair(root || letters, "XAG", "USD");
   const unique = [
     ...new Map(matches.map((match) => [`${match.base}${match.quote}`, match])).values(),
   ];
   if (unique.length === 1) return fromPair(root || letters, unique[0]!.base, unique[0]!.quote);
+  const bases = [...CRYPTO_BASES].sort((left, right) => right.length - left.length);
+  for (const base of bases) {
+    if (!letters.startsWith(base)) continue;
+    const rest = letters.slice(base.length);
+    for (const quote of CRYPTO_QUOTES) {
+      if (!rest.startsWith(quote)) continue;
+      if (decoration(rest.slice(quote.length))) return fromPair(root || letters, base, quote);
+    }
+  }
+  const index = rooted(letters, INDEX_ROOTS);
+  if (index) return fromClass(index, "INDEX", ["index", "session"]);
+  const energy = rooted(letters, ENERGY_ROOTS);
+  if (energy) return fromClass(energy, "ENERGY", ["energy"]);
+  const commodity = rooted(letters, COMMODITY_ROOTS);
+  if (commodity) return fromClass(commodity, "COMMODITY", ["commodity"]);
+  const described = specification?.description?.toLowerCase() ?? "";
+  if (/\b(equity|stock|share)\b/.test(described))
+    return fromClass(root || letters, "EQUITY", ["equity"]);
   return { root: root || letters, instrumentClass: "OTHER", currencies: [], themes: [] };
 }
 
@@ -211,7 +339,11 @@ export function newsPhaseForCurrencies(
 
 export function macroExposure(
   symbol: string,
-  specification?: { baseCurrency?: string | null; quoteCurrency?: string | null },
+  specification?: {
+    baseCurrency?: string | null;
+    quoteCurrency?: string | null;
+    description?: string | null;
+  },
 ) {
   const exposure = instrumentExposure(symbol, specification);
   return exposure.currencies.map((currency) => ({
@@ -473,6 +605,38 @@ const GOLD: PlaybookRule[] = [
   }),
 ];
 
+const CRYPTO: PlaybookRule[] = [
+  rule("CRYPTO.OWN_MARKET", "volatility", "crypto-context", "CRYPTO", {
+    priority: 40,
+    guidance:
+      "Use this instrument's own volatility and trading clock. A crypto market is not an FX pair and not a metal; do not import those distances or macro maps.",
+  }),
+  rule("CRYPTO.QUOTE_UNIT", "macro", "crypto-context", "CRYPTO", {
+    guidance:
+      "The quote currency is the pricing unit. A USD event can matter for a USD quote, but it is not a two-currency FX setup.",
+  }),
+];
+
+const INDEX: PlaybookRule[] = [
+  rule("INDEX.CASH_SESSION", "session", "index-context", "INDEX", {
+    priority: 40,
+    guidance:
+      "The cash open, the overnight gap, and the cash close are the relevant session structure. Do not treat an index as a currency pair.",
+  }),
+  rule("INDEX.RANGE", "volatility", "index-context", "INDEX", {
+    guidance:
+      "Index volatility clusters around the cash open and the home market's data. Measure extension from this symbol's own range.",
+  }),
+];
+
+const ENERGY: PlaybookRule[] = [
+  rule("ENERGY.SUPPLY", "macro", "energy-context", "ENERGY", {
+    priority: 40,
+    guidance:
+      "Inventory, supply, and the producing region's headlines are the relevant fundamental context. Do not apply metal-only or FX-pair rules.",
+  }),
+];
+
 const NEWS: PlaybookRule[] = [
   rule("NEWS.FREEZE", "news", null, "UNIVERSAL", {
     priority: 95,
@@ -585,6 +749,9 @@ export const TRADING_PLAYBOOK: PlaybookRule[] = [
   ...NORMALIZED,
   ...FX,
   ...GOLD,
+  ...CRYPTO,
+  ...INDEX,
+  ...ENERGY,
   ...NEWS,
 ];
 
@@ -598,6 +765,9 @@ export const PLAYBOOK_GROUPS = [
   ["news-protocol", "News protocol"],
   ["news-candle", "News-candle detection"],
   ["xauusd-behavior", "Gold-specific behavior"],
+  ["crypto-context", "Crypto context"],
+  ["index-context", "Index context"],
+  ["energy-context", "Energy context"],
 ] as const;
 
 export interface PlaybookQuery {
@@ -640,10 +810,10 @@ export function selectPlaybook(query: PlaybookQuery): PlaybookSelection {
       return exposure !== null || !query.symbol;
     if (!exposure) return false;
     if (item.scope === "XAUUSD") return exposure.themes.includes("gold");
-    if (item.scope === "FX") {
-      if (exposure.instrumentClass === "FX") return true;
-      return item.currencies.some((currency) => exposure.currencies.includes(currency));
-    }
+    if (item.scope === "FX") return exposure.instrumentClass === "FX";
+    if (item.scope === "CRYPTO") return exposure.instrumentClass === "CRYPTO";
+    if (item.scope === "INDEX") return exposure.instrumentClass === "INDEX";
+    if (item.scope === "ENERGY") return exposure.instrumentClass === "ENERGY";
     return false;
   });
   const relevance = (item: PlaybookRule) =>

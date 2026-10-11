@@ -405,6 +405,7 @@ describe("graphical computer spec", () => {
         expect(run(":1")).toContain("--enable-unsafe-swiftshader");
         expect(run(":1")).not.toContain("--disable-software-rasterizer");
         expect(run(":1").some((arg) => arg.startsWith("--remote-debugging-port="))).toBe(true);
+        expect(run(":1")).toContain("--remote-allow-origins=*");
         expect(run(":2")).toContain(`--user-data-dir=${home}/.browser-profiles/chromium-screen-2`);
         expect(run(":2")).toContain("--remote-debugging-port=9223");
         for (const display of [8, 9]) {
@@ -420,6 +421,44 @@ describe("graphical computer spec", () => {
         expect(explicit).not.toContain(
           `--user-data-dir=${home}/.browser-profiles/chromium-screen-3`,
         );
+      } finally {
+        rmSync(temp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "drops libnss_wrapper before Chromium so the debugging port can open",
+    () => {
+      const root = path.resolve(import.meta.dirname, "../../computer");
+      const temp = mkdtempSync(path.join(tmpdir(), "rakazo-browser-preload-"));
+      const bin = path.join(temp, "bin");
+      const capture = path.join(temp, "preload");
+      const chromium = path.join(bin, "chromium");
+      mkdirSync(bin);
+      writeFileSync(chromium, '#!/bin/sh\nprintf \'%s\' "$LD_PRELOAD" > "$RAKAZO_TEST_PRELOAD"\n');
+      chmodSync(chromium, 0o755);
+      const run = (preload: string | undefined) => {
+        const env: NodeJS.ProcessEnv = {
+          ...process.env,
+          DISPLAY: ":1",
+          HOME: temp,
+          PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
+          RAKAZO_TEST_PRELOAD: capture,
+        };
+        if (preload === undefined) delete env.LD_PRELOAD;
+        else env.LD_PRELOAD = preload;
+        const result = spawnSync("sh", [path.join(root, "rakazo-browser")], {
+          env,
+          encoding: "utf8",
+        });
+        expect(result.status, result.stderr).toBe(0);
+        return readFileSync(capture, "utf8");
+      };
+      try {
+        expect(run("/usr/local/lib/libnss_wrapper.so")).toBe("");
+        expect(run("/tmp/other.so:/usr/local/lib/libnss_wrapper.so")).toBe("/tmp/other.so");
+        expect(run(undefined)).toBe("");
       } finally {
         rmSync(temp, { recursive: true, force: true });
       }

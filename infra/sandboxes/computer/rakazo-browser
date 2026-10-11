@@ -393,10 +393,29 @@ if [ -d "$ACTUAL_PROFILE" ]; then
   fi
 fi
 
+# The image preloads libnss_wrapper so arbitrary UIDs resolve. Chromium stays
+# up while that library is loaded, and the debugging port never opens.
+if [ -n "${LD_PRELOAD:-}" ]; then
+  _kept=""
+  _rest="$LD_PRELOAD"
+  while [ -n "$_rest" ]; do
+    case "$_rest" in
+      *:*) _entry="${_rest%%:*}"; _rest="${_rest#*:}" ;;
+      *) _entry="$_rest"; _rest="" ;;
+    esac
+    case "$_entry" in
+      *libnss_wrapper.so|"") ;;
+      *) _kept="${_kept:+$_kept:}$_entry" ;;
+    esac
+  done
+  if [ -n "$_kept" ]; then export LD_PRELOAD="$_kept"; else unset LD_PRELOAD; fi
+  unset _kept _rest _entry
+fi
 # This container has no GPU. --disable-gpu keeps Chromium from probing one.
 # WebGL still needs SwiftShader: --disable-software-rasterizer blocks it, and
 # current Chromium allows that fallback only with --enable-unsafe-swiftshader.
-FLAGS="--test-type --no-sandbox --disable-dev-shm-usage --disable-gpu --enable-unsafe-swiftshader --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble --password-store=basic --restore-last-session --start-maximized --remote-debugging-address=127.0.0.1 --remote-debugging-port=$DEBUG_PORT"
+# remote-allow-origins lets the local page controller open the debugging socket.
+FLAGS="--test-type --no-sandbox --disable-dev-shm-usage --disable-gpu --enable-unsafe-swiftshader --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble --password-store=basic --restore-last-session --start-maximized --remote-debugging-address=127.0.0.1 --remote-debugging-port=$DEBUG_PORT --remote-allow-origins=*"
 if [ "$USER_DATA_DIR_SET" -eq 0 ]; then
   exec "$BIN" $FLAGS --user-data-dir="$PROFILE" "$@"
 fi

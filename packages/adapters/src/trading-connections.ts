@@ -9,7 +9,14 @@ import {
 import type { PrismaClient } from "@rakazo/db";
 import { listTradingAccountAccess, Prisma, requireTradingOwner } from "@rakazo/db";
 import { z } from "zod";
-import { BrokerProviderError } from "./metaapi-normalize.js";
+import {
+  brokerInstrumentDirectory,
+  brokerInstrumentSearch,
+  emptyDirectorySearch,
+  enqueueDirectoryRefresh,
+  loadBrokerDirectory,
+} from "./broker-directory.js";
+import { BrokerProviderError, publicBrokerFailureCode } from "./metaapi-normalize.js";
 import { persistPreparedSecret } from "./secret-persistence.js";
 
 const accountCurrency = z.string().regex(/^[A-Za-z]{3,8}$/);
@@ -199,6 +206,23 @@ export class TradingConnections {
   }
 }
 
+async function pollBrokerRead(
+  prisma: PrismaClient,
+  id: string,
+  deadline: Date,
+  signal?: AbortSignal,
+): Promise<z.infer<ReturnType<typeof z.json>>> {
+  while (Date.now() < deadline.getTime() && !signal?.aborted) {
+    const state = await prisma.brokerReadRequest.findUnique({ where: { id } });
+    if (state?.status === "SUCCEEDED") return z.json().parse(state.result);
+    if (state?.status === "FAILED")
+      throw new BrokerProviderError(publicBrokerFailureCode(state.failureCode));
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+  if (signal?.aborted) throw new BrokerProviderError("UNAVAILABLE");
+  throw new BrokerProviderError("TIMEOUT");
+}
+
 /** API/tools enqueue normalized read commands; only the existing Worker owns SDK sessions. */
 export async function requestBrokerRead(
   prisma: PrismaClient,
@@ -207,12 +231,76 @@ export async function requestBrokerRead(
   signal?: AbortSignal,
 ): Promise<z.infer<ReturnType<typeof z.json>>> {
   if (signal?.aborted) throw new BrokerProviderError("UNAVAILABLE");
-  const command: BrokerReadCommand = BrokerReadCommandSchema.parse(raw);
+  const parsed = BrokerReadCommandSchema.safeParse(raw);
+  if (!parsed.success) throw new BrokerProviderError("INVALID_REQUEST");
+  const command: BrokerReadCommand = parsed.data;
   await requireTradingOwner(prisma, ownerUserId);
   const connection = await prisma.tradingConnection.findFirst({
     where: { id: command.accountId, ownerUserId, revokedAt: null },
   });
   if (!connection) throw new BrokerProviderError("DISCONNECTED");
+  const now = new Date();
+  if (command.operation === "instrument_search") {
+    let directory = await loadBrokerDirectory(prisma, command.accountId, now);
+    if (!directory) throw new BrokerProviderError("DISCONNECTED");
+    if (directory.records.length === 0) {
+      await enqueueDirectoryRefresh(prisma, ownerUserId, command.accountId, now);
+      const deadline = new Date(now.getTime() + 25000);
+      const pending = await prisma.brokerReadRequest.findFirst({
+        where: {
+          accountId: command.accountId,
+          operation: "instrument_refresh",
+          status: { in: ["PENDING", "STARTED"] },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (pending) {
+        try {
+          await pollBrokerRead(prisma, pending.id, deadline, signal);
+        } catch {
+          return z.json().parse(
+            emptyDirectorySearch({
+              accountId: command.accountId,
+              provider: directory.provider,
+              query: command.query,
+              limit: command.limit,
+            }),
+          );
+        }
+      }
+      directory = (await loadBrokerDirectory(prisma, command.accountId, new Date())) ?? directory;
+      if (directory.records.length === 0)
+        return z.json().parse(
+          emptyDirectorySearch({
+            accountId: command.accountId,
+            provider: directory.provider,
+            query: command.query,
+            limit: command.limit,
+          }),
+        );
+    } else if (!directory.fresh) {
+      await enqueueDirectoryRefresh(prisma, ownerUserId, command.accountId, now);
+    }
+    return z.json().parse(
+      brokerInstrumentSearch({
+        accountId: command.accountId,
+        provider: directory.provider,
+        query: command.query,
+        records: directory.records,
+        limit: command.limit,
+        fresh: directory.fresh,
+        syncedAt: directory.syncedAt,
+      }),
+    );
+  }
+  if (command.operation === "instruments") {
+    const directory = await loadBrokerDirectory(prisma, command.accountId, now);
+    if (directory && directory.records.length > 0) {
+      if (!directory.fresh)
+        await enqueueDirectoryRefresh(prisma, ownerUserId, command.accountId, now);
+      return brokerInstrumentDirectory(directory.records);
+    }
+  }
   if (
     "instrumentId" in command &&
     !(await prisma.brokerInstrument.findFirst({
@@ -220,7 +308,7 @@ export async function requestBrokerRead(
     }))
   )
     throw new BrokerProviderError("INVALID_REQUEST");
-  const deadline = new Date(Date.now() + 25000);
+  const deadline = new Date(now.getTime() + 25000);
   const row = await prisma.brokerReadRequest.create({
     data: {
       accountId: command.accountId,
@@ -230,14 +318,5 @@ export async function requestBrokerRead(
       deadline,
     },
   });
-  while (Date.now() < deadline.getTime() && !signal?.aborted) {
-    const state = await prisma.brokerReadRequest.findUnique({ where: { id: row.id } });
-    if (state?.status === "SUCCEEDED") return z.json().parse(state.result);
-    if (state?.status === "FAILED")
-      throw new BrokerProviderError(
-        state.failureCode === "RATE_LIMITED" ? "RATE_LIMITED" : "UNAVAILABLE",
-      );
-    await new Promise<void>((resolve) => setTimeout(resolve, 100));
-  }
-  throw new BrokerProviderError("UNAVAILABLE");
+  return pollBrokerRead(prisma, row.id, deadline, signal);
 }

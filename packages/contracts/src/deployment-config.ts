@@ -112,6 +112,9 @@ export const PlaybookGroupIdSchema = z.enum([
   "news-protocol",
   "news-candle",
   "xauusd-behavior",
+  "crypto-context",
+  "index-context",
+  "energy-context",
 ]);
 export const PlaybookSettingsViewSchema = z.strictObject({
   version: z.string().min(1).max(32),

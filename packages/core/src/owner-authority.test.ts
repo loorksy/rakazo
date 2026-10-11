@@ -53,5 +53,8 @@ describe("single-owner admission contract", () => {
     expect(TRADING_AGENT_OPERATING_CONTRACT).toContain("Simulation");
     expect(TRADING_AGENT_OPERATING_CONTRACT).toContain("trading_accounts");
     expect(TRADING_AGENT_OPERATING_CONTRACT).toContain("does not have account-read permission");
+    expect(TRADING_AGENT_OPERATING_CONTRACT).toContain("instrument_search");
+    expect(TRADING_AGENT_OPERATING_CONTRACT).toContain("another venue");
+    expect(TRADING_AGENT_OPERATING_CONTRACT).toContain("supplementary");
   });
 });

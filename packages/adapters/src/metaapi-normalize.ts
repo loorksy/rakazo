@@ -15,20 +15,64 @@ export class BrokerProviderError extends Error {
       | "INVALID_RESPONSE"
       | "DISCONNECTED"
       | "INVALID_REQUEST"
-      | "RATE_LIMITED",
+      | "RATE_LIMITED"
+      | "TIMEOUT"
+      | "PROVIDER_UNAVAILABLE",
   ) {
     super(`Broker operation failed: ${code}`);
     this.name = "BrokerProviderError";
   }
 }
 
+const BROKER_FAILURE_CODES = new Set<BrokerProviderError["code"]>([
+  "UNAVAILABLE",
+  "INVALID_RESPONSE",
+  "DISCONNECTED",
+  "INVALID_REQUEST",
+  "RATE_LIMITED",
+  "TIMEOUT",
+  "PROVIDER_UNAVAILABLE",
+]);
+
+/** Keep a known safe code. Anything else stays the generic unavailable code. */
+export function publicBrokerFailureCode(
+  code: string | null | undefined,
+): BrokerProviderError["code"] {
+  return BROKER_FAILURE_CODES.has(code as BrokerProviderError["code"])
+    ? (code as BrokerProviderError["code"])
+    : "UNAVAILABLE";
+}
+
 /** Never pass SDK exceptions, request bodies or authorization headers to tools/logs. */
 export function sanitizedBrokerError(error: unknown): BrokerProviderError {
   if (error instanceof BrokerProviderError) return error;
-  const code = z.object({ statusCode: z.number().optional() }).safeParse(error);
-  return new BrokerProviderError(
-    code.success && code.data.statusCode === 429 ? "RATE_LIMITED" : "UNAVAILABLE",
-  );
+  if (error instanceof z.ZodError) return new BrokerProviderError("INVALID_REQUEST");
+  const parsed = z
+    .object({
+      statusCode: z.number().optional(),
+      status: z.number().optional(),
+      code: z.string().max(64).optional(),
+      name: z.string().max(64).optional(),
+    })
+    .safeParse(error);
+  const status = parsed.success ? (parsed.data.statusCode ?? parsed.data.status) : undefined;
+  const name = error instanceof Error ? error.name : parsed.success ? (parsed.data.name ?? "") : "";
+  const code =
+    error instanceof Error && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : parsed.success
+        ? (parsed.data.code ?? "")
+        : "";
+  const marker = `${name} ${code}`.slice(0, 160);
+  if (status === 429) return new BrokerProviderError("RATE_LIMITED");
+  if (status === 400 || status === 404 || status === 422)
+    return new BrokerProviderError("INVALID_REQUEST");
+  if (status === 408 || status === 504 || /timeout|ETIMEDOUT|ESOCKETTIMEDOUT/i.test(marker))
+    return new BrokerProviderError("TIMEOUT");
+  if (status === 502 || status === 503) return new BrokerProviderError("PROVIDER_UNAVAILABLE");
+  if (/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH/i.test(marker))
+    return new BrokerProviderError("DISCONNECTED");
+  return new BrokerProviderError("UNAVAILABLE");
 }
 
 const text = z.string().min(1).max(256);

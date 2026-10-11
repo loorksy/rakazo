@@ -208,7 +208,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "trading_playbook",
     description:
-      "Retrieve the shared trading playbook for one instrument, timeframe and task. Gold-only guidance is returned only for gold. The result is analysis context: it does not create a mandate, move a stop or place an order. Safety, the mandate and the risk engine outrank every heuristic, and WAIT is a valid result.",
+      "Retrieve the shared trading playbook for the exact broker symbol. Context follows the instrument class: gold rules only for gold, FX rules only for FX, and crypto, index, or energy context only for those classes. The result is analysis context: it does not create a mandate, move a stop, or place an order. Safety, the mandate, and the risk engine outrank every heuristic, and WAIT is a valid result.",
     inputSchema: {
       type: "object",
       properties: {
@@ -224,7 +224,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "broker_read",
     description:
-      "Read broker-native account, positions, pending orders, capabilities, instruments, specifications, pricing or candles. First list trading_accounts, then discover exact account-scoped instrument IDs using operation instruments. Use those IDs; do not guess broker symbol suffixes. History is paged (limit 1–1000); timeframe uses MetaTrader units such as 15m, 1h, 4h, 1d. This tool cannot execute or modify trades.",
+      "Read broker-native account state, market instruments, specifications, quotes, or candles. Discover a market with operation instrument_search (query and accountId, limit at most 20). Use the returned instrumentId and exact brokerSymbol for specification, quote, and candles. Account, positions, orders, and preflight require account-read permission; market data does not. The full symbol directory is not returned. If the result is unavailable or ambiguous, say so. Do not replace the broker instrument with another venue. History is paged (limit 1–1000); timeframe uses MetaTrader units such as 15m, 1h, 4h, 1d. This tool cannot execute or modify trades.",
     inputSchema: z.toJSONSchema(BrokerReadCommandSchema, { io: "input" }),
   },
   {
