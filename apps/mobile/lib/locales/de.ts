@@ -827,7 +827,8 @@ export const DE_MESSAGES: Record<string, string> = {
   "Trading mission": "Handelsauftrag",
   "Unfreeze account": "Kontosperre aufheben",
   "What should this Agent focus on?": "Worauf soll sich dieser Agent konzentrieren?",
-  "Account balance / equity / margin / positions": "Kontostand / Eigenkapital / Margin / Positionen",
+  "Account balance / equity / margin / positions":
+    "Kontostand / Eigenkapital / Margin / Positionen",
   "Allow account read": "Kontolesen erlauben",
   Allowed: "Erlaubt",
   Available: "Verfügbar",
